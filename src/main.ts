@@ -1102,6 +1102,7 @@ scene.setEventsAdapter({
   },
 });
 scene.setPaused(true);
+scene.setCinematicIdle(true);
 const savedProgress = readProgress();
 if (savedProgress) {
   locale = savedProgress.locale;
@@ -1115,6 +1116,7 @@ function beginJourney(): void {
   started = true;
   document.body.classList.add("has-started");
   scene.setPaused(false);
+  scene.setCinematicIdle(false);
   queryElement("#intro-screen")?.setAttribute("hidden", "");
 }
 
@@ -1141,6 +1143,7 @@ queryElement("#title-button")?.addEventListener("click", () => {
   queryElement("#ending-screen")?.setAttribute("hidden", "");
   queryElement("#intro-screen")?.removeAttribute("hidden");
   scene.setPaused(true);
+  scene.setCinematicIdle(true);
   started = false;
   document.body.classList.remove("has-started");
   switchChamber(FIRST_ROOM);

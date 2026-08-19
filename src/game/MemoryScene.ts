@@ -1,5 +1,7 @@
 import { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
+import { Constants } from "@babylonjs/core/Engines/constants";
 import { Engine } from "@babylonjs/core/Engines/engine";
+import { ImageProcessingConfiguration } from "@babylonjs/core/Materials/imageProcessingConfiguration";
 import { GlowLayer } from "@babylonjs/core/Layers/glowLayer";
 import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
@@ -25,6 +27,21 @@ const WORLD_SCALE = 0.02;
 const MAX_STEPS_PER_FRAME = 4;
 const TRAIL_SAMPLE_INTERVAL = 4;
 const TRAIL_CAPACITY = 18;
+
+/** Cinematic framing: close enough that a humanoid fills ~1/5 of frame height. */
+const CAMERA_RADIUS = 13.5;
+const CAMERA_RADIUS_EXIT = 12.2;
+const CAMERA_ALPHA = -2.05;
+const CAMERA_ALPHA_EXIT = -2.14;
+
+/**
+ * Resolution ladder. Rendering starts sharp and only steps down when the
+ * machine cannot hold the frame budget — a software rasterizer (or an old
+ * integrated GPU) lands on the last rung instead of dropping frames.
+ */
+const SCALING_LADDER = [1, 1.25, 1.5] as const;
+const SLOW_FRAME_MS = 28;
+const SCALING_SAMPLE_WINDOW = 60;
 
 type VirtualControl = "up" | "down" | "left" | "right" | "action";
 
@@ -73,6 +90,9 @@ interface ExitVisual {
   slab: Mesh;
   portalMaterial: StandardMaterial;
   light: PointLight;
+  shaft: TransformNode;
+  shaftMaterial: StandardMaterial;
+  spillMaterial: StandardMaterial;
 }
 
 interface TargetGuideVisual {
@@ -107,6 +127,7 @@ function material(
 ): StandardMaterial {
   const value = new StandardMaterial(name, scene);
   value.diffuseColor = diffuse;
+  value.ambientColor = Color3.White();
   value.emissiveColor = emissive;
   value.specularColor = specular;
   value.alpha = alpha;
@@ -138,6 +159,8 @@ export class MemoryScene {
   private readonly glow: GlowLayer;
   private readonly shadows: ShadowGenerator;
   private visuals: WorldVisuals;
+  private cameraRest = new Vector3(0.3, 1.15, 0.12);
+  private cameraFocus = new Vector3(3.55, 1.24, 0.45);
   private actorVisuals = new Map<ActorId, HumanoidRig>();
   private eventsAdapter: MemorySceneEvents | null = null;
   private accumulator = 0;
@@ -149,6 +172,10 @@ export class MemoryScene {
   private readonly automatedRenderInterval = navigator.webdriver ? 1000 / 8 : 0;
   private trailTick = 0;
   private trailPositions: Vector3[] = [];
+  private scalingRung = 0;
+  private recentFrameMs: number[] = [];
+  private cinematicIdle = false;
+  private idleClock = 0;
   private pressedKeys = new Set<string>();
   private virtualInput = new Set<VirtualControl>();
   private readonly resizeObserver: ResizeObserver;
@@ -168,61 +195,73 @@ export class MemoryScene {
       preserveDrawingBuffer: false,
       stencil: true,
     });
-    this.engine.setHardwareScalingLevel(Math.max(1.25, devicePixelRatio));
+    this.engine.setHardwareScalingLevel(SCALING_LADDER[this.scalingRung] ?? 1);
     this.scene = new Scene(this.engine);
     this.scene.performancePriority = ScenePerformancePriority.Aggressive;
     this.scene.clearColor = new Color4(0.004, 0.008, 0.014, 1);
-    this.scene.ambientColor = new Color3(0.035, 0.05, 0.075);
+    this.scene.ambientColor = new Color3(0.07, 0.086, 0.115);
     this.scene.fogMode = Scene.FOGMODE_EXP2;
-    this.scene.fogDensity = 0.012;
-    this.scene.fogColor = new Color3(0.012, 0.026, 0.045);
-    this.scene.imageProcessingConfiguration.contrast = 1.28;
-    this.scene.imageProcessingConfiguration.exposure = 0.98;
+    this.scene.fogDensity = 0.016;
+    this.scene.fogColor = new Color3(0.014, 0.028, 0.05);
 
     this.camera = new ArcRotateCamera(
       "memory-camera",
-      -2.05,
-      1.05,
-      18.4,
+      CAMERA_ALPHA,
+      1.15,
+      CAMERA_RADIUS,
       new Vector3(0.3, 1.15, 0.12),
       this.scene,
     );
-    this.camera.fov = 0.7;
-    this.camera.lowerRadiusLimit = 14.8;
-    this.camera.upperRadiusLimit = 18.4;
+    this.camera.fov = 0.78;
+    this.camera.lowerRadiusLimit = 12.5;
+    this.camera.upperRadiusLimit = 14.5;
     this.camera.inputs.clear();
 
     this.pipeline = new DefaultRenderingPipeline("memory-pipeline", true, this.scene, [this.camera]);
     this.pipeline.fxaaEnabled = true;
-    this.pipeline.samples = 1;
+    this.pipeline.samples = 4;
     this.pipeline.bloomEnabled = true;
-    this.pipeline.bloomThreshold = 0.9;
-    this.pipeline.bloomWeight = 0.1;
-    this.pipeline.bloomKernel = 16;
+    this.pipeline.bloomThreshold = 0.65;
+    this.pipeline.bloomWeight = 0.25;
+    this.pipeline.bloomKernel = 48;
+    const grade = this.pipeline.imageProcessing;
+    grade.toneMappingEnabled = true;
+    grade.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
+    grade.contrast = 1.35;
+    grade.exposure = 1.4;
+    grade.vignetteEnabled = true;
+    grade.vignetteWeight = 2.2;
+    grade.vignetteStretch = 0.35;
+    grade.vignetteColor = new Color4(0.012, 0.024, 0.06, 1);
+    grade.vignetteBlendMode = ImageProcessingConfiguration.VIGNETTEMODE_MULTIPLY;
 
+    // Cool steel-blue ambient stands in for the vault's own gloom; every warm
+    // value in the room comes from the doorway instead.
     const sky = new HemisphericLight("memory-sky", new Vector3(-0.2, 1, 0.35), this.scene);
-    sky.diffuse = new Color3(0.28, 0.42, 0.62);
-    sky.groundColor = new Color3(0.025, 0.03, 0.045);
+    sky.diffuse = new Color3(0.36, 0.5, 0.72);
+    sky.groundColor = new Color3(0.022, 0.03, 0.048);
     sky.intensity = 1.05;
-    const key = new DirectionalLight("memory-key", new Vector3(-0.45, -1, -0.25), this.scene);
-    key.position = new Vector3(5, 10, 2);
-    key.diffuse = new Color3(1, 0.68, 0.34);
-    key.intensity = 2.25;
-    const temporal = new PointLight("temporal-fill", new Vector3(-5.7, 3.2, 1), this.scene);
+    const key = new DirectionalLight("memory-key", new Vector3(-0.72, -0.66, -0.2), this.scene);
+    key.position = new Vector3(9.5, 7.4, 1.6);
+    key.diffuse = new Color3(1, 0.68, 0.42);
+    key.specular = new Color3(0.5, 0.36, 0.2);
+    key.intensity = 4.2;
+    const temporal = new PointLight("temporal-fill", new Vector3(-5.7, 2.6, 1), this.scene);
     temporal.diffuse = new Color3(0.08, 0.68, 1);
-    temporal.intensity = 5.2;
-    temporal.range = 10;
-    const living = new PointLight("living-fill", new Vector3(3.5, 4, -1.5), this.scene);
+    temporal.intensity = 2.8;
+    temporal.range = 7;
+    const living = new PointLight("living-fill", new Vector3(3.5, 3.2, -1.5), this.scene);
     living.diffuse = new Color3(1, 0.5, 0.16);
-    living.intensity = 6.2;
-    living.range = 10;
+    living.intensity = 2.6;
+    living.range = 7;
 
-    this.shadows = new ShadowGenerator(512, key);
+    this.shadows = new ShadowGenerator(1024, key);
     this.shadows.useBlurExponentialShadowMap = true;
-    this.shadows.blurKernel = 6;
-    this.shadows.bias = 0.0008;
-    this.glow = new GlowLayer("memory-glow", this.scene, { blurKernelSize: 16 });
-    this.glow.intensity = 0.4;
+    this.shadows.blurKernel = 8;
+    this.shadows.bias = 0.0009;
+    this.shadows.darkness = 0.12;
+    this.glow = new GlowLayer("memory-glow", this.scene, { blurKernelSize: 24 });
+    this.glow.intensity = 0.55;
 
     this.visuals = this.buildWorld();
     this.installKeyboard();
@@ -317,6 +356,11 @@ export class MemoryScene {
     if (paused) this.resetInput();
   }
 
+  /** The title card gets a slow camera sway; play does not. */
+  setCinematicIdle(active: boolean): void {
+    this.cinematicIdle = active;
+  }
+
   setVirtualControl(control: VirtualControl, active: boolean): void {
     if (active) this.virtualInput.add(control);
     else this.virtualInput.delete(control);
@@ -398,8 +442,10 @@ export class MemoryScene {
     }
     const shouldRender = this.automatedRenderInterval === 0 || now - this.lastRenderTime >= this.automatedRenderInterval;
     if (shouldRender) {
+      this.idleClock += delta;
       this.updateVisuals(this.simulation.state);
       this.scene.render();
+      this.trackFramePacing(delta);
       this.lastRenderTime = now;
     }
     if (steps > 0) this.publish();
@@ -504,9 +550,26 @@ export class MemoryScene {
     return this.registerMesh(mesh, root);
   }
 
+  /**
+   * Framing follows the route: the camera rests on the midpoint between spawn
+   * and exit, so a room whose action sits off the world centre still lands in
+   * frame at the closer cinematic radius.
+   */
+  private updateCameraFraming(): void {
+    const chamber = this.simulation.chamber;
+    const exitCenterX = chamber.exit.x + chamber.exit.width / 2;
+    const exitCenterY = chamber.exit.y + chamber.exit.height / 2;
+    const rest = this.worldPoint((chamber.spawn.x + exitCenterX) / 2, (chamber.spawn.y + exitCenterY) / 2, 1.15);
+    const exitPoint = this.worldPoint(exitCenterX, exitCenterY, 1.24);
+    this.cameraRest = rest;
+    this.cameraFocus = Vector3.Lerp(rest, exitPoint, 0.72);
+    this.camera.target = rest.clone();
+  }
+
   private buildWorld(): WorldVisuals {
     const root = new TransformNode(`world-${this.simulation.chamber.id}`, this.scene);
     const chamber = this.simulation.chamber;
+    this.updateCameraFraming();
     const roomWidth = chamber.world.width * WORLD_SCALE;
     const roomDepth = chamber.world.height * WORLD_SCALE;
     const materialSeed = [...chamber.id].reduce((sum, character) => sum + character.charCodeAt(0), 17);
@@ -696,6 +759,9 @@ export class MemoryScene {
 
     const exit = this.createExit(chamber.exit, basaltEdge, bronze, white, root);
     const guide = this.createTargetGuide(root);
+    // Architecture materials never change after the chamber is built; the
+    // signal materials (cyan/amber/portal/rune) keep animating their emissive.
+    for (const stoneLike of [basalt, basaltEdge, metal, bronze, voidMaterial]) stoneLike.freeze();
     return { root, bridge, winch, weight, handoffOrb, handoffDelivery, exit, guide };
   }
 
@@ -961,11 +1027,81 @@ export class MemoryScene {
     this.registerMesh(slab, root);
     const light = new PointLight("exit-beacon", new Vector3(4.72, 0.88, 0), this.scene);
     light.diffuse = new Color3(1, 0.86, 0.62);
-    light.intensity = 1.2;
-    light.range = 4.5;
+    light.intensity = 5.2;
+    light.range = 9;
     light.parent = root;
+    const { shaft, shaftMaterial, spillMaterial } = this.createLightShaft(root);
     void white;
-    return { root, portal, slab, portalMaterial, light };
+    return { root, portal, slab, portalMaterial, light, shaft, shaftMaterial, spillMaterial };
+  }
+
+  /**
+   * Procedural light-shaft texture: a soft blob whose centre can be pushed
+   * toward one edge, so the same helper makes both the doorway halo and the
+   * floor spill that streams away from it.
+   */
+  private createShaftTexture(name: string, centerY: number): DynamicTexture {
+    const texture = new DynamicTexture(name, { width: 256, height: 256 }, this.scene, false);
+    const context = texture.getContext();
+    context.fillStyle = "#000000";
+    context.fillRect(0, 0, 256, 256);
+    const falloff = context.createRadialGradient(128, centerY, 4, 128, centerY, 206);
+    falloff.addColorStop(0, "#fff2da");
+    falloff.addColorStop(0.24, "#d7a165");
+    falloff.addColorStop(0.58, "#432c15");
+    falloff.addColorStop(1, "#000000");
+    context.fillStyle = falloff;
+    context.fillRect(0, 0, 256, 256);
+    texture.update(false);
+    return texture;
+  }
+
+  private createShaftMaterial(name: string, texture: DynamicTexture): StandardMaterial {
+    const shaftMaterial = material(this.scene, name, Color3.Black(), new Color3(1, 1, 1), 1, Color3.Black());
+    shaftMaterial.emissiveTexture = texture;
+    shaftMaterial.disableLighting = true;
+    shaftMaterial.backFaceCulling = false;
+    shaftMaterial.alphaMode = Constants.ALPHA_ADD;
+    shaftMaterial.disableDepthWrite = true;
+    return shaftMaterial;
+  }
+
+  /**
+   * The doorway light is geometry, not a post-process. The tunnel points back
+   * at the camera, so a cone would only ever be seen end-on: instead the
+   * opening carries an additive halo and the floor keeps the spill that
+   * streams out of it.
+   */
+  private createLightShaft(exitRoot: TransformNode): {
+    shaft: TransformNode;
+    shaftMaterial: StandardMaterial;
+    spillMaterial: StandardMaterial;
+  } {
+    const shaft = new TransformNode("exit-shaft-root", this.scene);
+    shaft.parent = exitRoot;
+    const place = (mesh: Mesh, shaftMaterial: StandardMaterial): Mesh => {
+      mesh.material = shaftMaterial;
+      mesh.parent = shaft;
+      mesh.isPickable = false;
+      mesh.receiveShadows = false;
+      return mesh;
+    };
+
+    const shaftMaterial = this.createShaftMaterial("exit-shaft", this.createShaftTexture("exit-shaft-halo", 128));
+    const halo = place(MeshBuilder.CreatePlane("exit-shaft-halo", { width: 1.9, height: 2.6 }, this.scene), shaftMaterial);
+    halo.rotation.y = -Math.PI / 2;
+    halo.position = new Vector3(4.42, 1.15, 0);
+    this.glow.addIncludedOnlyMesh(halo);
+    const throat = place(MeshBuilder.CreatePlane("exit-shaft-throat", { width: 1.15, height: 1.75 }, this.scene), shaftMaterial);
+    throat.rotation.y = -Math.PI / 2;
+    throat.position = new Vector3(3.05, 0.95, 0);
+
+    const spillMaterial = this.createShaftMaterial("exit-spill", this.createShaftTexture("exit-spill-falloff", 40));
+    const spill = place(MeshBuilder.CreatePlane("exit-shaft-spill", { width: 3.6, height: 5.6 }, this.scene), spillMaterial);
+    spill.rotation.x = Math.PI / 2;
+    spill.rotation.z = -Math.PI / 2;
+    spill.position = new Vector3(0.35, 0.03, 0);
+    return { shaft, shaftMaterial, spillMaterial };
   }
 
   private createPortalGlyph(position: Vector3, glyphMaterial: StandardMaterial, root: TransformNode): void {
@@ -1004,7 +1140,7 @@ export class MemoryScene {
     root.position = position.clone();
     root.scaling.setAll(1.16);
     const echoMaterial = material(this.scene, `echo-body-${id}`, new Color3(0.04, 0.35, 0.48), new Color3(0.04, 0.45, 0.68));
-    const jacket = echo ? echoMaterial : material(this.scene, `amber-jacket-${id}`, new Color3(0.44, 0.18, 0.045), new Color3(0.05, 0.012, 0));
+    const jacket = echo ? echoMaterial : material(this.scene, `amber-jacket-${id}`, new Color3(0.52, 0.31, 0.12), new Color3(0.05, 0.014, 0));
     const skin = echo ? echoMaterial : material(this.scene, `skin-${id}`, new Color3(0.46, 0.3, 0.21));
     const cloth = echo ? echoMaterial : material(this.scene, `cloth-${id}`, new Color3(0.055, 0.065, 0.075));
     const meshes: AbstractMesh[] = [];
@@ -1226,14 +1362,50 @@ export class MemoryScene {
     const exitOpen = state.exit.open;
     const present = state.actors.find((actor) => actor.id === "present");
     const focusExit = state.success || Boolean(present && present.x >= state.exit.x - 80);
-    const cameraTarget = focusExit ? new Vector3(3.55, 1.24, 0.45) : new Vector3(0.3, 1.15, 0.12);
+    const cameraTarget = focusExit ? this.cameraFocus : this.cameraRest;
     this.camera.target = Vector3.Lerp(this.camera.target, cameraTarget, 0.12);
-    this.camera.alpha += ((focusExit ? -2.12 : -2.05) - this.camera.alpha) * 0.12;
-    this.camera.radius += ((focusExit ? 15.5 : 18.4) - this.camera.radius) * 0.12;
-    this.visuals.exit.light.intensity = exitOpen ? 1.6 + Math.sin(performance.now() * 0.004) * 0.15 : 0.5;
+    const restAlpha = focusExit ? CAMERA_ALPHA_EXIT : CAMERA_ALPHA;
+    this.camera.alpha += (restAlpha + this.idleDrift() - this.camera.alpha) * 0.12;
+    this.camera.radius += ((focusExit ? CAMERA_RADIUS_EXIT : CAMERA_RADIUS) - this.camera.radius) * 0.12;
+    const shaftReach = exitOpen ? 0.3 : 0.12;
+    this.visuals.exit.light.intensity = exitOpen ? 6.2 + Math.sin(performance.now() * 0.004) * 0.4 : 1.8;
     this.visuals.exit.portalMaterial.emissiveColor = exitOpen ? new Color3(0.65, 0.42, 0.18) : new Color3(0.08, 0.08, 0.07);
     this.visuals.exit.portalMaterial.alpha = exitOpen ? 0.65 : 0.16;
     this.visuals.exit.slab.position.y += ((exitOpen ? -2.05 : 1.84) - this.visuals.exit.slab.position.y) * 0.12;
+    this.visuals.exit.shaftMaterial.emissiveColor = new Color3(shaftReach, shaftReach * 0.94, shaftReach * 0.86);
+    this.visuals.exit.spillMaterial.emissiveColor = new Color3(shaftReach, shaftReach * 0.9, shaftReach * 0.78);
+  }
+
+  /** Slow alpha sway that only breathes under the title card. */
+  private idleDrift(): number {
+    if (!this.cinematicIdle || this.prefersReducedMotion()) return 0;
+    return Math.sin(this.idleClock * 0.00016) * 0.075;
+  }
+
+  private prefersReducedMotion(): boolean {
+    return document.body.classList.contains("reduce-motion")
+      || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+  }
+
+  /**
+   * Frame pacing guard: sustained slow frames step the render resolution down
+   * one rung rather than letting the whole scene stutter. Never steps back up —
+   * a machine that failed the budget once will fail it again.
+   */
+  private trackFramePacing(deltaMs: number): void {
+    if (this.automatedRenderInterval !== 0 || this.pausedByPlayer) return;
+    if (this.scalingRung >= SCALING_LADDER.length - 1) return;
+    this.recentFrameMs.push(deltaMs);
+    if (this.recentFrameMs.length < SCALING_SAMPLE_WINDOW) return;
+    const sorted = [...this.recentFrameMs].sort((left, right) => left - right);
+    const median = sorted[Math.floor(sorted.length / 2)] ?? 0;
+    this.recentFrameMs = [];
+    if (median <= SLOW_FRAME_MS) return;
+    this.scalingRung += 1;
+    const level = SCALING_LADDER[this.scalingRung] ?? 1.5;
+    this.engine.setHardwareScalingLevel(level);
+    if (this.scalingRung > 1) this.pipeline.samples = 1;
+    console.debug(`[memory-scene] ${median.toFixed(1)}ms frames — render scale stepped to ${level}`);
   }
 
   private updateHumanoid(rig: HumanoidRig, actor: ActorState): void {
