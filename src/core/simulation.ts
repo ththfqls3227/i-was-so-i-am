@@ -1,6 +1,7 @@
 import { checksumState } from "./checksum";
 import {
   ACTOR_RADIUS,
+  FORCE_MOVE_PER_TICK,
   GRACE_TICKS,
   MIN_TAPE_TICKS,
   MOVE_PER_TICK,
@@ -209,6 +210,11 @@ export class Simulation {
     return this.activeTape;
   }
 
+  /** Frames captured so far in this pass — read-only, so a caller can replay what was recorded. */
+  get recordedFrames(): readonly InputFrame[] {
+    return this.frames;
+  }
+
   /** True when the current recording is long enough to fold into a tape. */
   get canFold(): boolean {
     return this.current.phase === "recording" && this.frames.length >= MIN_TAPE_TICKS;
@@ -321,6 +327,7 @@ export class Simulation {
 export const simulationConstants = {
   actorRadius: ACTOR_RADIUS,
   movePerTick: MOVE_PER_TICK,
+  forceMovePerTick: FORCE_MOVE_PER_TICK,
   graceTicks: GRACE_TICKS,
   minTapeTicks: MIN_TAPE_TICKS,
 };
