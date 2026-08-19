@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import type { ChamberId } from "../src/core/types";
+import type { ChamberId, SimulationState } from "../src/core/types";
 import { CHAMBERS } from "../src/content/chambers";
 import { FOUR_ROOM_ROUTE } from "../src/content/manifests";
 
@@ -20,29 +20,74 @@ async function setHeldKeys(page: Page, held: Set<string>, next: Set<string>): Pr
   for (const key of next) if (!held.has(key)) await page.keyboard.down(key);
 }
 
+interface TapeProbe {
+  tapeTick: number;
+  phase: SimulationState["phase"] | undefined;
+  success: boolean;
+}
+
+function readTape(page: Page): Promise<TapeProbe> {
+  return page.evaluate(() => {
+    const state = window.__I_WAS_SO_I_AM__.state;
+    return { tapeTick: state?.tapeTick ?? 0, phase: state?.phase, success: state?.success === true };
+  });
+}
+
+/**
+ * Plays an authored tape through the real keyboard, measuring every run of held
+ * keys in simulation ticks rather than in milliseconds.
+ *
+ * The browser steps the fixed 30 Hz loop up to four times inside a single
+ * animation frame — headless rendering makes that common — so a run timed by
+ * wall clock can reach the simulation late, short, or, for a two-tick beat like
+ * Last Hold's step off the seated stone, not at all. Each run therefore starts
+ * counting from the tick its keys actually landed on and holds until the
+ * simulation has stepped the ticks it was authored for.
+ *
+ * Ticks the simulation runs past a target, and the ticks that pass while the
+ * keys are being swapped, are carried as a debt that later runs give back, so
+ * the tape neither drifts late nor stretches. A run gives back at most a quarter
+ * of itself: long beats absorb the debt, and a short, precise beat is never
+ * shortened to pay for one.
+ *
+ * Playback ends on a phase change — the recording closes itself once it reaches
+ * the chamber's tape length, and both tick counters restart at that boundary.
+ */
 async function playAuthoredFrames(page: Page, frames: number[]): Promise<void> {
-  const startTick = await page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.tapeTick ?? 0);
-  const startPhase = await page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.phase);
+  const startPhase = (await readTape(page)).phase;
   let held = new Set<string>();
   let consumed = 0;
+  let owed = 0;
   try {
     while (consumed < frames.length) {
       const mask = (frames[consumed] ?? 0) & 31;
       let runEnd = consumed + 1;
       while (runEnd < frames.length && ((frames[runEnd] ?? 0) & 31) === mask) runEnd += 1;
+      const authored = runEnd - consumed;
       const next = keysForFrame(mask);
+
+      const before = await readTape(page);
       await setHeldKeys(page, held, next);
       held = next;
+      const armed = await readTape(page);
+      if (armed.phase !== startPhase || armed.success) return;
+      owed += armed.tapeTick - before.tapeTick;
+
+      const given = Math.min(owed, Math.floor(authored / 4));
+      owed -= given;
+      const target = armed.tapeTick + authored - given;
       consumed = runEnd;
       await page.waitForFunction(
         ({ target, startPhase }) => {
           const state = window.__I_WAS_SO_I_AM__.state;
-          return state?.success || state?.phase === "rerecord" || state?.phase !== startPhase || (state?.tapeTick ?? 0) >= target;
+          return state?.success === true || state?.phase !== startPhase || (state?.tapeTick ?? 0) >= target;
         },
-        { target: startTick + consumed, startPhase },
-        { polling: 10, timeout: 15_000 },
+        { target, startPhase },
+        { polling: "raf", timeout: 15_000 },
       );
-      if (await page.locator("#success-card").isVisible()) return;
+      const settled = await readTape(page);
+      if (settled.phase !== startPhase || settled.success) return;
+      owed += settled.tapeTick - target;
     }
   } finally {
     await setHeldKeys(page, held, new Set());
