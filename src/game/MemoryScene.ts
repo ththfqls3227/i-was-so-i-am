@@ -250,7 +250,7 @@ export class MemoryScene {
     const sky = new HemisphericLight("memory-sky", new Vector3(-0.2, 1, 0.35), this.scene);
     sky.diffuse = new Color3(0.36, 0.5, 0.72);
     sky.groundColor = new Color3(0.022, 0.03, 0.048);
-    sky.intensity = 3.1;
+    sky.intensity = 2.0;
     const key = new DirectionalLight("memory-key", new Vector3(-0.72, -0.66, -0.2), this.scene);
     key.position = new Vector3(9.5, 7.4, 1.6);
     key.diffuse = new Color3(1, 0.68, 0.42);
@@ -514,7 +514,7 @@ export class MemoryScene {
     for (let row = 0; row < 8; row += 1) {
       for (let column = 0; column < 8; column += 1) {
         const inset = 3 + random() * 3;
-        const shade = 60 + Math.floor(random() * 26);
+        const shade = 58 + Math.floor(random() * 22);
         context.fillStyle = `rgb(${shade}, ${shade + 5}, ${shade + 7})`;
         context.fillRect(column * tileSize + inset, row * tileSize + inset, tileSize - inset * 2, tileSize - inset * 2);
         context.strokeStyle = `rgba(156, 143, 116, ${0.08 + random() * 0.1})`;
@@ -1159,10 +1159,10 @@ export class MemoryScene {
     beam.position = new Vector3(2.5, 1.72, 0);
 
     const spillMaterial = this.createShaftMaterial("exit-spill", this.createShaftTexture("exit-spill-falloff", 40));
-    const spill = place(MeshBuilder.CreatePlane("exit-shaft-spill", { width: 3.6, height: 5.6 }, this.scene), spillMaterial);
+    const spill = place(MeshBuilder.CreatePlane("exit-shaft-spill", { width: 2.9, height: 4.5 }, this.scene), spillMaterial);
     spill.rotation.x = Math.PI / 2;
     spill.rotation.z = -Math.PI / 2;
-    spill.position = new Vector3(0.35, 0.03, 0);
+    spill.position = new Vector3(0.75, 0.03, 0);
     return { shaft, shaftMaterial, spillMaterial, beamMaterial };
   }
 
