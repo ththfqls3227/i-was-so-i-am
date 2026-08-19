@@ -48,7 +48,13 @@ export interface ActorState extends Point {
   facingY: -1 | 0 | 1;
   actionHeld: boolean;
   targetId: string | null;
-  targetLockout: boolean;
+  /**
+   * The one target this actor dropped by walking out of its hysteresis radius.
+   * It cannot be regrabbed until the action key is released — but every other
+   * affordance stays available, so a held action can never blind an actor to
+   * the whole room.
+   */
+  lockedOutTargetId: string | null;
 }
 
 export interface DoorState {
@@ -112,6 +118,12 @@ export interface ChamberDefinition {
   hold?: HoldMechanismState;
   forceObject?: ForceObjectState;
   handoff?: HandoffMechanismState;
+  /**
+   * Mechanism allowed to open the exit. Defaults to the handoff when the
+   * chamber has one, else the force object; a chamber with neither keeps its
+   * authored exit state. Only the designated mechanism writes `exit.open`.
+   */
+  exitGate?: "force" | "handoff";
   exit: ExitState;
 }
 

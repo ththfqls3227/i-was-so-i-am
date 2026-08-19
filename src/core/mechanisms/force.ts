@@ -1,6 +1,7 @@
 import { ACTOR_RADIUS, FORCE_MOVE_PER_TICK, PUSH_CONTACT } from "../constants";
 import { moveActorBy } from "../geometry";
 import type { ActorState, ChamberDefinition, ForceObjectState, SimulationState } from "../types";
+import { exitGateOf } from "./exit";
 
 export function isAlignedPusher(actorState: ActorState, object: ForceObjectState): boolean {
   const direction = object.pushDirection ?? "right";
@@ -28,5 +29,7 @@ export function applyForce(state: SimulationState, chamber: ChamberDefinition, a
     const delta = object.x - previousX;
     for (const contributor of contributors) moveActorBy(contributor, delta, 0, chamber, state);
   }
-  state.exit.open = direction === "right" ? object.x >= object.maxX : object.x <= object.minX;
+  if (exitGateOf(chamber) === "force") {
+    state.exit.open = direction === "right" ? object.x >= object.maxX : object.x <= object.minX;
+  }
 }

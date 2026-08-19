@@ -1,5 +1,6 @@
 import { distanceBetween, pointInsideRect } from "../geometry";
 import type { ActorState, ChamberDefinition, SimulationState } from "../types";
+import { exitGateOf } from "./exit";
 
 export function applyHandoff(state: SimulationState, chamber: ChamberDefinition, actors: readonly ActorState[]): void {
   const handoff = state.handoff;
@@ -21,6 +22,12 @@ export function applyHandoff(state: SimulationState, chamber: ChamberDefinition,
     if (claimant) {
       handoff.holder = claimant.id;
       if (claimant.id === "present") handoff.receivedByPresent = true;
+      // The box is in one pair of hands now: nobody else keeps reaching for it,
+      // otherwise the other self follows it around and locks itself out of the
+      // affordance it was actually standing next to.
+      for (const other of actors) {
+        if (other.id !== claimant.id && other.targetId === handoff.id) other.targetId = null;
+      }
     }
   }
 
@@ -56,5 +63,5 @@ export function applyHandoff(state: SimulationState, chamber: ChamberDefinition,
       activeHolder.targetId = null;
     }
   }
-  state.exit.open = handoff.delivered;
+  if (exitGateOf(chamber) === "handoff") state.exit.open = handoff.delivered;
 }

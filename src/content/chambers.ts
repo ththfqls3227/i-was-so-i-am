@@ -53,6 +53,7 @@ export const TRACE_WEIGHT_CHAMBER: ChamberDefinition = {
     threshold: 2,
     force: 0,
   },
+  exitGate: "force",
   exit: { id: "trace-weight-exit", ...createRect(70, 17, 6, 10), open: false },
 };
 
@@ -103,6 +104,7 @@ export const HANDOFF_CHAMBER: ChamberDefinition = {
     redirectedByPresent: false,
     delivered: false,
   },
+  exitGate: "handoff",
   exit: { id: "handoff-exit", ...createRect(71, 6, 5, 9), open: false },
 };
 
@@ -132,6 +134,7 @@ export const LAST_HOLD_CHAMBER: ChamberDefinition = {
     force: 0,
     pushDirection: "left",
   },
+  exitGate: "force",
   exit: { id: "last-exit", ...createRect(70, 17, 6, 10), open: false },
 };
 

@@ -10,6 +10,7 @@ import {
 import { distanceBetween, distanceToRect, moveActorBy, pointInsideRect } from "./geometry";
 import { hasInput, InputBit, movementIntent, NEUTRAL_INPUT, type InputFrame } from "./input";
 import { applyDoor } from "./mechanisms/door";
+import { exitGateOf } from "./mechanisms/exit";
 import { applyForce } from "./mechanisms/force";
 import { applyHandoff } from "./mechanisms/handoff";
 import { applyHold } from "./mechanisms/hold";
@@ -44,7 +45,7 @@ function actor(id: ActorId, chamber: ChamberDefinition): ActorState {
     facingY: 0,
     actionHeld: false,
     targetId: null,
-    targetLockout: false,
+    lockedOutTargetId: null,
   };
 }
 
@@ -82,6 +83,12 @@ function moveActor(actorState: ActorState, frame: InputFrame, chamber: ChamberDe
   moveActorBy(actorState, intent.x * step, intent.y * step, chamber, state);
 }
 
+/** A carrier in someone else's hands cannot be targeted — no stealing mid-relay. */
+function carrierHeldByAnother(actorState: ActorState, state: SimulationState): boolean {
+  const handoff = state.handoff;
+  return handoff !== null && handoff.holder !== null && handoff.holder !== actorState.id;
+}
+
 function eligibleTarget(actorState: ActorState, state: SimulationState): { id: string; distance: number } | null {
   const targets: Array<{ id: string; distance: number; radius: number; x: number; y: number }> = [];
   if (state.hold) {
@@ -102,7 +109,7 @@ function eligibleTarget(actorState: ActorState, state: SimulationState): { id: s
       y: state.forceObject.y + state.forceObject.height / 2,
     });
   }
-  if (state.handoff) {
+  if (state.handoff && !carrierHeldByAnother(actorState, state)) {
     targets.push({
       id: state.handoff.id,
       distance: distanceBetween(actorState.x, actorState.y, state.handoff.x, state.handoff.y),
@@ -113,6 +120,7 @@ function eligibleTarget(actorState: ActorState, state: SimulationState): { id: s
   }
   return targets
     .filter((target) => {
+      if (target.id === actorState.lockedOutTargetId) return false;
       const facingProjection = (target.x - actorState.x) * actorState.facingX + (target.y - actorState.y) * actorState.facingY;
       return target.distance <= target.radius && facingProjection >= -POSITION_SCALE / 2;
     })
@@ -131,18 +139,23 @@ function updateAction(actorState: ActorState, frame: InputFrame, state: Simulati
   actorState.actionHeld = held;
   if (!held || hasInput(frame, InputBit.ActionReleased)) {
     actorState.targetId = null;
-    actorState.targetLockout = false;
+    actorState.lockedOutTargetId = null;
     return;
   }
   if (actorState.targetId) {
     if (targetDistance(actorState, actorState.targetId, state) > TARGET_HYSTERESIS) {
+      actorState.lockedOutTargetId = actorState.targetId;
       actorState.targetId = null;
-      actorState.targetLockout = true;
     }
     return;
   }
-  if (actorState.targetLockout) return;
-  actorState.targetId = eligibleTarget(actorState, state)?.id ?? null;
+  // The lockout only bars the target this actor just walked away from
+  // (eligibleTarget filters it out). Reaching any other affordance clears it,
+  // so a tape whose tail holds the action key can still grab what comes next.
+  const acquired = eligibleTarget(actorState, state);
+  if (!acquired) return;
+  actorState.targetId = acquired.id;
+  actorState.lockedOutTargetId = null;
 }
 
 function applyInteractions(state: SimulationState, chamber: ChamberDefinition, gracePastTargetId: string | null): void {
@@ -157,7 +170,8 @@ function applyInteractions(state: SimulationState, chamber: ChamberDefinition, g
     state.phase = "success";
   }
 
-  if (!state.hold && !state.forceObject && !state.handoff) state.exit.open = chamber.exit.open;
+  // With no mechanism designated to open it, the exit simply stays as authored.
+  if (exitGateOf(chamber) === null) state.exit.open = chamber.exit.open;
 }
 
 function replayFailureCode(state: SimulationState): FailureCode {
