@@ -65,7 +65,7 @@ try {
   const renderThrottleDisabled = await page.evaluate(() => globalThis.navigator.webdriver === false);
   const canvas = await page.locator("#game canvas").evaluate((element) => ({ width: element.clientWidth, height: element.clientHeight }));
   const glRenderer = await page.evaluate(() => {
-    const context = document.createElement("canvas").getContext("webgl2");
+    const context = globalThis.document.createElement("canvas").getContext("webgl2");
     const info = context?.getExtension("WEBGL_debug_renderer_info");
     return info && context ? String(context.getParameter(info.UNMASKED_RENDERER_WEBGL)) : "unknown";
   });
