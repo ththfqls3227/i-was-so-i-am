@@ -1,6 +1,6 @@
 {
   "verdict": "PASS",
-  "capturedAt": "2026-08-19T17:47:36.613Z",
+  "capturedAt": "2026-08-19T18:15:30.116Z",
   "url": "http://127.0.0.1:4173/",
   "renderer": {
     "name": "babylon",
@@ -16,11 +16,11 @@
     "height": 760
   },
   "frameSamples": 180,
-  "measuredWindowMs": 1482.8,
+  "measuredWindowMs": 1500.1,
   "simulationTicksPerSecond": 29.9,
-  "averageFrameMs": 8.238,
-  "p95FrameMs": 10,
-  "maximumFrameMs": 10.3,
+  "averageFrameMs": 8.334,
+  "p95FrameMs": 9.3,
+  "maximumFrameMs": 10.2,
   "thresholds": {
     "simulationTicksPerSecond": 24,
     "averageFrameMs": 20,
