@@ -58,6 +58,14 @@
 7. **visual-capture 출력 경로**: 커밋된 `.omx/artifacts/...png`를 덮어쓰지 않도록 캡처를 `test-results/visual/`(비추적)로 저장, visual-diff.mjs가 그 경로를 읽게 갱신. 커밋된 아티팩트는 의도적 승격 시에만 교체.
 8. 이 스펙 문서(`docs/rebuild-spec-phase-b.md`)를 커밋에 포함 (플랜→스펙→구현 체인 증빙).
 
+### B4 구현 메모 (2026-08-20)
+
+1~8 전부 반영. 스펙과 다르게 간 두 지점:
+- **필드명**: `targetLockout: boolean` → `ActorState.lockedOutTargetId: string | null`. 잠긴 id를 별도 필드로 병기하는 대신 한 필드로 대체(불리언과 id를 동시에 두면 두 값이 어긋날 수 있음). `eligibleTarget`이 이 id만 후보에서 제외하므로 다른 타겟은 즉시 획득·잠금 해제.
+- **캐리어 배타**: eligibleTarget 제외만으로는 「같은 틱에 present가 집는 순간」 과거의 targetId가 1틱 남음. 그래서 `applyHandoff`가 holder를 확정할 때 다른 액터의 targetId도 함께 비운다(불변식을 한 곳에서 보장).
+- `exitGate`는 기본값 로직을 두되 traceWeight/lastHold=`force`, handoff=`handoff`로 방 정의에 명시했다.
+- 튜토리얼 임계값 2개는 `src/content/tutorial-timing.ts`로 분리 — 회귀 테스트가 UI와 같은 출처를 읽게 하기 위함.
+
 ## 검증 게이트 (각 단계 후)
 - `npm run validate` 그린 (typecheck, lint, 147+ 유닛, 코퍼스, 레벨, 라이선스, 빌드, dist-smoke).
 - B3 후: `npx playwright test --project=chromium` 그린 + 4개 방 골든 경로 실키보드 통과.
