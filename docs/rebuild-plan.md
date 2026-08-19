@@ -18,7 +18,7 @@
 
 ### 치명 문제 (직접 재현 + 코드 검증됨)
 1. **튜토리얼**: 체크리스트를 그대로 따라도 실패(오너·Fable 각자 재현). 원인: (a) 기록이 고정 길이라 조기 종료 불가 → 실패 1회당 ~16-20초 강제 루프, (b) 튜토리얼 스테이지가 거리·tapeTick 매직넘버(92/82/172)로 판정돼 실제 상태와 어긋남, (c) 렌더 레이어가 입력을 조작하는 자동 빨리감기(completeCrossingTutorialHold)가 무설명 시간점프 유발, (d) lastError 표시 UI가 CSS로 숨겨져 있음(style.css:78), (e) handoff/lastHold는 튜토리얼 카피 자체가 없음.
-2. **그래픽**: 전부 MeshBuilder 프리미티브+StandardMaterial, 텍스처는 스톤 DynamicTexture 1장. hardwareScaling 1.25 다운스케일(흐릿함), 그림자 512px 1개, samples=1. 컨셉아트와 갭 극대. 성능도 나쁨: 평균 37.9ms(≈26fps) — 이 단순 씬에서 이 수치는 병목 조사 필요.
+2. **그래픽**: 전부 MeshBuilder 프리미티브+StandardMaterial, 텍스처는 스톤 DynamicTexture 1장. hardwareScaling 1.25 다운스케일(흐릿함), 그림자 512px 1개, samples=1. 컨셉아트와 갭 극대. ~~성능도 나쁨: 평균 37.9ms(≈26fps)~~ → **정정(C1, 2026-08-20)**: 37.9ms는 헤드리스 크로미움의 SwiftShader(CPU) 폴백 측정 아티팩트. 실제 GPU(M5 Pro) 8.3ms(120Hz vsync 상한), 픽셀/패스 바운드이며 지오메트리 비용 0 — 비주얼 예산 여유 큼.
 3. **퍼즐 깊이**: Last Hold는 Crossing의 플래그 리스킨(둘 다 hold→door→exit). 실패 조건이 전 방 공통 타임아웃 하나뿐. 결정 포인트 없음, 해법 1개 고정.
 4. **구조적 제약**: applyInteractions 단일 함수(102줄)에 전 메커니즘 인라인. door는 hold에만 하드커플, forceObject는 오른쪽 단방향 전용, chambers의 radius 필드는 데드 데이터(시뮬은 상수 사용), ActionPressed 비트 미사용, 대각선 이동 √2배 빠름(정규화 없음).
 5. **품질 갭**: `npm run validate`는 E2E를 안 돌림. 모든 브라우저 테스트가 dev 서버 대상 — **프로덕션 빌드를 실행하는 자동 테스트가 0개**. E2E는 좌표 매직넘버(230/235/240)와 한국어 카피 문자열에 강결합 → 이번 개편으로 대량 파손 예정. Math.hypot 크로스엔진 결정론 위험.
