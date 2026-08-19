@@ -6,6 +6,7 @@ import { CHAMBERS } from "./content/chambers";
 import { goldenFor } from "./content/golden";
 import { FOUR_ROOM_ROUTE } from "./content/manifests";
 import { idleTraceProgress, TraceRecordingProjection, traceFoldWouldFinish, traceRecordingRanOutOfTime, traceRequiredHoldTicks } from "./content/tutorial-timing";
+import { AudioEngine } from "./audio/engine";
 import { MemoryScene } from "./game/MemoryScene";
 
 interface BrowserRun {
@@ -21,6 +22,8 @@ declare global {
       checksum: string;
       versions: { build: string; simulation: string; renderer: string; babylon: string };
       renderer: { name: "babylon"; ready: boolean; context: "webgl1" | "webgl2"; error?: string };
+      /** Read-only audio state for tests and the presentation build. Audio never writes to the simulation. */
+      audio: { readonly started: boolean; readonly muted: boolean; readonly masterGain: number };
       switchChamber: (id: ChamberId) => void;
       rerecord: () => void;
       loadGolden: (id: ChamberId) => void;
@@ -213,6 +216,7 @@ let successShownFor: ChamberId | null = null;
 interface SavedProgress {
   nextRoom: ChamberId;
   locale: Locale;
+  muted?: boolean;
 }
 
 function readProgress(): SavedProgress | null {
@@ -229,7 +233,7 @@ function readProgress(): SavedProgress | null {
 
 function writeProgress(nextRoom: ChamberId): void {
   try {
-    localStorage.setItem(PROGRESS_KEY, JSON.stringify({ nextRoom, locale } satisfies SavedProgress));
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify({ nextRoom, locale, muted: audio.isMuted } satisfies SavedProgress));
   } catch {
     // Progress is optional; storage denial must never block play.
   }
@@ -957,6 +961,7 @@ function updateTutorial(state: Readonly<SimulationState>): void {
 function setPaused(value: boolean): void {
   paused = value;
   scene.setPaused(value);
+  audio.setPaused(value);
   const panel = queryElement("#pause-screen");
   if (panel) panel.hidden = !value;
   queryElement("#pause-button")?.setAttribute("aria-expanded", String(value));
@@ -1019,11 +1024,83 @@ function showPassTransition(folded: boolean): void {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Audio. The engine only ever reads state: it subscribes to the same snapshot
+// the UI does, compares each field with the previous snapshot, and plays on the
+// edges. It cannot write to the simulation or the scene. The AudioContext is
+// built on the first user gesture (below), so the browser never logs an
+// autoplay warning, and the whole node graph is built in that one call —
+// nothing is allocated on a fold, a room change, or a phase transition.
+// ---------------------------------------------------------------------------
+const audio = new AudioEngine(readProgress()?.muted === true);
+
+const audioCues = {
+  chamberId: null as ChamberId | null,
+  phase: null as SimulationState["phase"] | null,
+  tapeTick: 0,
+  winch: false,
+  push: false,
+  door: false,
+  exit: false,
+  carried: false,
+  staged: false,
+  delivered: false,
+  success: false,
+};
+
+function updateAudio(state: Readonly<SimulationState>): void {
+  const previous = audioCues;
+  if (state.chamberId !== previous.chamberId) audio.setRoom(state.chamberId);
+  // Recording begins on the first captured tick, not when the room loads: the
+  // core holds tapeTick at 0 until the player actually does something. A slow
+  // frame can step several ticks before this runs, so the edge is "left zero",
+  // not "reached one".
+  if (state.phase === "recording" && state.tapeTick > 0 && previous.tapeTick === 0) audio.trigger("record-start");
+  if (previous.phase === "recording" && state.phase === "replay") {
+    if (state.foldedAtTick !== null) audio.trigger("fold");
+    audio.trigger("echo-materialize");
+  }
+  if (previous.phase !== "rerecord" && state.phase === "rerecord") audio.trigger("fail");
+  if (!previous.success && state.success) audio.trigger("success");
+
+  // Loops belong to live play only, so a hold that was active at the moment of
+  // success does not creak on under the success card.
+  const playing = state.phase === "recording" || state.phase === "replay";
+  const winch = playing && state.hold?.active === true;
+  if (winch !== previous.winch) audio.setLoop("winch", winch);
+  const push = playing && (state.forceObject?.force ?? 0) > 0;
+  if (push !== previous.push) audio.setLoop("push", push);
+
+  const door = state.door?.open === true;
+  if (door && !previous.door) audio.trigger("gate-open");
+  const exit = state.exit.open;
+  if (exit && !previous.exit) audio.trigger("gate-open");
+  const carried = (state.handoff?.holder ?? null) !== null;
+  if (carried && !previous.carried) audio.trigger("carrier-pickup");
+  const staged = state.handoff?.stagedByPast === true;
+  if (staged && !previous.staged) audio.trigger("carrier-stage");
+  const delivered = state.handoff?.delivered === true;
+  if (delivered && !previous.delivered) audio.trigger("carrier-deliver");
+
+  previous.chamberId = state.chamberId;
+  previous.phase = state.phase;
+  previous.tapeTick = state.tapeTick;
+  previous.winch = winch;
+  previous.push = push;
+  previous.door = door;
+  previous.exit = exit;
+  previous.carried = carried;
+  previous.staged = staged;
+  previous.delivered = delivered;
+  previous.success = state.success;
+}
+
 function updateUi(state: Readonly<SimulationState>, checksum: string): void {
   const chamber = CHAMBERS[state.chamberId];
   currentId = state.chamberId;
   const index = ROUTE.indexOf(state.chamberId);
   trackTutorialSignals(state, scene.recordedFrames);
+  updateAudio(state);
   if (fxPhase === "recording" && state.phase === "replay") showPassTransition(state.foldedAtTick !== null);
   fxPhase = state.phase;
   setText("#phase-label", phaseCopy(state.phase));
@@ -1114,6 +1191,11 @@ const browserApi = {
     babylon: scene.rendererVersion,
   },
   renderer: { name: "babylon", ready: false, context: scene.rendererContext },
+  audio: {
+    get started() { return audio.started; },
+    get muted() { return audio.isMuted; },
+    get masterGain() { return audio.masterGain; },
+  },
 } as Window["__I_WAS_SO_I_AM__"];
 if (EXPOSE_TEST_API) {
   Object.assign(browserApi, {
@@ -1151,6 +1233,15 @@ if (savedProgress) {
 } else {
   scene.switchChamber(FIRST_ROOM);
 }
+// The engine was constructed with the saved mute state; make the button agree
+// with it, so a returning player does not see SOUND ON over silence.
+if (audio.isMuted) {
+  const muteButton = queryElement<HTMLButtonElement>('[data-setting="mute"]');
+  muteButton?.setAttribute("aria-pressed", "true");
+  const muteLabel = muteButton?.querySelector<HTMLElement>("span");
+  if (muteLabel) muteLabel.textContent = "OFF";
+  document.body.classList.add("muted");
+}
 
 function beginJourney(): void {
   started = true;
@@ -1175,6 +1266,7 @@ queryElement("#next")?.addEventListener("click", () => {
     switchChamber(next);
   } else {
     scene.setPaused(true);
+    audio.trigger("ending");
     queryElement("#ending-screen")?.removeAttribute("hidden");
   }
 });
@@ -1203,6 +1295,7 @@ document.querySelectorAll<HTMLButtonElement>("[data-control]").forEach((button) 
 document.querySelectorAll<HTMLButtonElement>("[data-setting]").forEach((button) => button.addEventListener("click", () => {
   const setting = button.dataset.setting;
   const value = button.querySelector<HTMLElement>("span");
+  audio.trigger("ui");
   if (setting === "locale") {
     locale = locale === "ko" ? "en" : "ko";
     if (value) value.textContent = locale.toUpperCase();
@@ -1214,7 +1307,11 @@ document.querySelectorAll<HTMLButtonElement>("[data-setting]").forEach((button) 
   button.setAttribute("aria-pressed", String(active));
   if (setting === "motion") document.body.classList.toggle("reduce-motion", active);
   if (setting === "contrast") document.body.classList.toggle("high-contrast", active);
-  if (setting === "mute") document.body.classList.toggle("muted", active);
+  if (setting === "mute") {
+    document.body.classList.toggle("muted", active);
+    audio.setMuted(active);
+    writeProgress(currentId);
+  }
   if (value) {
     if (setting === "contrast") {
       value.textContent = active ? "ON" : "OFF";
@@ -1229,4 +1326,11 @@ window.addEventListener("keydown", (event) => {
   if (!started && activationKeys.includes(event.key)) beginJourney();
 });
 window.addEventListener("blur", () => scene.resetInput());
+// Autoplay policy: the AudioContext is created inside the first user gesture
+// and never before, so no browser logs a blocked-autoplay warning. Both
+// listeners stay installed — start() is idempotent, and it also resumes a
+// context the browser suspended while the tab was in the background.
+const startAudio = (): void => audio.start();
+window.addEventListener("pointerdown", startAudio, { capture: true });
+window.addEventListener("keydown", startAudio, { capture: true });
 localize();
