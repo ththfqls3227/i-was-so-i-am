@@ -4,6 +4,7 @@ import { SIMULATION_VERSION, TICK_RATE, type ActorId, type ChamberId, type Failu
 import { CHAMBERS } from "./content/chambers";
 import { goldenFor } from "./content/golden";
 import { FOUR_ROOM_ROUTE } from "./content/manifests";
+import { traceRequiredHoldTicks, traceRequiredTravelTicks } from "./content/tutorial-timing";
 import { MemoryScene } from "./game/MemoryScene";
 
 interface BrowserRun {
@@ -42,19 +43,28 @@ const roomNames: Record<ChamberId, { ko: string; en: string }> = {
   handoff: { ko: "이어받은 마음", en: "Handoff" },
   lastHold: { ko: "마지막 붙듦", en: "Last Hold" },
 };
-// The core reports failures as structured codes; only this map turns them into copy.
-const failureCopyMap: Partial<Record<FailureCode, { ko: string; en: string }>> = {
+// The core reports failures as structured codes; only these maps turn them into
+// copy. Never compare the copy — branch on the code (and the room it came from).
+type FailureLine = { ko: string; en: string };
+const failureCopyMap: Partial<Record<FailureCode, FailureLine>> = {
   "echo-faded": { ko: "메아리가 사라졌습니다 — R로 다시 기록하세요.", en: "The echo has faded. Rerecord with R." },
   "door-closed": { ko: "다리가 닫혔습니다 — R로 다시 기록하고, 윈치를 잡은 채 ⏎로 접으세요.", en: "The bridge closed. Rerecord with R and fold with ⏎ while gripping the winch." },
   "hold-released-early": { ko: "문이 닫혔습니다 — 과거가 손잡이를 놓쳤어요. 붙든 채로 시간을 접으세요.", en: "The door closed — your past let go of the handle. Fold time while still holding." },
   "carrier-not-staged": { ko: "기억 상자가 접점에 도착하지 못했습니다 — 1회차에 상자를 접점까지 옮기세요.", en: "The memory carrier never reached the junction. Carry it there in pass 1." },
-  "delivery-gate-closed": { ko: "전달구가 닫혀 있습니다 — 1회차에서 개폐기를 더 오래 붙드세요.", en: "The delivery gate is closed. Hold the switch longer in pass 1." },
+  "delivery-gate-closed": { ko: "전달구가 닫혀 있습니다 — 과거가 개폐기를 붙든 채로 시간을 접었는지 확인하세요.", en: "The delivery gate is closed. Make sure your past folds time while still gripping the switch." },
   "block-not-bridged": { ko: "틈이 그대로입니다 — 돌덩이를 끝까지 밀어야 해요.", en: "The gap remains. Push the block all the way." },
 };
+// Some codes mean different things room to room: the same unseated force object
+// is a missing bridge in Last Hold and an unfinished shared push in Trace Weight.
+const roomFailureCopyMap: Partial<Record<ChamberId, Partial<Record<FailureCode, FailureLine>>>> = {
+  traceWeight: {
+    "block-not-bridged": { ko: "무게추를 함께 끝까지 밀어야 해요 — 과거와 같은 면에 서세요.", en: "The weight needs both of you pushing to the end — stand on the same side as your past." },
+  },
+};
 
-function failureCopy(code: FailureCode | null): string | null {
+function failureCopy(code: FailureCode | null, chamberId: ChamberId): string | null {
   if (!code) return null;
-  const entry = failureCopyMap[code];
+  const entry = roomFailureCopyMap[chamberId]?.[code] ?? failureCopyMap[code];
   if (entry) return entry[locale];
   return locale === "ko" ? "기록을 불러올 수 없습니다 — R로 다시 기록하세요." : "The recording could not be loaded. Rerecord with R.";
 }
@@ -276,29 +286,6 @@ function presentActor(state: Readonly<SimulationState>): SimulationState["actors
   return state.actors.find((candidate) => candidate.id === "present") ?? null;
 }
 
-/**
- * Ticks the Trace Weight winch must stay held so the present self can walk
- * from spawn to the latch line in pass 2 — derived from chamber geometry and
- * core movement speed, with the grace window as reaction margin.
- */
-function traceRequiredHoldTicks(): number {
-  const chamber = CHAMBERS.traceWeight;
-  const latchX = chamber.door?.latchWhenPresentBeyondX ?? chamber.spawn.x;
-  return Math.ceil((latchX - chamber.spawn.x) / simulationConstants.movePerTick) + simulationConstants.graceTicks;
-}
-
-/**
- * Ticks of rightward walking the Trace Weight recording needs after releasing
- * the winch so the replayed past can travel winch→weight through the latched
- * bridge. Derived from chamber geometry, not tuned by hand.
- */
-function traceRequiredTravelTicks(): number {
-  const chamber = CHAMBERS.traceWeight;
-  const holdX = chamber.hold?.x ?? chamber.spawn.x;
-  const weightX = chamber.forceObject?.x ?? holdX;
-  return Math.ceil((weightX - holdX) / simulationConstants.movePerTick) + simulationConstants.graceTicks;
-}
-
 // Signals accumulated from the state stream during a recording (state history,
 // still no magic numbers): how long the hold has been gripped and, for Trace
 // Weight, whether it was held long enough and when it was released.
@@ -361,7 +348,7 @@ function rerecordMessage(state: Readonly<SimulationState>, korean: boolean): Tut
     pass: korean ? "다시 기록이 필요합니다" : "RERECORD NEEDED",
     step: korean ? "복구" : "RECOVER",
     title: korean ? "기록을 고쳐야 합니다" : "Fix the recording",
-    body: failureCopy(state.lastError) ?? (korean ? "R을 눌러 처음부터 더 나은 행동을 기록하세요." : "Press R and record a better plan from the start."),
+    body: failureCopy(state.lastError, state.chamberId) ?? (korean ? "R을 눌러 처음부터 더 나은 행동을 기록하세요." : "Press R and record a better plan from the start."),
     ...tutorialInput("reset"),
     checklist: [
       { text: korean ? "R로 즉시 다시 기록" : "Rerecord now with R", state: "active" },

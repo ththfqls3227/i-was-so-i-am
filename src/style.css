@@ -87,7 +87,9 @@ kbd { border:1px solid #48566b; border-radius:4px; padding:2px 5px; font-size:.6
 .touch-action { width:78px; height:78px; border-radius:50%; border-color:#a98e5e; color:var(--gold); }.touch-reset { width:46px; height:46px; }
 .touch-fold { width:46px; height:46px; border-color:#357f96; color:var(--cyan); font-size:1.05rem; }
 .touch-fold:disabled { opacity:.38; }
-@media (max-width:900px),(pointer:coarse) { body.has-started .fold-prompt { display:none; } }
+/* Touch players fold with the dedicated ⏎ button, so the keyboard prompt is
+   hidden on coarse pointers only — a narrow desktop window still needs it. */
+@media (pointer:coarse) { body.has-started .fold-prompt { display:none; } }
 body[data-phase="success"] .phase { color:#83e6ac; } body[data-phase="rerecord"] .phase { color:#ff8ba4; }
 body[data-phase="success"] .rerecord { opacity:.28; }
 .pass-badge { position:absolute; z-index:3; top:14px; right:14px; padding:6px 13px; border:1px solid #806849; border-radius:999px; background:#11151be8; color:var(--gold); font-size:.66rem; font-weight:800; letter-spacing:.14em; backdrop-filter:blur(8px); }
