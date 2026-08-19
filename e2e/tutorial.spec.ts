@@ -149,6 +149,33 @@ test("Trace Weight finishes for a slow hand that follows the card", async ({ pag
   await expect(page.locator("#success-card")).toBeVisible();
 });
 
+test("says so when the action key is being held against nothing", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "기억 속으로 들어가기" }).click();
+  const nudge = page.locator("#tutorial-nudge");
+  await expect(nudge).toBeHidden();
+
+  // Spawn is nowhere near the winch: holding the action key here grips air.
+  await page.keyboard.down("Space");
+  await expect(nudge).toBeVisible();
+  await expect(nudge).toContainText("여기엔 잡을 것이 없습니다");
+  await page.keyboard.up("Space");
+  await expect(nudge).toBeHidden();
+
+  // Reaching a real affordance is the other way out of it.
+  await page.keyboard.down("ArrowRight");
+  await page.waitForFunction(
+    (x) => (window.__I_WAS_SO_I_AM__.state?.actors[0]?.x ?? 0) >= x,
+    nearWinchX,
+    { polling: 10, timeout: 4_000 },
+  );
+  await page.keyboard.up("ArrowRight");
+  await page.keyboard.down("Space");
+  await expect.poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.hold?.active)).toBe(true);
+  await expect(nudge).toBeHidden();
+  await page.keyboard.up("Space");
+});
+
 test("keeps the fold key discoverable in a narrow desktop window", async ({ page }) => {
   // A narrow window with a fine pointer is still a keyboard player: the prompt
   // that teaches ⏎ must stay, and must not sit on the touch controls.

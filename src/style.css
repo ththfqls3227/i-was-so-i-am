@@ -28,6 +28,9 @@ h1 { margin:0; font:400 clamp(1.25rem,2.25vw,2.25rem)/1 Georgia,serif; letter-sp
 .tutorial-action small { color:#cdbb9d; font-size:.64rem; }
 .tutorial-card[data-stage="crossing-hold-winch"] .tutorial-action::after { content:""; display:block; width:100%; height:4px; border-radius:999px; background:linear-gradient(90deg,var(--gold),#ffe7a8); transform-origin:left; animation:tutorial-hold-confirm 1s linear forwards; box-shadow:0 0 12px #e5a75e88; }
 @keyframes tutorial-hold-confirm { from { transform:scaleX(0); } to { transform:scaleX(1); } }
+.tutorial-nudge { margin:6px 0 0; padding-left:9px; border-left:2px solid var(--gold); color:#ffd9a0; font-size:.74rem; line-height:1.4; }
+/* The narrow-window rule below forces .tutorial-instruction p to display:block, which would outrank [hidden]. */
+.tutorial-nudge[hidden] { display:none; }
 .tutorial-checklist { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 0; padding:0; list-style:none; }
 .tutorial-checklist li { padding:5px 8px; border:1px solid #3a4655; border-radius:999px; color:#8290a1; background:#0a0f16d9; font-size:.66rem; }
 .tutorial-checklist li::before { content:"○"; margin-right:5px; }

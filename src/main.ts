@@ -144,7 +144,7 @@ root.innerHTML = `
       <div id="game" aria-label="I WAS, SO I AM 게임 화면"></div>
       <div class="tutorial-card" id="tutorial-card" role="status" aria-live="polite">
         <div class="tutorial-meta"><span id="tutorial-pass"></span><em id="tutorial-step"></em></div>
-        <div class="tutorial-instruction"><strong id="tutorial-title"></strong><p id="tutorial-copy"></p><ol class="tutorial-checklist" id="tutorial-checklist"><li></li><li></li><li></li></ol></div>
+        <div class="tutorial-instruction"><strong id="tutorial-title"></strong><p id="tutorial-copy"></p><p class="tutorial-nudge" id="tutorial-nudge" hidden></p><ol class="tutorial-checklist" id="tutorial-checklist"><li></li><li></li><li></li></ol></div>
         <div class="tutorial-action"><kbd id="tutorial-key"></kbd><small id="tutorial-action-label"></small></div>
       </div>
       <span class="pass-badge" id="pass-badge"></span>
@@ -294,9 +294,37 @@ function presentActor(state: Readonly<SimulationState>): SimulationState["actors
 const traceProjection = new TraceRecordingProjection();
 let traceProgress = idleTraceProgress();
 
+// A held action key that never lands on anything is the one dead end the
+// stage copy cannot describe: the actor looks busy while gripping nothing, and
+// nothing on screen changes. After this many ticks of it, say so.
+const NUDGE_AFTER_TICKS = 15;
+let gripsNothingSinceTick: number | null = null;
+
 function resetTutorialSignals(): void {
   traceProjection.reset();
   traceProgress = idleTraceProgress();
+  gripsNothingSinceTick = null;
+}
+
+/** The actor the player is driving right now: the past while recording, the present in pass 2. */
+function controlledActor(state: Readonly<SimulationState>): SimulationState["actors"][number] | null {
+  return state.phase === "recording" ? recordingActor(state) : presentActor(state);
+}
+
+function gripsNothing(state: Readonly<SimulationState>): boolean {
+  if (state.phase !== "recording" && state.phase !== "replay") {
+    gripsNothingSinceTick = null;
+    return false;
+  }
+  const actor = controlledActor(state);
+  if (!actor?.actionHeld || actor.targetId !== null) {
+    gripsNothingSinceTick = null;
+    return false;
+  }
+  // A rerecord rewinds the tick counter; restart the count rather than read a
+  // stale start tick from the run before it.
+  if (gripsNothingSinceTick === null || state.tick < gripsNothingSinceTick) gripsNothingSinceTick = state.tick;
+  return state.tick - gripsNothingSinceTick > NUDGE_AFTER_TICKS;
 }
 
 function trackTutorialSignals(state: Readonly<SimulationState>, recordedFrames: readonly InputFrame[]): void {
@@ -898,6 +926,16 @@ function updateTutorial(state: Readonly<SimulationState>): void {
   setText("#tutorial-copy", tutorial.body);
   setText("#tutorial-key", tutorial.key);
   setText("#tutorial-action-label", tutorial.action);
+  const nudge = queryElement("#tutorial-nudge");
+  if (nudge) {
+    const show = gripsNothing(state);
+    if (show) {
+      setText("#tutorial-nudge", locale === "ko"
+        ? "여기엔 잡을 것이 없습니다 — 황금 고리로 가서, 대상을 향해 잡으세요"
+        : "Nothing to grip here — go to the gold ring and face the target.");
+    }
+    if (nudge.hidden === show) nudge.hidden = !show;
+  }
   const list = queryElement("#tutorial-checklist");
   if (list) {
     while (list.children.length > tutorial.checklist.length) list.lastElementChild?.remove();
