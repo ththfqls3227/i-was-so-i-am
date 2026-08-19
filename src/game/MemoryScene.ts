@@ -24,6 +24,7 @@ import { InputBit, NEUTRAL_INPUT, type InputFrame } from "../core/input";
 import { Simulation } from "../core/simulation";
 import { TICK_MS, type ActorId, type ActorState, type ChamberId, type ForceObjectState, type Rect, type SimulationState, type Tape } from "../core/types";
 import { CHAMBERS } from "../content/chambers";
+import { traceRequiredHoldTicks } from "../content/tutorial-timing";
 
 const WORLD_SCALE = 0.02;
 const MAX_STEPS_PER_FRAME = 4;
@@ -193,6 +194,9 @@ export class MemoryScene {
   private presentMaterials: { jacket: StandardMaterial; skin: StandardMaterial; cloth: StandardMaterial; extremity: StandardMaterial } | null = null;
   private echoMaterials: { jacket: StandardMaterial; skin: StandardMaterial; cloth: StandardMaterial; extremity: StandardMaterial } | null = null;
   private lastPhase: SimulationState["phase"] | null = null;
+  /** Trace Weight's guide turns to the weight on the same beat the card does: once the winch has been held long enough. */
+  private traceGripStartTick: number | null = null;
+  private traceWinchHeldLongEnough = false;
   private rippleAge = -1;
   private idleClock = 0;
   private pressedKeys = new Set<string>();
@@ -333,6 +337,7 @@ export class MemoryScene {
     this.accumulator = 0;
     this.previousAction = false;
     this.recordingStarted = false;
+    this.resetRecordingBeats();
     this.disposeActorVisuals();
     this.disposeWorld();
     this.visuals = this.rebuildWorld();
@@ -346,6 +351,7 @@ export class MemoryScene {
     this.accumulator = 0;
     this.previousAction = false;
     this.recordingStarted = false;
+    this.resetRecordingBeats();
     this.updateVisuals(this.simulation.state);
     this.publish();
   }
@@ -466,6 +472,7 @@ export class MemoryScene {
         }
         this.recordingStarted = true;
         this.simulation.step(frame);
+        this.trackRecordingBeats();
         this.accumulator -= TICK_MS;
         steps += 1;
       }
@@ -2150,6 +2157,27 @@ export class MemoryScene {
     this.chamberMaterials = [];
   }
 
+  /**
+   * Latches the one recording beat the guide needs. It runs per simulation tick
+   * rather than per rendered frame, so a throttled or stuttering renderer reads
+   * the same grip length the card does.
+   */
+  private trackRecordingBeats(): void {
+    const state = this.simulation.state;
+    if (state.phase !== "recording") return;
+    if (!state.hold?.active) {
+      this.traceGripStartTick = null;
+      return;
+    }
+    this.traceGripStartTick ??= state.tapeTick;
+    if (state.tapeTick - this.traceGripStartTick >= traceRequiredHoldTicks()) this.traceWinchHeldLongEnough = true;
+  }
+
+  private resetRecordingBeats(): void {
+    this.traceGripStartTick = null;
+    this.traceWinchHeldLongEnough = false;
+  }
+
   private targetGuidePosition(state: Readonly<SimulationState>): Vector3 | null {
     if (state.success) return null;
     const exit = (): Vector3 => this.rectCenter(state.exit, 0.05);
@@ -2163,7 +2191,10 @@ export class MemoryScene {
         return state.phase === "recording" || state.phase === "rerecord" ? hold() : exit();
       case "traceWeight":
         if (state.phase === "recording" || state.phase === "rerecord") {
-          return state.tapeTick < 110 ? hold() : weight();
+          // Follow the recording's own beat, not the clock: a player who grips
+          // the winch generously must not be waved at the weight while the card
+          // is still telling them to hold on.
+          return this.traceWinchHeldLongEnough ? weight() : hold();
         }
         if (state.door && !state.door.latched) {
           return this.worldPoint(
