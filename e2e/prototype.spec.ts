@@ -82,8 +82,8 @@ test("keyboard input completes the live Crossing record-reset-cooperate loop", a
   await expect.poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.phase)).toBe("recording");
   await page.keyboard.down("ArrowRight");
   await page.waitForFunction(
-    () => (window.__I_WAS_SO_I_AM__.state?.actors[0]?.x ?? 0) >= 240,
-    null,
+    (x) => (window.__I_WAS_SO_I_AM__.state?.actors[0]?.x ?? 0) >= x,
+    (CHAMBERS.crossing.hold?.x ?? 0) - (CHAMBERS.crossing.hold?.radius ?? 0),
     { polling: 10, timeout: 3_000 },
   );
   await page.keyboard.up("ArrowRight");

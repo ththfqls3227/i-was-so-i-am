@@ -56,10 +56,12 @@ test("exposes an accessible title, start action, game surface, and controls", as
   await expect(page.getByLabel("I WAS, SO I AM 게임 화면")).toBeVisible();
   await expect(page.locator("#pause-button")).toBeHidden();
   await expect(page.locator('nav[aria-label="터치 게임 조작"]')).toBeAttached();
+  await expect(page.locator("#intro-controls")).toContainText("Space / E");
+  await expect(page.locator("#intro-controls")).toContainText("시간 접기");
   await page.getByRole("button", { name: "기억 속으로 들어가기" }).click();
   await expect(page.getByRole("button", { name: "일시정지" })).toBeVisible();
-  await expect(page.locator("#controls")).toBeAttached();
-  await expect(page.locator("#controls")).toContainText("Space / E");
+  await expect(page.locator("#fold-prompt")).toBeVisible();
+  await expect(page.locator("#fold-prompt")).toBeDisabled();
 });
 
 test("exposes operable pause settings in both supported locales", async ({ page }) => {
