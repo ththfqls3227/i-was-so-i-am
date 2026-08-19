@@ -75,6 +75,22 @@ test("a novice finishes Crossing with the fold key by following the on-screen in
   await expect(page.locator("#tutorial-title")).toContainText("과거의 나와 함께");
 });
 
+test("keeps the fold key discoverable in a narrow desktop window", async ({ page }) => {
+  // A narrow window with a fine pointer is still a keyboard player: the prompt
+  // that teaches ⏎ must stay, and must not sit on the touch controls.
+  await page.setViewportSize({ width: 880, height: 820 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "기억 속으로 들어가기" }).click();
+
+  const prompt = page.locator("#fold-prompt");
+  await expect(prompt).toBeVisible();
+  await expect(prompt).toBeDisabled();
+  const promptBox = await prompt.boundingBox();
+  const controlsBox = await page.locator('nav[aria-label="터치 게임 조작"]').boundingBox();
+  if (!promptBox || !controlsBox) throw new Error("Fold prompt or touch controls have no layout box");
+  expect(promptBox.y + promptBox.height).toBeLessThanOrEqual(controlsBox.y + 1);
+});
+
 test("keeps the complete tutorial instruction readable beside mobile controls", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
