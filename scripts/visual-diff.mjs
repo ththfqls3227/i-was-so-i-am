@@ -1,10 +1,15 @@
 /* global Image, ImageData, document */
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import { chromium } from "@playwright/test";
 
-const referencePath = ".omx/artifacts/visual-ralph/humanoid-redesign/reference-v1.png";
-const actualPath = ".omx/artifacts/visual-ralph/humanoid-redesign/actual-cooperation.png";
-const diffPath = ".omx/artifacts/visual-ralph/humanoid-redesign/pixel-diff.png";
+// Manual tooling: `node scripts/visual-diff.mjs [actual.png] [reference.png]`.
+// The default actual is the fresh capture written by e2e/visual-capture.spec.ts;
+// pass a path to diff a promoted artifact instead.
+const [actualArgument, referenceArgument] = process.argv.slice(2);
+const referencePath = referenceArgument ?? ".omx/artifacts/visual-ralph/humanoid-redesign/reference-v1.png";
+const actualPath = actualArgument ?? "test-results/visual/actual-cooperation.png";
+const diffPath = "test-results/visual/pixel-diff.png";
 
 const [reference, actual] = await Promise.all([readFile(referencePath), readFile(actualPath)]);
 const browser = await chromium.launch({ headless: true });
@@ -62,6 +67,7 @@ try {
     referenceUrl: `data:image/png;base64,${reference.toString("base64")}`,
     actualUrl: `data:image/png;base64,${actual.toString("base64")}`,
   });
+  await mkdir(dirname(diffPath), { recursive: true });
   await writeFile(diffPath, Buffer.from(result.dataUrl.split(",")[1], "base64"));
   console.log(JSON.stringify({ ...result, dataUrl: undefined, referencePath, actualPath, diffPath }, null, 2));
 } finally {

@@ -1,8 +1,10 @@
 import { test, type Page } from "@playwright/test";
 import { goldenFor } from "../src/content/golden";
 
-const ARTIFACT = ".omx/artifacts/visual-ralph/humanoid-redesign/actual-cooperation.png";
-const TUTORIAL_ARTIFACT = ".omx/artifacts/visual-ralph/humanoid-redesign/tutorial-crossing.png";
+// Captures land in the untracked test-results tree. The committed artifacts
+// under .omx/ are promoted deliberately, never overwritten by a test run.
+const ARTIFACT = "test-results/visual/actual-cooperation.png";
+const TUTORIAL_ARTIFACT = "test-results/visual/tutorial-crossing.png";
 
 function keysForFrame(frame: number): Set<string> {
   const keys = new Set<string>();
