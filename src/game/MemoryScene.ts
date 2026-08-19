@@ -8,12 +8,13 @@ import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { PointLight } from "@babylonjs/core/Lights/pointLight";
 import { ShadowGenerator } from "@babylonjs/core/Lights/Shadows/shadowGenerator";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
+import { FresnelParameters } from "@babylonjs/core/Materials/fresnelParameters";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
 import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
 import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
-import type { Mesh } from "@babylonjs/core/Meshes/mesh";
+import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { DefaultRenderingPipeline } from "@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline";
@@ -32,6 +33,8 @@ const TRAIL_CAPACITY = 18;
 const CAMERA_RADIUS = 13.5;
 const CAMERA_RADIUS_EXIT = 12.2;
 const CAMERA_ALPHA = -2.05;
+/** Yaw baked into every exit tunnel; the shaft has to undo it to stay side-on. */
+const EXIT_YAW = -1.02;
 const CAMERA_ALPHA_EXIT = -2.14;
 
 /**
@@ -93,6 +96,7 @@ interface ExitVisual {
   shaft: TransformNode;
   shaftMaterial: StandardMaterial;
   spillMaterial: StandardMaterial;
+  beamMaterial: StandardMaterial;
 }
 
 interface TargetGuideVisual {
@@ -195,11 +199,17 @@ export class MemoryScene {
       preserveDrawingBuffer: false,
       stencil: true,
     });
+    // Automation already halves its render rate; running it at full native
+    // resolution with MSAA on top means every one of those frames is the most
+    // expensive one the scene can produce, on a software rasteriser. Automated
+    // runs start on a cheaper rung — review captures clear navigator.webdriver
+    // and so keep full quality.
+    if (this.automatedRenderInterval !== 0) this.scalingRung = 1;
     this.engine.setHardwareScalingLevel(SCALING_LADDER[this.scalingRung] ?? 1);
     this.scene = new Scene(this.engine);
     this.scene.performancePriority = ScenePerformancePriority.Aggressive;
     this.scene.clearColor = new Color4(0.004, 0.008, 0.014, 1);
-    this.scene.ambientColor = new Color3(0.07, 0.086, 0.115);
+    this.scene.ambientColor = new Color3(0.11, 0.135, 0.18);
     this.scene.fogMode = Scene.FOGMODE_EXP2;
     this.scene.fogDensity = 0.016;
     this.scene.fogColor = new Color3(0.014, 0.028, 0.05);
@@ -219,7 +229,7 @@ export class MemoryScene {
 
     this.pipeline = new DefaultRenderingPipeline("memory-pipeline", true, this.scene, [this.camera]);
     this.pipeline.fxaaEnabled = true;
-    this.pipeline.samples = 4;
+    this.pipeline.samples = this.automatedRenderInterval === 0 ? 4 : 1;
     this.pipeline.bloomEnabled = true;
     this.pipeline.bloomThreshold = 0.65;
     this.pipeline.bloomWeight = 0.25;
@@ -227,10 +237,10 @@ export class MemoryScene {
     const grade = this.pipeline.imageProcessing;
     grade.toneMappingEnabled = true;
     grade.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
-    grade.contrast = 1.35;
+    grade.contrast = 1.14;
     grade.exposure = 1.4;
     grade.vignetteEnabled = true;
-    grade.vignetteWeight = 2.2;
+    grade.vignetteWeight = 1.65;
     grade.vignetteStretch = 0.35;
     grade.vignetteColor = new Color4(0.012, 0.024, 0.06, 1);
     grade.vignetteBlendMode = ImageProcessingConfiguration.VIGNETTEMODE_MULTIPLY;
@@ -240,7 +250,7 @@ export class MemoryScene {
     const sky = new HemisphericLight("memory-sky", new Vector3(-0.2, 1, 0.35), this.scene);
     sky.diffuse = new Color3(0.36, 0.5, 0.72);
     sky.groundColor = new Color3(0.022, 0.03, 0.048);
-    sky.intensity = 1.05;
+    sky.intensity = 3.1;
     const key = new DirectionalLight("memory-key", new Vector3(-0.72, -0.66, -0.2), this.scene);
     key.position = new Vector3(9.5, 7.4, 1.6);
     key.diffuse = new Color3(1, 0.68, 0.42);
@@ -493,7 +503,7 @@ export class MemoryScene {
   private createStoneMaterial(name: string, seed: number): StandardMaterial {
     const texture = new DynamicTexture(`${name}-texture`, { width: 512, height: 512 }, this.scene, false);
     const context = texture.getContext();
-    context.fillStyle = "#20262a";
+    context.fillStyle = "#3b444a";
     context.fillRect(0, 0, 512, 512);
     let value = seed >>> 0;
     const random = (): number => {
@@ -504,7 +514,7 @@ export class MemoryScene {
     for (let row = 0; row < 8; row += 1) {
       for (let column = 0; column < 8; column += 1) {
         const inset = 3 + random() * 3;
-        const shade = 28 + Math.floor(random() * 20);
+        const shade = 60 + Math.floor(random() * 26);
         context.fillStyle = `rgb(${shade}, ${shade + 5}, ${shade + 7})`;
         context.fillRect(column * tileSize + inset, row * tileSize + inset, tileSize - inset * 2, tileSize - inset * 2);
         context.strokeStyle = `rgba(156, 143, 116, ${0.08 + random() * 0.1})`;
@@ -525,7 +535,7 @@ export class MemoryScene {
       context.stroke();
     }
     for (let index = 0; index < 900; index += 1) {
-      const shade = random() > 0.55 ? 110 : 8;
+      const shade = random() > 0.55 ? 150 : 20;
       context.fillStyle = `rgba(${shade}, ${shade}, ${shade}, ${0.02 + random() * 0.035})`;
       context.fillRect(random() * 512, random() * 512, 1 + random() * 2, 1 + random() * 2);
     }
@@ -579,6 +589,9 @@ export class MemoryScene {
     const bronze = material(this.scene, "memory-bronze", new Color3(0.3, 0.2, 0.09), new Color3(0.035, 0.018, 0.004), 1, new Color3(0.48, 0.32, 0.13));
     const voidMaterial = material(this.scene, "memory-void", new Color3(0.002, 0.006, 0.012), new Color3(0, 0.025, 0.06));
     const cyan = material(this.scene, "temporal-cyan", new Color3(0.025, 0.24, 0.32), new Color3(0.02, 0.68, 0.94));
+    // Half the emissive of the signal cyan and outside the glow layer: the
+    // depth markers must never compete with the echo for the eye.
+    const chasmRune = material(this.scene, "chasm-rune", new Color3(0.02, 0.14, 0.19), new Color3(0.01, 0.32, 0.46));
     const cyanGlass = material(this.scene, "temporal-glass", new Color3(0.015, 0.18, 0.24), new Color3(0.02, 0.38, 0.56), 0.48);
     const amber = material(this.scene, "living-amber", new Color3(0.55, 0.25, 0.065), new Color3(0.2, 0.07, 0.008));
     const white = material(this.scene, "exit-white", new Color3(0.82, 0.78, 0.67), new Color3(0.9, 0.82, 0.62), 0.82);
@@ -694,9 +707,8 @@ export class MemoryScene {
       for (const z of [-2.9, 0, 2.9]) {
         const depthRune = MeshBuilder.CreateCylinder(`chasm-rune-${z}`, { diameter: 0.15, height: 3.8, tessellation: 10 }, this.scene);
         depthRune.position = new Vector3(center.x, -2.05, z);
-        depthRune.material = cyan;
+        depthRune.material = chasmRune;
         this.registerMesh(depthRune, root, false);
-        this.glow.addIncludedOnlyMesh(depthRune);
       }
       const bridgeRoot = new TransformNode("bridge-root", this.scene);
       bridgeRoot.parent = root;
@@ -973,7 +985,7 @@ export class MemoryScene {
   ): ExitVisual {
     const root = new TransformNode("exit-root", this.scene);
     root.position = this.rectCenter(rect, 0).add(new Vector3(3.6, 0, 0));
-    root.rotation.y = -1.02;
+    root.rotation.y = EXIT_YAW;
     root.parent = worldRoot;
     const depth = Math.max(2.35, rect.height * WORLD_SCALE * 1.05);
     const approach = MeshBuilder.CreateBox("exit-approach", { width: 4.2, depth: 3.15, height: 0.04 }, this.scene);
@@ -986,7 +998,11 @@ export class MemoryScene {
     portal.material = portalMaterial;
     this.registerMesh(portal, root, false);
     this.glow.addIncludedOnlyMesh(portal);
-    const tunnelStone = material(this.scene, "exit-tunnel-stone", new Color3(0.22, 0.21, 0.18), new Color3(0.035, 0.026, 0.016), 1, new Color3(0.12, 0.1, 0.07));
+    const tunnelStone = material(this.scene, "exit-tunnel-stone", new Color3(0.11, 0.105, 0.088), new Color3(0.03, 0.022, 0.013), 1, new Color3(0.12, 0.1, 0.07));
+    // The arch must stay a dark frame around the light. It sits closest to the
+    // exit lamp and the raised fill, so it opts out of most of the ambient
+    // floor the rest of the vault relies on.
+    tunnelStone.ambientColor = new Color3(0.3, 0.3, 0.34);
     const tunnelFloor = MeshBuilder.CreateBox("exit-tunnel-floor", { width: 4.4, depth: depth - 0.24, height: 0.035 }, this.scene);
     tunnelFloor.position = new Vector3(2.1, -0.017, 0);
     tunnelFloor.material = tunnelStone;
@@ -1027,12 +1043,12 @@ export class MemoryScene {
     this.registerMesh(slab, root);
     const light = new PointLight("exit-beacon", new Vector3(4.72, 0.88, 0), this.scene);
     light.diffuse = new Color3(1, 0.86, 0.62);
-    light.intensity = 5.2;
-    light.range = 9;
+    light.intensity = 2.6;
+    light.range = 7.5;
     light.parent = root;
-    const { shaft, shaftMaterial, spillMaterial } = this.createLightShaft(root);
+    const { shaft, shaftMaterial, spillMaterial, beamMaterial } = this.createLightShaft(root);
     void white;
-    return { root, portal, slab, portalMaterial, light, shaft, shaftMaterial, spillMaterial };
+    return { root, portal, slab, portalMaterial, light, shaft, shaftMaterial, spillMaterial, beamMaterial };
   }
 
   /**
@@ -1067,15 +1083,36 @@ export class MemoryScene {
   }
 
   /**
-   * The doorway light is geometry, not a post-process. The tunnel points back
-   * at the camera, so a cone would only ever be seen end-on: instead the
-   * opening carries an additive halo and the floor keeps the spill that
-   * streams out of it.
+   * Vertical ramp for the beam itself: bright where it leaves the doorway,
+   * spent by the time it reaches the floor. Kept separate from the blob
+   * texture so the cone reads as a shaft with edges rather than as fog.
+   */
+  private createBeamTexture(): DynamicTexture {
+    const texture = new DynamicTexture("exit-beam-ramp", { width: 32, height: 256 }, this.scene, false);
+    const context = texture.getContext();
+    const ramp = context.createLinearGradient(0, 0, 0, 256);
+    ramp.addColorStop(0, "#c9a274");
+    ramp.addColorStop(0.32, "#8a6136");
+    ramp.addColorStop(0.7, "#33220f");
+    ramp.addColorStop(1, "#0a0603");
+    context.fillStyle = ramp;
+    context.fillRect(0, 0, 32, 256);
+    texture.update(false);
+    return texture;
+  }
+
+  /**
+   * The doorway light is geometry, not a post-process. A cone aimed straight
+   * out of the tunnel would be seen end-on — the tunnel faces the camera — so
+   * the beam is raked steeply downward instead: from the top of the opening to
+   * the floor of the room, which the camera sees side-on as a shaft crossing
+   * dark air. The opening keeps a halo and the floor keeps the spill.
    */
   private createLightShaft(exitRoot: TransformNode): {
     shaft: TransformNode;
     shaftMaterial: StandardMaterial;
     spillMaterial: StandardMaterial;
+    beamMaterial: StandardMaterial;
   } {
     const shaft = new TransformNode("exit-shaft-root", this.scene);
     shaft.parent = exitRoot;
@@ -1088,20 +1125,45 @@ export class MemoryScene {
     };
 
     const shaftMaterial = this.createShaftMaterial("exit-shaft", this.createShaftTexture("exit-shaft-halo", 128));
-    const halo = place(MeshBuilder.CreatePlane("exit-shaft-halo", { width: 1.9, height: 2.6 }, this.scene), shaftMaterial);
+    const halo = place(MeshBuilder.CreatePlane("exit-shaft-halo", { width: 1.7, height: 2.3 }, this.scene), shaftMaterial);
     halo.rotation.y = -Math.PI / 2;
     halo.position = new Vector3(4.42, 1.15, 0);
     this.glow.addIncludedOnlyMesh(halo);
-    const throat = place(MeshBuilder.CreatePlane("exit-shaft-throat", { width: 1.15, height: 1.75 }, this.scene), shaftMaterial);
-    throat.rotation.y = -Math.PI / 2;
-    throat.position = new Vector3(3.05, 0.95, 0);
+
+    // Apex at the top of the opening, base on the flagstones inside the room:
+    // a ~45-degree rake, which the camera reads as a beam rather than a blob.
+    const beamMaterial = this.createShaftMaterial("exit-beam", this.createBeamTexture());
+    // Without this the cone is a solid shape wherever the camera catches it
+    // end-on. Weighting the emissive toward grazing angles is what turns the
+    // mesh into a beam: bright at the silhouette, near-invisible face-on.
+    const edgeWeighting = new FresnelParameters();
+    edgeWeighting.bias = 0.05;
+    edgeWeighting.power = 2;
+    edgeWeighting.leftColor = Color3.White();
+    edgeWeighting.rightColor = Color3.Black();
+    beamMaterial.emissiveFresnelParameters = edgeWeighting;
+    const beam = place(MeshBuilder.CreateCylinder("exit-shaft-beam", {
+      height: 4.74,
+      diameterTop: 0.5,
+      diameterBottom: 1.7,
+      tessellation: 26,
+      // Caps would show as a lit disc wherever the camera catches the open end.
+      cap: Mesh.NO_CAP,
+    }, this.scene), beamMaterial);
+    // A fake volumetric only reads while the camera sees it side-on, and the
+    // exits are yawed toward the viewer. Raking the cone along the camera's
+    // screen-right axis (rather than along the tunnel) keeps the beam broadside
+    // in every room instead of collapsing into a lit shell in handoff.
+    const beamYaw = Math.atan2(-Math.cos(CAMERA_ALPHA), -Math.sin(CAMERA_ALPHA)) - EXIT_YAW;
+    beam.rotation = new Vector3(0, beamYaw, -0.83);
+    beam.position = new Vector3(2.5, 1.72, 0);
 
     const spillMaterial = this.createShaftMaterial("exit-spill", this.createShaftTexture("exit-spill-falloff", 40));
     const spill = place(MeshBuilder.CreatePlane("exit-shaft-spill", { width: 3.6, height: 5.6 }, this.scene), spillMaterial);
     spill.rotation.x = Math.PI / 2;
     spill.rotation.z = -Math.PI / 2;
     spill.position = new Vector3(0.35, 0.03, 0);
-    return { shaft, shaftMaterial, spillMaterial };
+    return { shaft, shaftMaterial, spillMaterial, beamMaterial };
   }
 
   private createPortalGlyph(position: Vector3, glyphMaterial: StandardMaterial, root: TransformNode): void {
@@ -1367,13 +1429,15 @@ export class MemoryScene {
     const restAlpha = focusExit ? CAMERA_ALPHA_EXIT : CAMERA_ALPHA;
     this.camera.alpha += (restAlpha + this.idleDrift() - this.camera.alpha) * 0.12;
     this.camera.radius += ((focusExit ? CAMERA_RADIUS_EXIT : CAMERA_RADIUS) - this.camera.radius) * 0.12;
-    const shaftReach = exitOpen ? 0.3 : 0.12;
-    this.visuals.exit.light.intensity = exitOpen ? 6.2 + Math.sin(performance.now() * 0.004) * 0.4 : 1.8;
+    const shaftReach = exitOpen ? 0.15 : 0.06;
+    this.visuals.exit.light.intensity = exitOpen ? 3 + Math.sin(performance.now() * 0.004) * 0.25 : 1.1;
     this.visuals.exit.portalMaterial.emissiveColor = exitOpen ? new Color3(0.65, 0.42, 0.18) : new Color3(0.08, 0.08, 0.07);
     this.visuals.exit.portalMaterial.alpha = exitOpen ? 0.65 : 0.16;
     this.visuals.exit.slab.position.y += ((exitOpen ? -2.05 : 1.84) - this.visuals.exit.slab.position.y) * 0.12;
     this.visuals.exit.shaftMaterial.emissiveColor = new Color3(shaftReach, shaftReach * 0.94, shaftReach * 0.86);
     this.visuals.exit.spillMaterial.emissiveColor = new Color3(shaftReach, shaftReach * 0.9, shaftReach * 0.78);
+    const beamReach = shaftReach * 1.15;
+    this.visuals.exit.beamMaterial.emissiveColor = new Color3(beamReach, beamReach * 0.92, beamReach * 0.82);
   }
 
   /** Slow alpha sway that only breathes under the title card. */
