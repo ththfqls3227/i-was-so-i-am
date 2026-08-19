@@ -1,0 +1,43 @@
+{
+  "name": "i-was-so-i-am",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.13.0",
+    "npm": "11.6.2"
+  },
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . && node scripts/lint-core.mjs",
+    "test": "vitest run tests",
+    "test:replay-corpus": "vitest run tests/replay-corpus.test.ts",
+    "test:levels": "vitest run tests/levels.test.ts",
+    "test:licenses": "node scripts/license-audit.mjs",
+    "test:e2e": "playwright test",
+    "test:mcp": "node scripts/mcp-browser-smoke.mjs",
+    "test:performance": "node scripts/performance-smoke.mjs",
+    "test:visual-diff": "node scripts/visual-diff.mjs",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test:dist-smoke": "node scripts/dist-smoke.mjs",
+    "validate": "npm run typecheck && npm run lint && npm run test && npm run test:replay-corpus && npm run test:levels && npm run test:licenses && npm run build && npm run test:dist-smoke"
+  },
+  "dependencies": {
+    "@babylonjs/core": "^9.21.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "@playwright/mcp": "0.0.78",
+    "@playwright/test": "1.62.1",
+    "@types/node": "24.10.13",
+    "eslint": "10.8.1",
+    "globals": "17.4.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.57.1",
+    "vite": "8.2.1",
+    "vitest": "4.1.10"
+  }
+}

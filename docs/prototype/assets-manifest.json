@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 2,
+  "updatedAt": "2026-08-16",
+  "generator": "OpenAI ImageGen invoked through the Codex built-in imagegen skill",
+  "rightsNote": "The generated PNGs are retained only as concept and visual-direction evidence. They are not referenced by source code, copied to public/, or shipped in dist. The playable renderer builds the chamber, mechanisms, human, and echo from live Babylon.js geometry and procedural materials.",
+  "runtimeAssets": [],
+  "retiredConceptAssets": [
+    {
+      "path": ".omx/artifacts/visual-ralph/humanoid-redesign/source-assets/humanoid-sprites-source.png",
+      "sha256": "2b485abbbc91210e2e83017ebf55adae424250435f3af1a68ac4524330ed5453",
+      "purpose": "Retired human-pose concept reference; never loaded by the game"
+    },
+    {
+      "path": ".omx/artifacts/visual-ralph/humanoid-redesign/source-assets/humanoid-echo-sprites-source.png",
+      "sha256": "5f190affd93ea2f46c8d36e8e6fbb456082be0e42f64fbd0c665b9439afda6b5",
+      "purpose": "Retired echo-pose concept reference; never loaded by the game"
+    },
+    {
+      "path": ".omx/artifacts/visual-ralph/humanoid-redesign/source-assets/memory-chamber-background-source.png",
+      "sha256": "f86651cdfc8b3bf1e2ba5c9d73f07740320d6c5bd382d144abe246db83c880f5",
+      "purpose": "Retired chamber concept reference; never used as a background plate"
+    },
+    {
+      "path": ".omx/artifacts/visual-ralph/humanoid-redesign/source-assets/memory-props-source.png",
+      "sha256": "42e17a6a6f0bbeb70759f26ec9c980983c787e66e852b408103b54163ab817b3",
+      "purpose": "Retired mechanism concept reference; never loaded as a sprite sheet"
+    }
+  ]
+}

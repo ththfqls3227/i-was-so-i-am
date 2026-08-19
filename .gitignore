@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+.playwright-mcp/
+.DS_Store
+.omx/state/
+.omx/tmux-hook.json
+.omc/
