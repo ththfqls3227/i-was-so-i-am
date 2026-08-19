@@ -1,7 +1,13 @@
 import { encodeInput, NEUTRAL_INPUT, type InputFrame } from "../core/input";
 import { createTape } from "../core/replay";
+import { Simulation, simulationConstants } from "../core/simulation";
 import type { ChamberDefinition, ChamberId, Tape } from "../core/types";
-import { CROSSING_CHAMBER, TRACE_WEIGHT_CHAMBER } from "./chambers";
+import {
+  CROSSING_CHAMBER,
+  HANDOFF_CHAMBER,
+  LAST_HOLD_CHAMBER,
+  TRACE_WEIGHT_CHAMBER,
+} from "./chambers";
 
 export interface ReplayCorpusCase {
   id: number;
@@ -9,6 +15,13 @@ export interface ReplayCorpusCase {
   tape: Tape;
   presentFrames: InputFrame[];
 }
+
+const CHAMBER_CYCLE = [
+  CROSSING_CHAMBER,
+  TRACE_WEIGHT_CHAMBER,
+  HANDOFF_CHAMBER,
+  LAST_HOLD_CHAMBER,
+] as const;
 
 function seeded(seed: number): () => number {
   let state = seed >>> 0;
@@ -42,13 +55,32 @@ function generatedFrames(chamber: ChamberDefinition, seed: number): InputFrame[]
   return frames;
 }
 
+/** Record part of the generated frames through the real simulation, then fold. */
+function foldedTape(chamber: ChamberDefinition, frames: InputFrame[], seed: number): Tape {
+  const random = seeded(seed);
+  const minTicks = simulationConstants.minTapeTicks;
+  const foldTick = minTicks + (random() % (chamber.tapeDurationTicks - minTicks));
+  const simulation = new Simulation(chamber);
+  for (let tick = 0; tick < foldTick; tick += 1) simulation.step(frames[tick] ?? NEUTRAL_INPUT);
+  if (!simulation.foldRecording() || !simulation.tape) {
+    throw new Error(`Corpus fold failed for ${chamber.id} at tick ${foldTick}`);
+  }
+  return simulation.tape;
+}
+
 export function buildReplayCorpus(count = 100): ReplayCorpusCase[] {
   return Array.from({ length: count }, (_, caseIndex) => {
-    const chamber = caseIndex % 2 === 0 ? CROSSING_CHAMBER : TRACE_WEIGHT_CHAMBER;
+    const chamber = CHAMBER_CYCLE[caseIndex % CHAMBER_CYCLE.length] ?? CROSSING_CHAMBER;
+    const pastFrames = generatedFrames(chamber, caseIndex * 2 + 1);
+    // Every third case ends its recording with a fold so the corpus also
+    // certifies determinism of ActionHeld-filled folded tapes in all rooms.
+    const tape = caseIndex % 3 === 0
+      ? foldedTape(chamber, pastFrames, caseIndex * 2 + 3)
+      : createTape(chamber, pastFrames);
     return {
       id: caseIndex,
       chamberId: chamber.id,
-      tape: createTape(chamber, generatedFrames(chamber, caseIndex * 2 + 1)),
+      tape,
       presentFrames: generatedFrames(chamber, caseIndex * 2 + 2),
     };
   });

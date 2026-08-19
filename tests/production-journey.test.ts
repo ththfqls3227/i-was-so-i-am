@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NEUTRAL_INPUT, type InputFrame } from "../src/core/input";
+import { encodeInput, NEUTRAL_INPUT, type InputFrame } from "../src/core/input";
 import { createInitialState, Simulation } from "../src/core/simulation";
 import type { ChamberDefinition, ChamberId, Tape } from "../src/core/types";
 import { CHAMBERS } from "../src/content/chambers";
@@ -65,6 +65,13 @@ describe("four-room cooperation contract", () => {
     const simulation = run(chamber, idleTape(chamber), golden.present);
     expect(simulation.state.success).toBe(false);
   });
+
+  it.each(EXPECTED_ROUTE)("authors the %s past tape through a fold with an ActionHeld-only tail", (chamberId) => {
+    const holdOnly = encodeInput({ actionHeld: true });
+    const tape = goldenFor(chamberId).past;
+    expect(tape.frames).toHaveLength(CHAMBERS[chamberId].tapeDurationTicks);
+    expect(tape.frames.at(-1)).toBe(holdOnly);
+  });
 });
 
 describe("authored emotional gates", () => {
@@ -97,18 +104,19 @@ describe("authored emotional gates", () => {
     expect(simulation.state.forceObject?.x).toBeGreaterThan(initialX ?? Number.POSITIVE_INFINITY);
   });
 
-  it("leaves the past credited behind while the present crosses Last Hold", () => {
+  it("leaves the past credited at the handle behind the bridged gap while the present crosses Last Hold", () => {
     const chamber = CHAMBERS.lastHold;
     const golden = goldenFor("lastHold");
     const simulation = run(chamber, golden.past, golden.present);
     const past = simulation.state.actors.find((actor) => actor.id === "past");
     const present = simulation.state.actors.find((actor) => actor.id === "present");
     expect(simulation.state.hold?.creditedActors).toContain("past");
+    expect(simulation.state.forceObject?.x).toBe(chamber.forceObject?.minX);
     expect(past?.x).toBeLessThan(chamber.door?.rect.x ?? Number.NEGATIVE_INFINITY);
     expect(present?.x).toBeGreaterThan(chamber.door?.rect.x ?? Number.POSITIVE_INFINITY);
   });
 
-  it("requires the present to redirect the staged Handoff core onto a new route", () => {
+  it("requires the present to redirect the staged Handoff core through the gate the past holds open", () => {
     const chamber = CHAMBERS.handoff;
     const golden = goldenFor("handoff");
     expect(golden.present).not.toEqual(golden.past.frames);
@@ -119,6 +127,8 @@ describe("authored emotional gates", () => {
       redirectedByPresent: true,
       delivered: true,
     });
+    expect(simulation.state.door?.open).toBe(true);
+    expect(simulation.state.hold?.creditedActors).toContain("past");
     expect(simulation.state.success).toBe(true);
   });
 });

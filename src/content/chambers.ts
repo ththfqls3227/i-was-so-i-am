@@ -24,7 +24,7 @@ function createBoundaryWalls(width: number, height: number): Rect[] {
 
 export const TRACE_WEIGHT_CHAMBER: ChamberDefinition = {
   id: "traceWeight",
-  version: 1,
+  version: 2,
   name: "TRACE WEIGHT",
   subtitle: "과거가 길을 열고, 다시 합류한 두 자아가 기억의 무게를 밉니다.",
   hint: "과거로 윈치를 붙잡아 현재를 건넌 뒤, 추 앞에서 두 힘을 합치세요.",
@@ -58,7 +58,7 @@ export const TRACE_WEIGHT_CHAMBER: ChamberDefinition = {
 
 export const CROSSING_CHAMBER: ChamberDefinition = {
   id: "crossing",
-  version: 1,
+  version: 2,
   name: "CROSSING",
   subtitle: "과거가 윈치를 붙잡는 동안 현재가 끊어진 길을 건넙니다.",
   hint: "과거는 윈치를 계속 잡고, 현재는 열린 다리를 건너세요.",
@@ -77,10 +77,10 @@ export const CROSSING_CHAMBER: ChamberDefinition = {
 
 export const HANDOFF_CHAMBER: ChamberDefinition = {
   id: "handoff",
-  version: 1,
+  version: 2,
   name: "HANDOFF",
-  subtitle: "과거가 가져온 기억의 방향을 현재가 바꾸어 이어갑니다.",
-  hint: "과거로 운반체를 접점까지 보내세요. 현재는 이어받아 위쪽 길로 꺾은 뒤 봉인 지점까지 옮기세요.",
+  subtitle: "과거가 기억을 내려놓고 전달구를 여는 동안, 현재가 이어받아 옮깁니다.",
+  hint: "과거로 상자를 접점에 내려놓고 개폐기를 붙드세요. 현재는 이어받아 위쪽 길로 옮겨 열린 전달구에 넣으세요.",
   tapeDurationTicks: 10 * TICK_RATE,
   world: { width: scalePosition(80), height: scalePosition(45) },
   spawn: { x: scalePosition(10), y: scalePosition(22) },
@@ -88,6 +88,8 @@ export const HANDOFF_CHAMBER: ChamberDefinition = {
     ...createBoundaryWalls(80, 45),
     createRect(48, 15, 2, 28),
   ],
+  door: { id: "handoff-gate", rect: createRect(56, 2, 2, 13), open: false },
+  hold: { id: "handoff-switch", x: scalePosition(38), y: scalePosition(9), radius: scalePosition(3.2), active: false, creditedActors: [] },
   handoff: {
     id: "memory-carrier",
     x: scalePosition(18),
@@ -106,11 +108,11 @@ export const HANDOFF_CHAMBER: ChamberDefinition = {
 
 export const LAST_HOLD_CHAMBER: ChamberDefinition = {
   id: "lastHold",
-  version: 1,
+  version: 2,
   name: "LAST HOLD",
-  subtitle: "마지막 메아리가 문을 붙드는 동안 현재만이 앞으로 나아갑니다.",
-  hint: "과거를 마지막 고정점에 남기고, 현재로 최종 문을 통과하세요.",
-  tapeDurationTicks: 8 * TICK_RATE,
+  subtitle: "과거가 다리를 놓고 문을 붙드는 동안, 현재만이 앞으로 나아갑니다.",
+  hint: "과거로 돌덩이를 왼쪽 틈에 밀어 넣고 마지막 문의 손잡이를 붙드세요. 현재는 다리를 건너 문 너머 출구로 나아가세요.",
+  tapeDurationTicks: 10 * TICK_RATE,
   world: { width: scalePosition(80), height: scalePosition(45) },
   spawn: { x: scalePosition(10), y: scalePosition(22) },
   walls: [
@@ -119,8 +121,18 @@ export const LAST_HOLD_CHAMBER: ChamberDefinition = {
     createRect(43, 28, 2, 15),
   ],
   door: { id: "last-door", rect: createRect(43, 17, 2, 11), open: false, blocksPast: true },
-  hold: { id: "last-echo-hold", x: scalePosition(28), y: scalePosition(22), radius: scalePosition(3.2), active: false, creditedActors: [], requiredActor: "past" },
-  exit: { id: "last-exit", ...createRect(70, 17, 6, 10), open: true },
+  hold: { id: "last-echo-hold", x: scalePosition(38), y: scalePosition(22), radius: scalePosition(3.2), active: false, creditedActors: [], requiredActor: "past" },
+  forceObject: {
+    id: "last-bridge-stone",
+    ...createRect(30, 29, 8, 9),
+    axis: "x",
+    minX: scalePosition(20),
+    maxX: scalePosition(30),
+    threshold: 1,
+    force: 0,
+    pushDirection: "left",
+  },
+  exit: { id: "last-exit", ...createRect(70, 17, 6, 10), open: false },
 };
 
 export const CHAMBERS: Record<ChamberId, ChamberDefinition> = {

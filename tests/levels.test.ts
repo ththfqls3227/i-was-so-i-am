@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NEUTRAL_INPUT } from "../src/core/input";
+import { encodeInput, NEUTRAL_INPUT } from "../src/core/input";
 import { Simulation } from "../src/core/simulation";
 import type { ChamberDefinition, Tape } from "../src/core/types";
 import { CROSSING_CHAMBER, TRACE_WEIGHT_CHAMBER } from "../src/content/chambers";
@@ -23,6 +23,12 @@ describe("Crossing cooperation gate", () => {
     expect(simulation.state.success).toBe(true);
     expect(simulation.state.phase).toBe("success");
     expect(simulation.state.actors).toHaveLength(2);
+  });
+
+  it("authors the past tape through a fold, filling the tail with ActionHeld only", () => {
+    const holdOnly = encodeInput({ actionHeld: true });
+    expect(golden.past.frames).toHaveLength(CROSSING_CHAMBER.tapeDurationTicks);
+    expect(golden.past.frames.at(-1)).toBe(holdOnly);
   });
 
   it("cannot complete with the past role alone", () => {
