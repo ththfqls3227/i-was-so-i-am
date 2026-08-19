@@ -5,6 +5,7 @@ import {
   TAPE_FORMAT_VERSION,
   TICK_RATE,
   type ChamberDefinition,
+  type FailureCode,
   type Tape,
 } from "./types";
 
@@ -31,20 +32,20 @@ export function createTape(chamber: ChamberDefinition, frames: InputFrame[]): Ta
   return { ...tapeWithoutChecksum, checksum: checksumValue(payload(tapeWithoutChecksum)) };
 }
 
-export function validateTape(chamber: ChamberDefinition, tape: Tape): string | null {
+export function validateTape(chamber: ChamberDefinition, tape: Tape): FailureCode | null {
   try {
-    if (tape.formatVersion !== TAPE_FORMAT_VERSION) return "Unknown tape format";
-    if (tape.simulationVersion !== SIMULATION_VERSION) return "Simulation version mismatch";
-    if (tape.chamberId !== chamber.id || tape.chamberVersion !== chamber.version) return "Chamber version mismatch";
-    if (tape.tickRate !== TICK_RATE) return "Tick rate mismatch";
-    if (tape.duration !== chamber.tapeDurationTicks || tape.duration !== tape.frames.length) return "Tape duration mismatch";
-    if (tape.duration > MAX_TAPE_TICKS) return "Tape is too long";
+    if (tape.formatVersion !== TAPE_FORMAT_VERSION) return "tape-format-unknown";
+    if (tape.simulationVersion !== SIMULATION_VERSION) return "tape-version-mismatch";
+    if (tape.chamberId !== chamber.id || tape.chamberVersion !== chamber.version) return "tape-chamber-mismatch";
+    if (tape.tickRate !== TICK_RATE) return "tape-tickrate-mismatch";
+    if (tape.duration !== chamber.tapeDurationTicks || tape.duration !== tape.frames.length) return "tape-duration-mismatch";
+    if (tape.duration > MAX_TAPE_TICKS) return "tape-too-long";
     tape.frames.forEach(assertValidInputFrame);
     const { checksum, ...withoutChecksum } = tape;
-    if (checksumValue(payload(withoutChecksum)) !== checksum) return "Tape checksum mismatch";
+    if (checksumValue(payload(withoutChecksum)) !== checksum) return "tape-checksum-mismatch";
     return null;
-  } catch (error) {
-    return error instanceof Error ? error.message : "Invalid tape";
+  } catch {
+    return "tape-invalid";
   }
 }
 

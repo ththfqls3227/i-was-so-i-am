@@ -39,6 +39,7 @@ export function canonicalState(state: SimulationState): unknown {
     exit: state.exit,
     success: state.success,
     lastError: state.lastError,
+    foldedAtTick: state.foldedAtTick,
   };
 }
 

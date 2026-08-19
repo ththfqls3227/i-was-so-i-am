@@ -54,6 +54,77 @@ describe("record/reset/replay lifecycle", () => {
   });
 });
 
+describe("fold recording", () => {
+  it("refuses to fold before one second has been recorded", () => {
+    const simulation = new Simulation(CROSSING_CHAMBER);
+    for (let tick = 0; tick < simulationConstants.minTapeTicks - 1; tick += 1) {
+      simulation.step(encodeInput({ right: true }));
+    }
+    expect(simulation.foldRecording()).toBe(false);
+    expect(simulation.state.phase).toBe("recording");
+    expect(simulation.tape).toBeNull();
+  });
+
+  it("folds mid-recording into a full-length tape keeping only ActionHeld", () => {
+    const simulation = new Simulation(CROSSING_CHAMBER);
+    for (let tick = 0; tick < 24; tick += 1) simulation.step(encodeInput({ right: true }));
+    for (let tick = 0; tick < 30; tick += 1) simulation.step(encodeInput({ right: true, actionHeld: true }));
+    expect(simulation.foldRecording()).toBe(true);
+    expect(simulation.state.phase).toBe("replay");
+    expect(simulation.state.foldedAtTick).toBe(54);
+    const tape = simulation.tape;
+    expect(tape?.frames).toHaveLength(CROSSING_CHAMBER.tapeDurationTicks);
+    for (let tick = 54; tick < CROSSING_CHAMBER.tapeDurationTicks; tick += 1) {
+      expect(tape?.frames[tick]).toBe(InputBit.ActionHeld);
+    }
+  });
+
+  it("does not fold outside the recording phase", () => {
+    const simulation = new Simulation(CROSSING_CHAMBER);
+    expect(simulation.loadTape(crossingGolden().past)).toBeNull();
+    expect(simulation.foldRecording()).toBe(false);
+    expect(simulation.state.phase).toBe("replay");
+  });
+
+  it("keeps the cooperative replay window at the authored duration after a fold", () => {
+    const simulation = new Simulation(CROSSING_CHAMBER);
+    for (let tick = 0; tick < simulationConstants.minTapeTicks; tick += 1) simulation.step(NEUTRAL_INPUT);
+    expect(simulation.foldRecording()).toBe(true);
+    let steps = 0;
+    while (simulation.state.phase === "replay") {
+      simulation.step(NEUTRAL_INPUT);
+      steps += 1;
+    }
+    expect(steps).toBe(CROSSING_CHAMBER.tapeDurationTicks + simulationConstants.graceTicks);
+  });
+
+  it("completes the crossing after an early fold while holding the winch", () => {
+    const simulation = new Simulation(CROSSING_CHAMBER);
+    for (let tick = 0; tick < 24; tick += 1) simulation.step(encodeInput({ right: true }));
+    for (let tick = 0; tick < 32; tick += 1) simulation.step(encodeInput({ actionHeld: true }));
+    expect(simulation.foldRecording()).toBe(true);
+    const cross = encodeInput({ right: true });
+    for (let tick = 0; tick < 120 && simulation.state.phase === "replay"; tick += 1) {
+      simulation.step(cross);
+    }
+    expect(simulation.state.success).toBe(true);
+  });
+});
+
+describe("movement normalization", () => {
+  it("moves at the same speed diagonally as on a single axis", () => {
+    const simulation = new Simulation(CROSSING_CHAMBER);
+    const start = { x: CROSSING_CHAMBER.spawn.x, y: CROSSING_CHAMBER.spawn.y };
+    for (let tick = 0; tick < 10; tick += 1) simulation.step(encodeInput({ right: true, down: true }));
+    const past = simulation.state.actors[0];
+    if (!past) throw new Error("Recording actor is missing");
+    const dx = past.x - start.x;
+    const dy = past.y - start.y;
+    expect(Math.sqrt(dx * dx + dy * dy)).toBeCloseTo(10 * simulationConstants.movePerTick, 6);
+    expect(dx).toBeCloseTo(dy, 6);
+  });
+});
+
 describe("context action target lock", () => {
   it("cannot reacquire after leaving hysteresis until action is released", () => {
     const simulation = new Simulation(CROSSING_CHAMBER);

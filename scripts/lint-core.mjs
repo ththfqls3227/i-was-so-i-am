@@ -12,7 +12,7 @@ const forbidden = [
 ];
 
 const failures = [];
-for (const entry of await readdir(root)) {
+for (const entry of await readdir(root, { recursive: true })) {
   if (!entry.endsWith(".ts")) continue;
   const source = await readFile(join(root.pathname, entry), "utf8");
   for (const [pattern, label] of forbidden) {

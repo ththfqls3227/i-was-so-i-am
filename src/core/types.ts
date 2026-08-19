@@ -2,13 +2,35 @@ import type { InputFrame } from "./input";
 
 export const TICK_RATE = 30;
 export const TICK_MS = 1000 / TICK_RATE;
-export const SIMULATION_VERSION = "production-1.0.0";
+export const SIMULATION_VERSION = "production-2.0.0";
 export const TAPE_FORMAT_VERSION = 1;
 export const POSITION_SCALE = 10;
 
 export type ChamberId = "traceWeight" | "crossing" | "handoff" | "lastHold";
 export type Phase = "recording" | "replay" | "success" | "rerecord";
 export type ActorId = "past" | "present";
+
+/**
+ * Structured failure reasons. The core only ever stores these codes in
+ * `lastError`; the UI layer maps each code to player-facing copy.
+ * Never compare failure copy strings — compare codes.
+ */
+export type FailureCode =
+  | "tape-missing"
+  | "tape-format-unknown"
+  | "tape-version-mismatch"
+  | "tape-chamber-mismatch"
+  | "tape-tickrate-mismatch"
+  | "tape-duration-mismatch"
+  | "tape-too-long"
+  | "tape-checksum-mismatch"
+  | "tape-invalid"
+  | "echo-faded"
+  | "door-closed"
+  | "hold-released-early"
+  | "carrier-not-staged"
+  | "delivery-gate-closed"
+  | "block-not-bridged";
 
 export interface Point {
   x: number;
@@ -33,6 +55,8 @@ export interface DoorState {
   id: string;
   rect: Rect;
   open: boolean;
+  /** Mechanism that gates this door. Defaults to "hold" when the chamber has a hold; doors without a gate keep their authored open state. */
+  gatedBy?: "hold";
   latchWhenPresentBeyondX?: number;
   latched?: boolean;
   blocksPast?: boolean;
@@ -53,6 +77,8 @@ export interface ForceObjectState extends Rect {
   maxX: number;
   threshold: number;
   force: number;
+  /** Direction aligned pushers move the object. Defaults to "right". */
+  pushDirection?: "left" | "right";
 }
 
 export interface HandoffMechanismState extends Point {
@@ -114,5 +140,7 @@ export interface SimulationState {
   handoff: HandoffMechanismState | null;
   exit: ExitState;
   success: boolean;
-  lastError: string | null;
+  lastError: FailureCode | null;
+  /** Recording tick at which the player folded time, or null when the tape ran its full length. Render-only flourish data. */
+  foldedAtTick: number | null;
 }

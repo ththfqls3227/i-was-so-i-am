@@ -4,6 +4,8 @@ export const enum InputBit {
   Left = 1 << 2,
   Right = 1 << 3,
   ActionHeld = 1 << 4,
+  // ActionPressed is still recorded to keep the tape format stable, but the
+  // simulation itself never reads it (edge detection derives from ActionHeld).
   ActionPressed = 1 << 5,
   ActionReleased = 1 << 6,
 }
