@@ -1,6 +1,6 @@
 import "./style.css";
 import { Simulation } from "./core/simulation";
-import type { ActorId, ChamberId, SimulationState, Tape } from "./core/types";
+import { SIMULATION_VERSION, type ActorId, type ChamberId, type FailureCode, type SimulationState, type Tape } from "./core/types";
 import { CHAMBERS } from "./content/chambers";
 import { goldenFor } from "./content/golden";
 import { FOUR_ROOM_ROUTE } from "./content/manifests";
@@ -42,6 +42,23 @@ const roomNames: Record<ChamberId, { ko: string; en: string }> = {
   handoff: { ko: "이어받은 마음", en: "Handoff" },
   lastHold: { ko: "마지막 붙듦", en: "Last Hold" },
 };
+// The core reports failures as structured codes; only this map turns them into copy.
+const failureCopyMap: Partial<Record<FailureCode, { ko: string; en: string }>> = {
+  "echo-faded": { ko: "메아리가 사라졌습니다 — R로 다시 기록하세요.", en: "The echo has faded. Rerecord with R." },
+  "door-closed": { ko: "문이 닫혔습니다 — 과거가 더 오래 붙들도록 기록하세요.", en: "The door closed. Record your past holding on longer." },
+  "hold-released-early": { ko: "과거가 손을 너무 일찍 놓았습니다 — 붙든 채로 시간을 접으세요.", en: "Your past let go too early. Fold time while still holding." },
+  "carrier-not-staged": { ko: "기억 상자가 접점에 도착하지 못했습니다 — 1회차에 상자를 접점까지 옮기세요.", en: "The memory carrier never reached the junction. Carry it there in pass 1." },
+  "delivery-gate-closed": { ko: "전달구가 닫혀 있습니다 — 1회차에서 개폐기를 더 오래 붙드세요.", en: "The delivery gate is closed. Hold the switch longer in pass 1." },
+  "block-not-bridged": { ko: "틈이 그대로입니다 — 돌덩이를 끝까지 밀어야 해요.", en: "The gap remains. Push the block all the way." },
+};
+
+function failureCopy(code: FailureCode | null): string | null {
+  if (!code) return null;
+  const entry = failureCopyMap[code];
+  if (entry) return entry[locale];
+  return locale === "ko" ? "기록을 불러올 수 없습니다 — R로 다시 기록하세요." : "The recording could not be loaded. Rerecord with R.";
+}
+
 const debugDetails = SHOW_DEBUG_DETAILS
   ? '<details class="debug"><summary>결정성 정보</summary><code id="debug-value"></code></details>'
   : "";
@@ -368,7 +385,7 @@ function tutorialMessage(state: Readonly<SimulationState>): TutorialMessage {
       pass: state.phase === "recording" ? (korean ? "1회차 · 과거 행동 기록 중" : "PASS 1 · RECORDING") : (korean ? "2회차 · 과거와 협동 중" : "PASS 2 · COOPERATING"),
       step: korean ? `기억 ${String(ROUTE.indexOf(state.chamberId) + 1).padStart(2, "0")}` : `MEMORY ${String(ROUTE.indexOf(state.chamberId) + 1).padStart(2, "0")}`,
       title: roomNames[state.chamberId][locale],
-      body: state.lastError ?? CHAMBERS[state.chamberId].hint,
+      body: failureCopy(state.lastError) ?? CHAMBERS[state.chamberId].hint,
       ...input,
       checklist: [],
     };
@@ -529,7 +546,7 @@ function updateUi(state: Readonly<SimulationState>, checksum: string): void {
   setText("#chamber-title", roomNames[state.chamberId][locale]);
   queryElement("#chamber-title")?.setAttribute("data-chamber-id", state.chamberId);
   setText("#chamber-subtitle", chamber.subtitle);
-  setText("#hint", state.lastError ?? chamber.hint);
+  setText("#hint", failureCopy(state.lastError) ?? chamber.hint);
   setText("#room-ordinal", `${String(index + 1).padStart(2, "0")} / ${String(ROUTE.length).padStart(2, "0")}`);
   const secondsRemaining = Math.max(0, chamber.tapeDurationTicks - Math.min(state.tapeTick, chamber.tapeDurationTicks)) / 30;
   const tapeMode = state.phase === "recording"
@@ -599,7 +616,7 @@ const browserApi = {
   checksum: "",
   versions: {
     build: BUILD_ID,
-    simulation: "production-1.0.0",
+    simulation: SIMULATION_VERSION,
     renderer: "Babylon.js",
     babylon: scene.rendererVersion,
   },

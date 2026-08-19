@@ -25,7 +25,6 @@ const WORLD_SCALE = 0.02;
 const MAX_STEPS_PER_FRAME = 4;
 const TRAIL_SAMPLE_INTERVAL = 4;
 const TRAIL_CAPACITY = 18;
-const CROSSING_HOLD_CONFIRM_TICKS = 30;
 
 type VirtualControl = "up" | "down" | "left" | "right" | "action";
 
@@ -150,7 +149,6 @@ export class MemoryScene {
   private readonly automatedRenderInterval = navigator.webdriver ? 1000 / 8 : 0;
   private trailTick = 0;
   private trailPositions: Vector3[] = [];
-  private crossingHoldTicks = 0;
   private pressedKeys = new Set<string>();
   private virtualInput = new Set<VirtualControl>();
   private readonly resizeObserver: ResizeObserver;
@@ -268,7 +266,6 @@ export class MemoryScene {
     this.recordingStarted = false;
     this.trailTick = 0;
     this.trailPositions = [];
-    this.crossingHoldTicks = 0;
     this.disposeActorVisuals();
     this.disposeWorld();
     this.visuals = this.buildWorld();
@@ -284,9 +281,23 @@ export class MemoryScene {
     this.recordingStarted = false;
     this.trailTick = 0;
     this.trailPositions = [];
-    this.crossingHoldTicks = 0;
     this.updateVisuals(this.simulation.state);
     this.publish();
+  }
+
+  /**
+   * Fold time: finalize the current recording from the render layer without
+   * fabricating input frames — the deterministic core owns the tape fill.
+   * Returns true when the fold happened.
+   */
+  foldRecording(): boolean {
+    if (this.pausedByPlayer) return false;
+    const folded = this.simulation.foldRecording();
+    if (folded) {
+      this.updateVisuals(this.simulation.state);
+      this.publish();
+    }
+    return folded;
   }
 
   loadTape(tape: Tape): void {
@@ -297,7 +308,6 @@ export class MemoryScene {
     this.recordingStarted = true;
     this.trailTick = 0;
     this.trailPositions = [];
-    this.crossingHoldTicks = 0;
     this.updateVisuals(this.simulation.state);
     this.publish();
   }
@@ -331,6 +341,10 @@ export class MemoryScene {
       "KeyW", "KeyA", "KeyS", "KeyD", "Space", "KeyE", "KeyR",
     ]);
     window.addEventListener("keydown", (event) => {
+      if ((event.code === "Enter" || event.code === "NumpadEnter") && !event.repeat) {
+        this.foldRecording();
+        return;
+      }
       if (!controlled.has(event.code)) return;
       event.preventDefault();
       this.pressedKeys.add(event.code);
@@ -359,7 +373,6 @@ export class MemoryScene {
         }
         this.recordingStarted = true;
         this.simulation.step(frame);
-        this.completeCrossingTutorialHold(frame);
         this.captureTrail();
         this.accumulator -= TICK_MS;
         steps += 1;
@@ -387,25 +400,6 @@ export class MemoryScene {
     if (!action && this.previousAction) frame |= InputBit.ActionReleased;
     this.previousAction = action;
     return frame;
-  }
-
-  private completeCrossingTutorialHold(frame: InputFrame): void {
-    const state = this.simulation.state;
-    const holdingTutorialWinch = state.chamberId === "crossing"
-      && state.phase === "recording"
-      && state.hold?.active === true
-      && (frame & InputBit.ActionHeld) !== 0;
-    if (!holdingTutorialWinch) {
-      this.crossingHoldTicks = 0;
-      return;
-    }
-    this.crossingHoldTicks += 1;
-    if (this.crossingHoldTicks < CROSSING_HOLD_CONFIRM_TICKS) return;
-    while (this.simulation.state.phase === "recording") {
-      this.simulation.step(InputBit.ActionHeld);
-    }
-    this.crossingHoldTicks = 0;
-    this.accumulator = 0;
   }
 
   private publish(): void {
