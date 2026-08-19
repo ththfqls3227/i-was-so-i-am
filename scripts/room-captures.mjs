@@ -1,11 +1,13 @@
 // Art-direction captures: plays each room's golden tape to a representative
 // beat and writes unthrottled 1440x900 PNGs for visual review.
 // Usage: node scripts/room-captures.mjs [outputDirectory]
+// Output defaults to captures/, which is untracked and — unlike test-results/ —
+// is not wiped by `playwright test` at the start of every run.
 import { chromium } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 
 const gameUrl = process.env.GAME_URL ?? "http://127.0.0.1:4173/";
-const outputDirectory = process.argv[2] ?? "test-results/visual/c1";
+const outputDirectory = process.argv[2] ?? "captures";
 const viewport = { width: 1440, height: 900 };
 
 // The scene halves its render rate when it detects automation; captures must
