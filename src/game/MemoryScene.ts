@@ -16,6 +16,7 @@ import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
+import { ParticleSystem } from "@babylonjs/core/Particles/particleSystem";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { DefaultRenderingPipeline } from "@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline";
 import { Scene, ScenePerformancePriority } from "@babylonjs/core/scene";
@@ -26,8 +27,6 @@ import { CHAMBERS } from "../content/chambers";
 
 const WORLD_SCALE = 0.02;
 const MAX_STEPS_PER_FRAME = 4;
-const TRAIL_SAMPLE_INTERVAL = 4;
-const TRAIL_CAPACITY = 18;
 
 /** Cinematic framing: close enough that a humanoid fills ~1/5 of frame height. */
 const CAMERA_RADIUS = 13.5;
@@ -43,6 +42,14 @@ const CAMERA_ALPHA_EXIT = -2.14;
  * integrated GPU) lands on the last rung instead of dropping frames.
  */
 const SCALING_LADDER = [1, 1.25, 1.5] as const;
+
+/** Each room signs its trim — inlays, rune slits, cradle rims — in one colour. */
+const ROOM_ACCENT: Record<ChamberId, { diffuse: Color3; emissive: Color3 }> = {
+  crossing: { diffuse: new Color3(0.03, 0.2, 0.27), emissive: new Color3(0.015, 0.34, 0.5) },
+  traceWeight: { diffuse: new Color3(0.3, 0.16, 0.05), emissive: new Color3(0.34, 0.15, 0.03) },
+  handoff: { diffuse: new Color3(0.34, 0.25, 0.07), emissive: new Color3(0.36, 0.24, 0.05) },
+  lastHold: { diffuse: new Color3(0.34, 0.33, 0.29), emissive: new Color3(0.4, 0.37, 0.3) },
+};
 const SLOW_FRAME_MS = 28;
 const SCALING_SAMPLE_WINDOW = 60;
 
@@ -52,6 +59,7 @@ interface HumanoidRig {
   echo: boolean;
   root: TransformNode;
   meshes: AbstractMesh[];
+  shimmer: Texture | null;
   leftShoulder: TransformNode;
   rightShoulder: TransformNode;
   leftElbow: TransformNode;
@@ -107,6 +115,9 @@ interface TargetGuideVisual {
 
 interface WorldVisuals {
   root: TransformNode;
+  motes: ParticleSystem;
+  burst: ParticleSystem;
+  ripple: { mesh: Mesh; material: StandardMaterial };
   bridge: BridgeVisual | null;
   winch: WinchVisual | null;
   weight: WeightVisual | null;
@@ -176,11 +187,13 @@ export class MemoryScene {
   private lastFrameTime = performance.now();
   private lastRenderTime = 0;
   private readonly automatedRenderInterval = navigator.webdriver ? 1000 / 8 : 0;
-  private trailTick = 0;
-  private trailPositions: Vector3[] = [];
   private scalingRung = 0;
   private recentFrameMs: number[] = [];
   private cinematicIdle = false;
+  private presentMaterials: { jacket: StandardMaterial; skin: StandardMaterial; cloth: StandardMaterial; extremity: StandardMaterial } | null = null;
+  private echoMaterials: { jacket: StandardMaterial; skin: StandardMaterial; cloth: StandardMaterial; extremity: StandardMaterial } | null = null;
+  private lastPhase: SimulationState["phase"] | null = null;
+  private rippleAge = -1;
   private idleClock = 0;
   private pressedKeys = new Set<string>();
   private virtualInput = new Set<VirtualControl>();
@@ -315,8 +328,6 @@ export class MemoryScene {
     this.accumulator = 0;
     this.previousAction = false;
     this.recordingStarted = false;
-    this.trailTick = 0;
-    this.trailPositions = [];
     this.disposeActorVisuals();
     this.disposeWorld();
     this.visuals = this.rebuildWorld();
@@ -330,8 +341,6 @@ export class MemoryScene {
     this.accumulator = 0;
     this.previousAction = false;
     this.recordingStarted = false;
-    this.trailTick = 0;
-    this.trailPositions = [];
     this.updateVisuals(this.simulation.state);
     this.publish();
   }
@@ -345,6 +354,7 @@ export class MemoryScene {
     if (this.pausedByPlayer) return false;
     const folded = this.simulation.foldRecording();
     if (folded) {
+      this.startFoldRipple();
       this.updateVisuals(this.simulation.state);
       this.publish();
     }
@@ -357,8 +367,6 @@ export class MemoryScene {
     this.accumulator = 0;
     this.previousAction = false;
     this.recordingStarted = true;
-    this.trailTick = 0;
-    this.trailPositions = [];
     this.updateVisuals(this.simulation.state);
     this.publish();
   }
@@ -387,6 +395,11 @@ export class MemoryScene {
   dispose(): void {
     for (const stone of Object.values(this.sharedStone ?? {})) stone.dispose(true, true);
     this.sharedStone = null;
+    for (const body of [this.presentMaterials, this.echoMaterials]) {
+      for (const bodyMaterial of new Set(Object.values(body ?? {}))) bodyMaterial.dispose(true, true);
+    }
+    this.presentMaterials = null;
+    this.echoMaterials = null;
     this.resizeObserver.disconnect();
     this.engine.stopRenderLoop();
     this.scene.dispose();
@@ -448,7 +461,6 @@ export class MemoryScene {
         }
         this.recordingStarted = true;
         this.simulation.step(frame);
-        this.captureTrail();
         this.accumulator -= TICK_MS;
         steps += 1;
       }
@@ -862,6 +874,8 @@ export class MemoryScene {
     // depth markers must never compete with the echo for the eye.
     const chasmRune = material(this.scene, "chasm-rune", new Color3(0.02, 0.14, 0.19), new Color3(0.01, 0.32, 0.46));
     const cyanGlass = material(this.scene, "temporal-glass", new Color3(0.015, 0.18, 0.24), new Color3(0.02, 0.38, 0.56), 0.48);
+    const roomAccent = ROOM_ACCENT[chamber.id];
+    const accent = material(this.scene, "room-accent", roomAccent.diffuse, roomAccent.emissive, 0.85);
     const amber = material(this.scene, "living-amber", new Color3(0.55, 0.25, 0.065), new Color3(0.2, 0.07, 0.008));
     const white = material(this.scene, "exit-white", new Color3(0.82, 0.78, 0.67), new Color3(0.9, 0.82, 0.62), 0.82);
 
@@ -902,7 +916,7 @@ export class MemoryScene {
     for (const z of [-1.82, 1.82]) {
       const inlay = MeshBuilder.CreateBox(`bronze-inlay-${z}`, { width: roomWidth - 1.2, depth: 0.036, height: 0.022 }, this.scene);
       inlay.position = new Vector3(0, 0.028, z);
-      inlay.material = bronze;
+      inlay.material = accent;
       this.registerMesh(inlay, root, false);
     }
 
@@ -974,7 +988,7 @@ export class MemoryScene {
         if (index < 2) {
           const slit = MeshBuilder.CreateBox(`wall-rune-${index}`, { width: 0.16, depth: 0.05, height: 1.15 }, this.scene);
           slit.position = new Vector3(nicheX, 1.5, columnZ + 0.02);
-          slit.material = cyanGlass;
+          slit.material = accent;
           this.registerMesh(slit, root, false);
         }
       }
@@ -1002,9 +1016,13 @@ export class MemoryScene {
     // rooms span a chasm, the handoff gate is a portcullis in a wall.
     let bridge: BridgeVisual | null = null;
     if (chamber.door) {
-      bridge = chamber.door.id.includes("gate")
-        ? this.createPortcullis(chamber.door.rect, ashlarEdge, metal, bronze, root)
-        : this.createChasmBridge(chamber.door.rect, roomDepth, ashlarEdge, metal, bronze, cyan, cyanGlass, chasmRune, voidMaterial, root);
+      if (chamber.door.id.includes("gate")) {
+        bridge = this.createPortcullis(chamber.door.rect, ashlarEdge, metal, bronze, root);
+      } else if (chamber.door.id.includes("door")) {
+        bridge = this.createHeavyPortal(chamber.door.rect, ashlarEdge, metal, bronze, root);
+      } else {
+        bridge = this.createChasmBridge(chamber.door.rect, roomDepth, ashlarEdge, metal, bronze, cyan, cyanGlass, chasmRune, voidMaterial, root);
+      }
     }
 
     const winch = chamber.hold ? this.createWinch(chamber.hold.x, chamber.hold.y, chamber.door?.rect ?? null, metal, bronze, cyan, root) : null;
@@ -1035,7 +1053,7 @@ export class MemoryScene {
           height: 0.34,
         }, this.scene);
         rim.position = cradleCenter.add(new Vector3(offset[0] ?? 0, 0.5, offset[1] ?? 0));
-        rim.material = bronze;
+        rim.material = accent;
         this.registerMesh(rim, root);
       }
       const mouth = MeshBuilder.CreateBox("handoff-mouth", {
@@ -1054,10 +1072,15 @@ export class MemoryScene {
 
     const exit = this.createExit(chamber.exit, ashlarEdge, bronze, white, root);
     const guide = this.createTargetGuide(root);
+    const moteTexture = this.createMoteTexture();
+    const motes = this.createDustMotes(exit.root, moteTexture);
+    const burst = this.createEchoBurst(moteTexture);
+    const ripple = this.createFoldRipple(root);
+    if (!this.prefersReducedMotion()) motes.start();
     // Architecture materials never change after the chamber is built; the
     // signal materials (cyan/amber/portal/rune) keep animating their emissive.
     for (const stoneLike of [metal, bronze, voidMaterial, nicheDark]) stoneLike.freeze();
-    return { root, bridge, winch, weight, handoffOrb, handoffDelivery, exit, guide };
+    return { root, motes, burst, ripple, bridge, winch, weight, handoffOrb, handoffDelivery, exit, guide };
   }
 
   /**
@@ -1162,6 +1185,73 @@ export class MemoryScene {
    * Handoff runs through a gate in a wall, not over a void: bars that ride up
    * into the arch when the past opens it.
    */
+  /**
+   * Last Hold ends with the past holding a door — the ending copy says so, and
+   * the tutorial calls it a handle. So the mechanism is dressed as a monumental
+   * slab in a bronze-banded frame, held up rather than bridged across.
+   */
+  private createHeavyPortal(
+    rect: Rect,
+    stone: StandardMaterial,
+    metal: StandardMaterial,
+    bronze: StandardMaterial,
+    root: TransformNode,
+  ): BridgeVisual {
+    const center = this.rectCenter(rect, 0);
+    const span = Math.max(1.6, rect.height * WORLD_SCALE);
+    const frame = new TransformNode("portal-frame", this.scene);
+    frame.parent = root;
+    frame.position = new Vector3(center.x, 0, center.z);
+    for (const z of [-span / 2 - 0.3, span / 2 + 0.3]) {
+      const pier = MeshBuilder.CreateBox(`portal-pier-${z}`, { width: 0.78, depth: 0.58, height: 3.5 }, this.scene);
+      pier.position = new Vector3(0, 1.75, z);
+      pier.material = stone;
+      this.registerMesh(pier, frame);
+      const corbel = MeshBuilder.CreateBox(`portal-corbel-${z}`, { width: 0.96, depth: 0.72, height: 0.26 }, this.scene);
+      corbel.position = new Vector3(0, 3.36, z);
+      corbel.material = stone;
+      this.registerMesh(corbel, frame);
+    }
+    const lintel = MeshBuilder.CreateBox("portal-lintel", { width: 0.86, depth: span + 1.7, height: 0.62 }, this.scene);
+    lintel.position = new Vector3(0, 3.78, 0);
+    lintel.material = stone;
+    this.registerMesh(lintel, frame);
+    const threshold = MeshBuilder.CreateBox("portal-threshold", { width: 0.82, depth: span + 0.9, height: 0.09 }, this.scene);
+    threshold.position = new Vector3(0, 0.045, 0);
+    threshold.material = bronze;
+    this.registerMesh(threshold, frame);
+    // The handle the past grips, on the room's side of the slab.
+    for (const z of [-span * 0.22, span * 0.22]) {
+      const handle = MeshBuilder.CreateTorus(`portal-handle-${z}`, { diameter: 0.42, thickness: 0.06, tessellation: 20 }, this.scene);
+      handle.position = new Vector3(-0.42, 1.15, z);
+      handle.rotation.y = Math.PI / 2;
+      handle.material = bronze;
+      this.registerMesh(handle, frame);
+    }
+
+    const leaf = new TransformNode("portal-leaf", this.scene);
+    leaf.parent = root;
+    leaf.position = new Vector3(center.x, 0, center.z);
+    const slab = MeshBuilder.CreateBox("portal-slab", { width: 0.46, depth: span + 0.5, height: 3.3 }, this.scene);
+    slab.position = new Vector3(0, 1.65, 0);
+    slab.material = stone;
+    this.registerMesh(slab, leaf);
+    for (const y of [0.62, 1.62, 2.62]) {
+      const band = MeshBuilder.CreateBox(`portal-band-${y}`, { width: 0.54, depth: span + 0.56, height: 0.14 }, this.scene);
+      band.position = new Vector3(0, y, 0);
+      band.material = bronze;
+      this.registerMesh(band, leaf);
+      for (const z of [-span * 0.3, 0, span * 0.3]) {
+        const stud = MeshBuilder.CreateCylinder(`portal-stud-${y}-${z}`, { diameter: 0.11, height: 0.08, tessellation: 8 }, this.scene);
+        stud.position = new Vector3(-0.29, y, z);
+        stud.rotation.z = Math.PI / 2;
+        stud.material = metal;
+        this.registerMesh(stud, leaf);
+      }
+    }
+    return { root: leaf, openY: 3.28, closedY: 0 };
+  }
+
   private createPortcullis(
     rect: Rect,
     stone: StandardMaterial,
@@ -1221,6 +1311,94 @@ export class MemoryScene {
       this.registerMesh(brace, gate);
     }
     return { root: gate, openY: 2.55, closedY: 0 };
+  }
+
+  private createMoteTexture(): DynamicTexture {
+    const texture = new DynamicTexture("mote-texture", { width: 64, height: 64 }, this.scene, false);
+    const context = texture.getContext();
+    context.fillStyle = "#000000";
+    context.fillRect(0, 0, 64, 64);
+    const dot = context.createRadialGradient(32, 32, 0, 32, 32, 30);
+    dot.addColorStop(0, "rgba(255, 240, 214, 1)");
+    dot.addColorStop(0.35, "rgba(255, 226, 178, 0.5)");
+    dot.addColorStop(1, "rgba(0, 0, 0, 0)");
+    context.fillStyle = dot;
+    context.fillRect(0, 0, 64, 64);
+    texture.update(false);
+    texture.hasAlpha = true;
+    return texture;
+  }
+
+  /**
+   * Dust hanging in the doorway light. Motes are the cheapest way to say the
+   * beam is volume rather than a surface, so they live only where it lands.
+   */
+  private createDustMotes(exitRoot: TransformNode, texture: DynamicTexture): ParticleSystem {
+    const motes = new ParticleSystem("exit-dust", 60, this.scene);
+    motes.particleTexture = texture;
+    // The emitter takes a world point, and the exit root carries both a yaw and
+    // an offset, so the beam's centre has to be transformed out of it.
+    exitRoot.computeWorldMatrix(true);
+    motes.emitter = Vector3.TransformCoordinates(new Vector3(1.6, 1.5, 0), exitRoot.getWorldMatrix());
+    motes.minEmitBox = new Vector3(-1.6, -1.3, -0.8);
+    motes.maxEmitBox = new Vector3(1.6, 1.3, 0.8);
+    motes.color1 = new Color4(1, 0.87, 0.64, 0.7);
+    motes.color2 = new Color4(1, 0.78, 0.5, 0.45);
+    motes.colorDead = new Color4(0.6, 0.45, 0.25, 0);
+    motes.minSize = 0.04;
+    motes.maxSize = 0.115;
+    motes.minLifeTime = 3.2;
+    motes.maxLifeTime = 6.5;
+    motes.emitRate = 22;
+    motes.blendMode = ParticleSystem.BLENDMODE_ADD;
+    motes.gravity = new Vector3(0, -0.012, 0);
+    motes.direction1 = new Vector3(-0.05, 0.03, -0.04);
+    motes.direction2 = new Vector3(0.05, 0.07, 0.04);
+    motes.minEmitPower = 0.01;
+    motes.maxEmitPower = 0.05;
+    motes.updateSpeed = 0.008;
+    return motes;
+  }
+
+  /** The echo arriving: a short cyan bloom of motes where the past reappears. */
+  private createEchoBurst(texture: DynamicTexture): ParticleSystem {
+    const burst = new ParticleSystem("echo-burst", 90, this.scene);
+    burst.particleTexture = texture;
+    burst.emitter = new Vector3(0, 0, 0);
+    burst.minEmitBox = new Vector3(-0.2, 0, -0.2);
+    burst.maxEmitBox = new Vector3(0.2, 1.8, 0.2);
+    burst.color1 = new Color4(0.5, 0.92, 1, 0.85);
+    burst.color2 = new Color4(0.1, 0.62, 0.95, 0.6);
+    burst.colorDead = new Color4(0.05, 0.3, 0.5, 0);
+    burst.minSize = 0.03;
+    burst.maxSize = 0.11;
+    burst.minLifeTime = 0.35;
+    burst.maxLifeTime = 0.85;
+    burst.emitRate = 0;
+    burst.blendMode = ParticleSystem.BLENDMODE_ADD;
+    burst.gravity = new Vector3(0, 0.35, 0);
+    burst.direction1 = new Vector3(-1.1, 0.2, -1.1);
+    burst.direction2 = new Vector3(1.1, 1.4, 1.1);
+    burst.minEmitPower = 0.4;
+    burst.maxEmitPower = 1.5;
+    burst.updateSpeed = 0.012;
+    return burst;
+  }
+
+  /** Time folding: one ring that expands out of the recorder and thins away. */
+  private createFoldRipple(worldRoot: TransformNode): { mesh: Mesh; material: StandardMaterial } {
+    const rippleMaterial = material(this.scene, "fold-ripple", Color3.Black(), new Color3(0.3, 0.85, 1), 1, Color3.Black());
+    rippleMaterial.disableLighting = true;
+    rippleMaterial.alphaMode = Constants.ALPHA_ADD;
+    rippleMaterial.disableDepthWrite = true;
+    const mesh = MeshBuilder.CreateTorus("fold-ripple", { diameter: 1, thickness: 0.055, tessellation: 40 }, this.scene);
+    mesh.material = rippleMaterial;
+    mesh.parent = worldRoot;
+    mesh.isPickable = false;
+    mesh.receiveShadows = false;
+    mesh.setEnabled(false);
+    this.glow.addIncludedOnlyMesh(mesh);
+    return { mesh, material: rippleMaterial };
   }
 
   private createTargetGuide(worldRoot: TransformNode): TargetGuideVisual {
@@ -1538,30 +1716,40 @@ export class MemoryScene {
     tunnelFloor.position = new Vector3(2.1, -0.017, 0);
     tunnelFloor.material = tunnelStone;
     this.registerMesh(tunnelFloor, root);
+    // Two converging walls carry the perspective, with a frame at each end.
+    // Four nested rings read as a barcode of dark bars rather than as depth.
     const farArchRim = material(this.scene, "exit-far-arch-rim", new Color3(0.42, 0.25, 0.08), new Color3(0.15, 0.065, 0.015));
-    for (let index = 0; index < 4; index += 1) {
-      const x = 0.18 + index * 1.1;
-      const scale = 1 - index * 0.14;
-      const archHeight = 3.62 * scale;
-      const openingDepth = (depth - 0.08) * scale;
-      for (const z of [-openingDepth / 2, openingDepth / 2]) {
-        const upright = MeshBuilder.CreateBox(`exit-arch-upright-${index}-${z}`, { width: 0.28, depth: 0.3, height: archHeight }, this.scene);
-        upright.position = new Vector3(x, archHeight / 2, z);
-        upright.material = tunnelStone;
-        this.registerMesh(upright, root);
-        const inset = MeshBuilder.CreateBox(`exit-arch-inset-${index}-${z}`, { width: 0.055, depth: 0.12, height: archHeight * 0.82 }, this.scene);
-        inset.position = new Vector3(x - 0.17, archHeight * 0.43, z * 0.94);
-        inset.material = index >= 2 ? farArchRim : bronze;
-        this.registerMesh(inset, root, false);
+    for (const z of [-1, 1]) {
+      const side = MeshBuilder.CreateBox(`exit-tunnel-side-${z}`, { width: 4.5, depth: 0.32, height: 3.5 }, this.scene);
+      side.position = new Vector3(2.2, 1.6, z * (depth / 2 - 0.06));
+      side.rotation.y = z * -0.055;
+      side.material = tunnelStone;
+      this.registerMesh(side, root);
+    }
+    const ceiling = MeshBuilder.CreateBox("exit-tunnel-ceiling", { width: 4.5, depth: depth + 0.2, height: 0.3 }, this.scene);
+    ceiling.position = new Vector3(2.2, 3.4, 0);
+    ceiling.material = tunnelStone;
+    this.registerMesh(ceiling, root);
+    for (const [index, spec] of [
+      { x: 0.2, height: 3.55, span: depth, inset: bronze },
+      { x: 4.25, height: 2.35, span: depth * 0.62, inset: farArchRim },
+    ].entries()) {
+      for (const z of [-spec.span / 2, spec.span / 2]) {
+        const jamb = MeshBuilder.CreateBox(`exit-arch-upright-${index}-${z}`, { width: 0.3, depth: 0.32, height: spec.height }, this.scene);
+        jamb.position = new Vector3(spec.x, spec.height / 2, z);
+        jamb.material = tunnelStone;
+        this.registerMesh(jamb, root);
+        if (index === 0) {
+          const reveal = MeshBuilder.CreateBox(`exit-arch-inset-${index}-${z}`, { width: 0.06, depth: 0.12, height: spec.height * 0.8 }, this.scene);
+          reveal.position = new Vector3(spec.x - 0.18, spec.height * 0.42, z * 0.94);
+          reveal.material = spec.inset;
+          this.registerMesh(reveal, root, false);
+        }
       }
-      const archTop = MeshBuilder.CreateBox(`exit-arch-top-${index}`, { width: 0.28, depth: openingDepth + 0.34, height: 0.3 }, this.scene);
-      archTop.position = new Vector3(x, archHeight, 0);
-      archTop.material = tunnelStone;
-      this.registerMesh(archTop, root);
-      const topInset = MeshBuilder.CreateBox(`exit-arch-top-inset-${index}`, { width: 0.055, depth: openingDepth * 0.86, height: 0.075 }, this.scene);
-      topInset.position = new Vector3(x - 0.17, archHeight - 0.18, 0);
-      topInset.material = index >= 2 ? farArchRim : bronze;
-      this.registerMesh(topInset, root, false);
+      const lintel = MeshBuilder.CreateBox(`exit-arch-top-${index}`, { width: 0.3, depth: spec.span + 0.36, height: 0.32 }, this.scene);
+      lintel.position = new Vector3(spec.x, spec.height, 0);
+      lintel.material = tunnelStone;
+      this.registerMesh(lintel, root);
     }
     const lightPathMaterial = material(this.scene, "exit-light-path", new Color3(0.32, 0.22, 0.1), new Color3(0.42, 0.27, 0.1), 0.42);
     const approachLight = MeshBuilder.CreateBox("exit-approach-light", { width: 3.4, depth: 0.34, height: 0.026 }, this.scene);
@@ -1754,15 +1942,69 @@ export class MemoryScene {
     return limb;
   }
 
+  /**
+   * The echo is light pretending to be a body: additive so it never occludes,
+   * with a vertical ramp that both drives the shimmer and fades the limbs out
+   * toward hands and boots.
+   */
+  private createEchoMaterials(): { core: StandardMaterial; fade: StandardMaterial } {
+    const id = "shared";
+    const ramp = new DynamicTexture(`echo-ramp-${id}`, { width: 16, height: 256 }, this.scene, false);
+    const context = ramp.getContext();
+    const gradient = context.createLinearGradient(0, 0, 0, 256);
+    gradient.addColorStop(0, "#a8e9ff");
+    gradient.addColorStop(0.22, "#4fc6f5");
+    gradient.addColorStop(0.55, "#1a86bd");
+    gradient.addColorStop(0.82, "#0d5c86");
+    gradient.addColorStop(1, "#083c58");
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, 16, 256);
+    for (let index = 0; index < 30; index += 1) {
+      const y = Math.random() * 256;
+      context.fillStyle = `rgba(170, 230, 255, ${0.04 + Math.random() * 0.09})`;
+      context.fillRect(0, y, 16, 1 + Math.random() * 2);
+    }
+    ramp.update(false);
+    ramp.wrapV = Texture.WRAP_ADDRESSMODE;
+
+    const build = (name: string, strength: number): StandardMaterial => {
+      const echoMaterial = material(this.scene, name, Color3.Black(), new Color3(strength, strength, strength), 1, Color3.Black());
+      echoMaterial.emissiveTexture = ramp;
+      echoMaterial.disableLighting = true;
+      echoMaterial.alphaMode = Constants.ALPHA_ADD;
+      echoMaterial.disableDepthWrite = true;
+      return echoMaterial;
+    };
+    return { core: build(`echo-core-${id}`, 0.34), fade: build(`echo-fade-${id}`, 0.17) };
+  }
+
+  private bodyMaterials(echo: boolean): { jacket: StandardMaterial; skin: StandardMaterial; cloth: StandardMaterial; extremity: StandardMaterial } {
+    if (echo) {
+      if (!this.echoMaterials) {
+        const built = this.createEchoMaterials();
+        this.echoMaterials = { jacket: built.core, skin: built.fade, cloth: built.core, extremity: built.fade };
+      }
+      return this.echoMaterials;
+    }
+    if (!this.presentMaterials) {
+      const cloth = material(this.scene, "present-cloth", new Color3(0.115, 0.12, 0.14));
+      this.presentMaterials = {
+        jacket: material(this.scene, "present-jacket", new Color3(0.52, 0.31, 0.12), new Color3(0.05, 0.014, 0)),
+        skin: material(this.scene, "present-skin", new Color3(0.46, 0.3, 0.21)),
+        cloth,
+        extremity: cloth,
+      };
+    }
+    return this.presentMaterials;
+  }
+
   private createHumanoid(id: ActorId, echo: boolean): HumanoidRig {
     const root = new TransformNode(`human-${id}`, this.scene);
     const position = this.worldPoint(this.simulation.chamber.spawn.x, this.simulation.chamber.spawn.y, 0.12);
     root.position = position.clone();
     root.scaling.setAll(1.16);
-    const echoMaterial = material(this.scene, `echo-body-${id}`, new Color3(0.04, 0.35, 0.48), new Color3(0.04, 0.45, 0.68));
-    const jacket = echo ? echoMaterial : material(this.scene, `amber-jacket-${id}`, new Color3(0.52, 0.31, 0.12), new Color3(0.05, 0.014, 0));
-    const skin = echo ? echoMaterial : material(this.scene, `skin-${id}`, new Color3(0.46, 0.3, 0.21));
-    const cloth = echo ? echoMaterial : material(this.scene, `cloth-${id}`, new Color3(0.055, 0.065, 0.075));
+    // Tunic, hood and boots read as one silhouette; skin is only face and hands.
+    const { jacket, skin, cloth, extremity } = this.bodyMaterials(echo);
     const meshes: AbstractMesh[] = [];
     const addBodyMesh = (mesh: Mesh, bodyMaterial: StandardMaterial): Mesh => {
       mesh.material = bodyMaterial;
@@ -1774,43 +2016,67 @@ export class MemoryScene {
       return mesh;
     };
 
-    const torso = addBodyMesh(MeshBuilder.CreateCapsule(`human-${id}-torso`, { radius: 0.28, height: 0.78, tessellation: 14, subdivisions: 2, capSubdivisions: 5 }, this.scene), jacket);
-    torso.position.y = 1.34;
-    torso.scaling = new Vector3(0.72, 1, 1.08);
+    const torso = addBodyMesh(MeshBuilder.CreateCapsule(`human-${id}-torso`, { radius: 0.27, height: 0.96, tessellation: 14, subdivisions: 2, capSubdivisions: 5 }, this.scene), jacket);
+    torso.position.y = 1.46;
+    torso.scaling = new Vector3(0.7, 1, 1.06);
     torso.rotation.z = -0.05;
-    const pelvis = addBodyMesh(MeshBuilder.CreateCapsule(`human-${id}-pelvis`, { radius: 0.22, height: 0.34, tessellation: 12, subdivisions: 1, capSubdivisions: 4 }, this.scene), cloth);
-    pelvis.position.y = 0.89;
+    // The tunic skirt below the belt is what gives the silhouette its taper.
+    const tunic = addBodyMesh(MeshBuilder.CreateCylinder(`human-${id}-tunic`, {
+      diameterTop: 0.5,
+      diameterBottom: 0.66,
+      height: 0.46,
+      tessellation: 14,
+    }, this.scene), jacket);
+    tunic.position.y = 1.01;
+    tunic.scaling.x = 0.78;
+    const pelvis = addBodyMesh(MeshBuilder.CreateCapsule(`human-${id}-pelvis`, { radius: 0.2, height: 0.3, tessellation: 12, subdivisions: 1, capSubdivisions: 4 }, this.scene), cloth);
+    pelvis.position.y = 0.9;
     pelvis.scaling.z = 1.1;
-    const head = addBodyMesh(MeshBuilder.CreateSphere(`human-${id}-head`, { diameter: 0.36, segments: 16 }, this.scene), skin);
-    head.position = new Vector3(0.02, 1.9, 0);
-    const neck = addBodyMesh(MeshBuilder.CreateCylinder(`human-${id}-neck`, { diameter: 0.15, height: 0.16, tessellation: 10 }, this.scene), skin);
-    neck.position.y = 1.68;
+    const head = addBodyMesh(MeshBuilder.CreateSphere(`human-${id}-head`, { diameter: 0.29, segments: 16 }, this.scene), skin);
+    head.position = new Vector3(0.02, 2.03, 0);
+    const neck = addBodyMesh(MeshBuilder.CreateCylinder(`human-${id}-neck`, { diameter: 0.13, height: 0.18, tessellation: 10 }, this.scene), skin);
+    neck.position.y = 1.86;
     if (!echo) {
-      const hair = addBodyMesh(MeshBuilder.CreateSphere(`human-${id}-hair`, { diameter: 0.37, segments: 12, slice: 0.55 }, this.scene), cloth);
-      hair.position = new Vector3(0.01, 1.97, 0);
-      hair.rotation.z = Math.PI;
+      // Hood: a cone behind the head, plus the shoulder mantle it falls from.
+      const hood = addBodyMesh(MeshBuilder.CreateCylinder(`human-${id}-hood`, {
+        diameterTop: 0.2,
+        diameterBottom: 0.46,
+        height: 0.26,
+        tessellation: 14,
+      }, this.scene), cloth);
+      hood.position = new Vector3(-0.13, 1.98, 0);
+      hood.rotation.z = -0.62;
+      // Small enough to stay a collar: the amber tunic has to carry the figure.
+      const mantle = addBodyMesh(MeshBuilder.CreateCylinder(`human-${id}-mantle`, {
+        diameterTop: 0.32,
+        diameterBottom: 0.56,
+        height: 0.18,
+        tessellation: 14,
+      }, this.scene), cloth);
+      mantle.position.y = 1.79;
+      mantle.scaling.x = 0.82;
     }
 
     const leftShoulder = new TransformNode(`human-${id}-left-shoulder`, this.scene);
     const rightShoulder = new TransformNode(`human-${id}-right-shoulder`, this.scene);
-    leftShoulder.position = new Vector3(0, 1.57, -0.38);
-    rightShoulder.position = new Vector3(0, 1.57, 0.38);
+    leftShoulder.position = new Vector3(0, 1.72, -0.36);
+    rightShoulder.position = new Vector3(0, 1.72, 0.36);
     leftShoulder.parent = rightShoulder.parent = root;
-    const leftUpperArm = this.createLimb(`human-${id}-left-upper-arm`, 0.48, 0.105, jacket, leftShoulder, echo);
-    const rightUpperArm = this.createLimb(`human-${id}-right-upper-arm`, 0.48, 0.105, jacket, rightShoulder, echo);
+    const leftUpperArm = this.createLimb(`human-${id}-left-upper-arm`, 0.5, 0.1, jacket, leftShoulder, echo);
+    const rightUpperArm = this.createLimb(`human-${id}-right-upper-arm`, 0.5, 0.1, jacket, rightShoulder, echo);
     meshes.push(leftUpperArm, rightUpperArm);
     const leftElbow = new TransformNode(`human-${id}-left-elbow`, this.scene);
     const rightElbow = new TransformNode(`human-${id}-right-elbow`, this.scene);
-    leftElbow.position.y = rightElbow.position.y = -0.46;
+    leftElbow.position.y = rightElbow.position.y = -0.48;
     leftElbow.parent = leftShoulder;
     rightElbow.parent = rightShoulder;
-    const leftLowerArm = this.createLimb(`human-${id}-left-lower-arm`, 0.43, 0.085, skin, leftElbow, echo);
-    const rightLowerArm = this.createLimb(`human-${id}-right-lower-arm`, 0.43, 0.085, skin, rightElbow, echo);
+    const leftLowerArm = this.createLimb(`human-${id}-left-lower-arm`, 0.45, 0.08, extremity, leftElbow, echo);
+    const rightLowerArm = this.createLimb(`human-${id}-right-lower-arm`, 0.45, 0.08, extremity, rightElbow, echo);
     meshes.push(leftLowerArm, rightLowerArm);
     for (const [name, elbow] of [["left", leftElbow], ["right", rightElbow]] as const) {
-      const hand = MeshBuilder.CreateSphere(`human-${id}-${name}-hand`, { diameter: 0.19, segments: 10 }, this.scene);
-      hand.position.y = -0.45;
-      hand.material = skin;
+      const hand = MeshBuilder.CreateSphere(`human-${id}-${name}-hand`, { diameter: 0.17, segments: 10 }, this.scene);
+      hand.position.y = -0.47;
+      hand.material = echo ? extremity : skin;
       hand.parent = elbow;
       hand.isPickable = false;
       if (!echo) this.shadows.addShadowCaster(hand);
@@ -1819,28 +2085,35 @@ export class MemoryScene {
 
     const leftHip = new TransformNode(`human-${id}-left-hip`, this.scene);
     const rightHip = new TransformNode(`human-${id}-right-hip`, this.scene);
-    leftHip.position = new Vector3(0, 0.82, -0.18);
-    rightHip.position = new Vector3(0, 0.82, 0.18);
+    leftHip.position = new Vector3(0, 0.86, -0.17);
+    rightHip.position = new Vector3(0, 0.86, 0.17);
     leftHip.parent = rightHip.parent = root;
-    const leftThigh = this.createLimb(`human-${id}-left-thigh`, 0.52, 0.13, cloth, leftHip, echo);
-    const rightThigh = this.createLimb(`human-${id}-right-thigh`, 0.52, 0.13, cloth, rightHip, echo);
+    const leftThigh = this.createLimb(`human-${id}-left-thigh`, 0.5, 0.125, cloth, leftHip, echo);
+    const rightThigh = this.createLimb(`human-${id}-right-thigh`, 0.5, 0.125, cloth, rightHip, echo);
     meshes.push(leftThigh, rightThigh);
     const leftKnee = new TransformNode(`human-${id}-left-knee`, this.scene);
     const rightKnee = new TransformNode(`human-${id}-right-knee`, this.scene);
-    leftKnee.position.y = rightKnee.position.y = -0.5;
+    leftKnee.position.y = rightKnee.position.y = -0.48;
     leftKnee.parent = leftHip;
     rightKnee.parent = rightHip;
-    const leftShin = this.createLimb(`human-${id}-left-shin`, 0.52, 0.105, cloth, leftKnee, echo);
-    const rightShin = this.createLimb(`human-${id}-right-shin`, 0.52, 0.105, cloth, rightKnee, echo);
+    const leftShin = this.createLimb(`human-${id}-left-shin`, 0.46, 0.1, extremity, leftKnee, echo);
+    const rightShin = this.createLimb(`human-${id}-right-shin`, 0.46, 0.1, extremity, rightKnee, echo);
     meshes.push(leftShin, rightShin);
-    for (const [name, z] of [["left", -0.18], ["right", 0.18]] as const) {
-      const boot = addBodyMesh(MeshBuilder.CreateBox(`human-${id}-${name}-boot`, { width: 0.38, depth: 0.18, height: 0.16 }, this.scene), cloth);
-      boot.position = new Vector3(0.09, 0.16, z);
+    for (const [name, z] of [["left", -0.17], ["right", 0.17]] as const) {
+      const boot = addBodyMesh(MeshBuilder.CreateBox(`human-${id}-${name}-boot`, { width: 0.36, depth: 0.2, height: 0.22 }, this.scene), extremity);
+      boot.position = new Vector3(0.07, 0.13, z);
+      const cuff = addBodyMesh(MeshBuilder.CreateCylinder(`human-${id}-${name}-cuff`, {
+        diameter: 0.26,
+        height: 0.14,
+        tessellation: 10,
+      }, this.scene), extremity);
+      cuff.position = new Vector3(0.02, 0.3, z);
     }
     return {
       echo,
       root,
       meshes,
+      shimmer: echo && jacket.emissiveTexture instanceof Texture ? jacket.emissiveTexture : null,
       leftShoulder,
       rightShoulder,
       leftElbow,
@@ -1858,25 +2131,18 @@ export class MemoryScene {
   private disposeActorVisuals(): void {
     for (const rig of this.actorVisuals.values()) {
       for (const mesh of rig.meshes) this.shadows.removeShadowCaster(mesh);
-      rig.root.dispose(false, true);
+      rig.root.dispose(false, false);
     }
     this.actorVisuals.clear();
   }
 
   private disposeWorld(): void {
+    this.visuals.motes.dispose(true);
+    this.visuals.burst.dispose(true);
     for (const mesh of this.visuals.root.getChildMeshes()) this.shadows.removeShadowCaster(mesh);
     this.visuals.root.dispose(false, false);
     for (const chamberMaterial of this.chamberMaterials) chamberMaterial.dispose(true, true);
     this.chamberMaterials = [];
-  }
-
-  private captureTrail(): void {
-    const past = this.simulation.state.actors.find((actor) => actor.id === "past");
-    if (!past || this.simulation.state.phase !== "replay") return;
-    this.trailTick += 1;
-    if (this.trailTick % TRAIL_SAMPLE_INTERVAL !== 0) return;
-    this.trailPositions.push(this.worldPoint(past.x, past.y, 0.04));
-    if (this.trailPositions.length > TRAIL_CAPACITY) this.trailPositions.shift();
   }
 
   private targetGuidePosition(state: Readonly<SimulationState>): Vector3 | null {
@@ -1915,11 +2181,12 @@ export class MemoryScene {
   }
 
   private updateVisuals(state: Readonly<SimulationState>): void {
+    this.updateBeats(state);
     const activeIds = new Set(state.actors.map((actor) => actor.id));
     for (const [id, rig] of this.actorVisuals) {
       if (activeIds.has(id)) continue;
       for (const mesh of rig.meshes) this.shadows.removeShadowCaster(mesh);
-      rig.root.dispose(false, true);
+      rig.root.dispose(false, false);
       this.actorVisuals.delete(id);
     }
     for (const actor of state.actors) {
@@ -1927,7 +2194,7 @@ export class MemoryScene {
       const shouldEcho = actor.id === "past" && state.phase !== "recording";
       if (rig && rig.echo !== shouldEcho) {
         for (const mesh of rig.meshes) this.shadows.removeShadowCaster(mesh);
-        rig.root.dispose(false, true);
+        rig.root.dispose(false, false);
         this.actorVisuals.delete(actor.id);
         rig = undefined;
       }
@@ -2000,6 +2267,46 @@ export class MemoryScene {
     this.visuals.exit.beamMaterial.emissiveColor = new Color3(beamReach, beamReach * 0.92, beamReach * 0.82);
   }
 
+  /**
+   * One-shot beats: the echo materialising as the tape hands over, and the ring
+   * that marks a fold. Both are motion, so both sit out under reduced motion.
+   */
+  private updateBeats(state: Readonly<SimulationState>): void {
+    const reduced = this.prefersReducedMotion();
+    if (this.lastPhase === "recording" && state.phase === "replay" && !reduced) {
+      const past = state.actors.find((actor) => actor.id === "past");
+      if (past) {
+        this.visuals.burst.emitter = this.worldPoint(past.x, past.y, 0.1);
+        this.visuals.burst.manualEmitCount = 70;
+        this.visuals.burst.start();
+      }
+    }
+    this.lastPhase = state.phase;
+
+    if (this.rippleAge >= 0) {
+      this.rippleAge += 1;
+      const life = this.rippleAge / 42;
+      if (life >= 1 || reduced) {
+        this.visuals.ripple.mesh.setEnabled(false);
+        this.rippleAge = -1;
+      } else {
+        const spread = 0.6 + life * 5.4;
+        this.visuals.ripple.mesh.scaling.set(spread, 1, spread);
+        const fade = (1 - life) * 0.7;
+        this.visuals.ripple.material.emissiveColor.set(fade * 0.34, fade * 0.9, fade);
+      }
+    }
+  }
+
+  private startFoldRipple(): void {
+    if (this.prefersReducedMotion()) return;
+    const present = this.simulation.state.actors.find((actor) => actor.id === "present");
+    if (!present) return;
+    this.visuals.ripple.mesh.position = this.worldPoint(present.x, present.y, 0.12);
+    this.visuals.ripple.mesh.setEnabled(true);
+    this.rippleAge = 0;
+  }
+
   /** Slow alpha sway that only breathes under the title card. */
   private idleDrift(): number {
     if (!this.cinematicIdle || this.prefersReducedMotion()) return 0;
@@ -2045,12 +2352,14 @@ export class MemoryScene {
     const distance = Vector3.Distance(target, rig.lastPosition);
     const moving = distance > 0.001;
     rig.position = Vector3.Lerp(rig.position, target, 0.5);
-    if (moving) rig.gait += 0.34;
-    const bob = moving ? Math.abs(Math.sin(rig.gait)) * 0.035 : Math.sin(performance.now() * 0.0025) * 0.012;
+    if (moving) rig.gait += 0.3;
+    const bob = moving ? Math.abs(Math.sin(rig.gait)) * 0.052 : Math.sin(performance.now() * 0.0025) * 0.012;
+    // The echo's ramp scrolls upward; a still echo is a reduced-motion echo.
+    if (rig.shimmer && !this.prefersReducedMotion()) rig.shimmer.vOffset = (rig.shimmer.vOffset + 0.0022) % 1;
     rig.root.position = rig.position.add(new Vector3(0, bob, 0));
     const facing = Math.atan2(-actor.facingY, actor.facingX || 0.001);
     rig.root.rotation.y += (shortestAngle(rig.root.rotation.y, facing) - rig.root.rotation.y) * 0.28;
-    rig.root.rotation.z += ((pushing ? -0.18 : 0) - rig.root.rotation.z) * 0.25;
+    rig.root.rotation.z += ((pushing ? -0.3 : operating ? -0.12 : 0) - rig.root.rotation.z) * 0.25;
 
     if (pushing) {
       const shoulderOffset = rig.echo ? -0.08 : 0.08;
@@ -2058,19 +2367,23 @@ export class MemoryScene {
       rig.rightShoulder.rotation.z += (1.22 - shoulderOffset - rig.rightShoulder.rotation.z) * 0.25;
       rig.leftElbow.rotation.z += (-0.14 - rig.leftElbow.rotation.z) * 0.25;
       rig.rightElbow.rotation.z += (-0.22 - rig.rightElbow.rotation.z) * 0.25;
-      rig.leftHip.rotation.z = rig.echo ? 0.28 : -0.34;
-      rig.rightHip.rotation.z = rig.echo ? -0.32 : 0.24;
-      rig.leftKnee.rotation.z = rig.echo ? 0.18 : 0.34;
-      rig.rightKnee.rotation.z = rig.echo ? 0.36 : 0.16;
+      // Lean-in: back leg straight and driving, front knee bent under the load.
+      rig.leftHip.rotation.z = rig.echo ? 0.34 : -0.46;
+      rig.rightHip.rotation.z = rig.echo ? -0.42 : 0.34;
+      rig.leftKnee.rotation.z = rig.echo ? 0.2 : 0.46;
+      rig.rightKnee.rotation.z = rig.echo ? 0.48 : 0.18;
     } else if (operating) {
-      rig.leftShoulder.rotation.z += (0.88 - rig.leftShoulder.rotation.z) * 0.25;
-      rig.rightShoulder.rotation.z += (0.88 - rig.rightShoulder.rotation.z) * 0.25;
-      rig.leftElbow.rotation.z = 0.3;
-      rig.rightElbow.rotation.z = 0.3;
-      rig.leftHip.rotation.z = -0.12;
-      rig.rightHip.rotation.z = 0.12;
+      // Crouch into the winch: weight down, both hands committed to the crank.
+      rig.leftShoulder.rotation.z += (0.94 - rig.leftShoulder.rotation.z) * 0.25;
+      rig.rightShoulder.rotation.z += (0.94 - rig.rightShoulder.rotation.z) * 0.25;
+      rig.leftElbow.rotation.z = 0.34;
+      rig.rightElbow.rotation.z = 0.34;
+      rig.leftHip.rotation.z = -0.3;
+      rig.rightHip.rotation.z = 0.26;
+      rig.leftKnee.rotation.z = 0.42;
+      rig.rightKnee.rotation.z = 0.38;
     } else if (moving) {
-      const swing = Math.sin(rig.gait) * 0.55;
+      const swing = Math.sin(rig.gait) * 0.72;
       rig.leftShoulder.rotation.z = swing * 0.62;
       rig.rightShoulder.rotation.z = -swing * 0.62;
       rig.leftElbow.rotation.z = Math.max(0, -swing) * 0.3;
