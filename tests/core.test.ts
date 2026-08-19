@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { encodeInput, InputBit, movementIntent, NEUTRAL_INPUT } from "../src/core/input";
 import { createInitialState, Simulation, simulationConstants } from "../src/core/simulation";
+import { POSITION_SCALE } from "../src/core/types";
 import { CROSSING_CHAMBER, TRACE_WEIGHT_CHAMBER } from "../src/content/chambers";
 import { crossingGolden } from "../src/content/golden";
 
@@ -126,19 +127,50 @@ describe("movement normalization", () => {
 });
 
 describe("context action target lock", () => {
-  it("cannot reacquire after leaving hysteresis until action is released", () => {
+  it("cannot reacquire the target it walked away from until action is released", () => {
     const simulation = new Simulation(CROSSING_CHAMBER);
     const rightHeld = encodeInput({ right: true, actionHeld: true });
     const leftHeld = encodeInput({ left: true, actionHeld: true });
     for (let tick = 0; tick < 25; tick += 1) simulation.step(rightHeld);
     expect(simulation.state.actors[0]?.targetId).toBe(CROSSING_CHAMBER.hold?.id);
     for (let tick = 0; tick < 16; tick += 1) simulation.step(leftHeld);
-    expect(simulation.state.actors[0]).toMatchObject({ targetId: null, targetLockout: true });
+    expect(simulation.state.actors[0]).toMatchObject({ targetId: null, lockedOutTargetId: CROSSING_CHAMBER.hold?.id });
     for (let tick = 0; tick < 16; tick += 1) simulation.step(rightHeld);
-    expect(simulation.state.actors[0]).toMatchObject({ targetId: null, targetLockout: true });
+    expect(simulation.state.actors[0]).toMatchObject({ targetId: null, lockedOutTargetId: CROSSING_CHAMBER.hold?.id });
     simulation.step(encodeInput({ actionReleased: true }));
     simulation.step(encodeInput({ actionHeld: true, actionPressed: true }));
-    expect(simulation.state.actors[0]).toMatchObject({ targetId: CROSSING_CHAMBER.hold?.id, targetLockout: false });
+    expect(simulation.state.actors[0]).toMatchObject({ targetId: CROSSING_CHAMBER.hold?.id, lockedOutTargetId: null });
+  });
+
+  it("acquires a different affordance while still locked out of the last one", () => {
+    const chamber = structuredClone(CROSSING_CHAMBER);
+    delete chamber.door;
+    chamber.forceObject = {
+      id: "test-block",
+      x: 54 * POSITION_SCALE,
+      y: 17 * POSITION_SCALE,
+      width: 8 * POSITION_SCALE,
+      height: 10 * POSITION_SCALE,
+      axis: "x",
+      minX: 54 * POSITION_SCALE,
+      maxX: 64 * POSITION_SCALE,
+      threshold: 2,
+      force: 0,
+    };
+    const simulation = new Simulation(chamber);
+    const rightHeld = encodeInput({ right: true, actionHeld: true });
+    for (let tick = 0; tick < 25; tick += 1) simulation.step(rightHeld);
+    expect(simulation.state.actors[0]?.targetId).toBe(chamber.hold?.id);
+    // Keep the action key down and walk on: the winch stays locked out, but the
+    // block further right is a different target and must still be grabbable.
+    let sawWinchLockout = false;
+    for (let tick = 0; tick < 60 && simulation.state.phase === "recording"; tick += 1) {
+      simulation.step(rightHeld);
+      sawWinchLockout ||= simulation.state.actors[0]?.lockedOutTargetId === chamber.hold?.id;
+      if (simulation.state.actors[0]?.targetId === chamber.forceObject.id) break;
+    }
+    expect(sawWinchLockout).toBe(true);
+    expect(simulation.state.actors[0]).toMatchObject({ targetId: chamber.forceObject.id, lockedOutTargetId: null });
   });
 
   it("does not acquire a nearby affordance behind the actor", () => {
