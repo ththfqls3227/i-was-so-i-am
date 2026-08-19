@@ -16,6 +16,8 @@
     "test:levels": "vitest run tests/levels.test.ts",
     "test:licenses": "node scripts/license-audit.mjs",
     "test:e2e": "playwright test",
+    "test:e2e:dist": "node scripts/e2e-dist.mjs",
+    "test:e2e:dist:all": "node scripts/e2e-dist.mjs --all",
     "test:mcp": "node scripts/mcp-browser-smoke.mjs",
     "test:performance": "node scripts/performance-smoke.mjs",
     "test:visual-diff": "node scripts/visual-diff.mjs",
