@@ -1,9 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
-import type { ChamberId, SimulationState } from "../src/core/types";
+import { TICK_RATE, type ChamberId, type SimulationState } from "../src/core/types";
 import { CHAMBERS } from "../src/content/chambers";
 import { FOUR_ROOM_ROUTE } from "../src/content/manifests";
 
 const heldBits = { up: 1, down: 2, left: 4, right: 8, action: 16 } as const;
+const TICK_MS = 1000 / TICK_RATE;
 
 function keysForFrame(frame: number): Set<string> {
   const keys = new Set<string>();
@@ -24,40 +25,55 @@ interface TapeProbe {
   tapeTick: number;
   phase: SimulationState["phase"] | undefined;
   success: boolean;
+  lastError: SimulationState["lastError"] | undefined;
 }
 
 function readTape(page: Page): Promise<TapeProbe> {
   return page.evaluate(() => {
     const state = window.__I_WAS_SO_I_AM__.state;
-    return { tapeTick: state?.tapeTick ?? 0, phase: state?.phase, success: state?.success === true };
+    return {
+      tapeTick: state?.tapeTick ?? 0,
+      phase: state?.phase,
+      success: state?.success === true,
+      lastError: state?.lastError,
+    };
   });
 }
 
 /**
- * Plays an authored tape through the real keyboard, measuring every run of held
- * keys in simulation ticks rather than in milliseconds.
+ * Lets the presentation catch up with the simulation. Nothing in the page moves
+ * unless this test advances the clock, so a card, a HUD field or a storage write
+ * that lands on the frame after a beat needs a few ticks of room to appear.
+ */
+function settle(page: Page): Promise<void> {
+  return page.clock.runFor(Math.round(6 * TICK_MS));
+}
+
+/**
+ * Plays an authored tape through the real keyboard on a clock this test owns.
  *
- * The browser steps the fixed 30 Hz loop up to four times inside a single
- * animation frame — headless rendering makes that common — so a run timed by
- * wall clock can reach the simulation late, short, or, for a two-tick beat like
- * Last Hold's step off the seated stone, not at all. Each run therefore starts
- * counting from the tick its keys actually landed on and holds until the
- * simulation has stepped the ticks it was authored for.
+ * Under wall-clock time the run lengths were only a request. The browser steps
+ * the fixed 30 Hz loop up to four times inside one animation frame — the 8 Hz
+ * render throttle headless runs use makes a double step ordinary — so a run
+ * could take a tick or two more than it was authored for. Nothing in the test
+ * could give those ticks back: a 46-tick walk that ran 48 left the present self
+ * two ticks past the junction it had to stand on, and Handoff, whose two selves
+ * meet in a four-tick window, failed about one run in six that way.
  *
- * Ticks the simulation runs past a target, and the ticks that pass while the
- * keys are being swapped, are carried as a debt that later runs give back, so
- * the tape neither drifts late nor stretches. A run gives back at most a quarter
- * of itself: long beats absorb the debt, and a short, precise beat is never
- * shortened to pay for one.
+ * So the clock is faked and advanced by exactly the milliseconds a run is worth.
+ * Every rAF then sees a 16 ms delta, the loop steps at most once per frame, and
+ * a run gets the ticks it asked for and no others. The tick budget is fractional
+ * — 30 Hz does not divide a millisecond — so a run that lands a tick short is
+ * topped up rather than allowed to drift, and one that would run long fails the
+ * test rather than silently distorting the tape.
  *
- * Playback ends on a phase change — the recording closes itself once it reaches
- * the chamber's tape length, and both tick counters restart at that boundary.
+ * Playback ends on a phase change: the recording closes itself at the chamber's
+ * tape length, and both tick counters restart at that boundary.
  */
 async function playAuthoredFrames(page: Page, frames: number[]): Promise<void> {
   const startPhase = (await readTape(page)).phase;
   let held = new Set<string>();
   let consumed = 0;
-  let owed = 0;
   try {
     while (consumed < frames.length) {
       const mask = (frames[consumed] ?? 0) & 31;
@@ -66,28 +82,28 @@ async function playAuthoredFrames(page: Page, frames: number[]): Promise<void> {
       const authored = runEnd - consumed;
       const next = keysForFrame(mask);
 
-      const before = await readTape(page);
       await setHeldKeys(page, held, next);
       held = next;
-      const armed = await readTape(page);
-      if (armed.phase !== startPhase || armed.success) return;
-      owed += armed.tapeTick - before.tapeTick;
+      const before = await readTape(page);
+      if (before.phase !== startPhase || before.success) return;
 
-      const given = Math.min(owed, Math.floor(authored / 4));
-      owed -= given;
-      const target = armed.tapeTick + authored - given;
+      // Time is spent in two parts so the run can never be handed a tick it was
+      // not authored for: one jump that is a whole tick short of the run however
+      // the fractional budget rounds, then half-tick steps, each of which can
+      // carry the loop at most one tick further, until the count is exact.
+      const wanted = before.tapeTick + authored;
+      if (authored > 1) await page.clock.runFor(Math.floor((authored - 1) * TICK_MS));
+      let settled = await readTape(page);
+      for (let step = 0; settled.tapeTick < wanted && settled.phase === startPhase && !settled.success; step += 1) {
+        expect(step, `the simulation stopped stepping at tick ${settled.tapeTick} of the run at frame ${consumed}`).toBeLessThan(8 * authored + 16);
+        await page.clock.runFor(Math.floor(TICK_MS / 6));
+        settled = await readTape(page);
+      }
+      if (settled.phase === startPhase && !settled.success) {
+        expect(settled.tapeTick, `the run at frame ${consumed} was held for ${settled.tapeTick - before.tapeTick} ticks, not ${authored}`).toBe(wanted);
+      }
       consumed = runEnd;
-      await page.waitForFunction(
-        ({ target, startPhase }) => {
-          const state = window.__I_WAS_SO_I_AM__.state;
-          return state?.success === true || state?.phase !== startPhase || (state?.tapeTick ?? 0) >= target;
-        },
-        { target, startPhase },
-        { polling: "raf", timeout: 15_000 },
-      );
-      const settled = await readTape(page);
       if (settled.phase !== startPhase || settled.success) return;
-      owed += settled.tapeTick - target;
     }
   } finally {
     await setHeldKeys(page, held, new Set());
@@ -221,20 +237,36 @@ test("presents every authored room in manifest order with a passing golden path"
 test("records and replays all four rooms through public controls into the authored ending", async ({ page, browserName }) => {
   test.skip(browserName !== "chromium", "A full physical keyboard journey runs once; cross-engine core/UI routes are covered separately.");
   test.setTimeout(150_000);
+  // The keys are real and so is everything they drive; only time is this test's
+  // to give, so a slow frame can no longer hand a beat more ticks than it was
+  // written for. Whether the game keeps up in real time is the performance
+  // smoke's question, not this one's.
+  await page.clock.install();
   await page.goto("/");
+  // Boot on borrowed time, then stop the clock: installing alone leaves it
+  // running against the wall, and the ticks that slip through between two
+  // advances are exactly the ones this test exists to control.
+  await page.clock.pauseAt(Date.now() + 2_000);
   await page.getByRole("button", { name: "기억 속으로 들어가기" }).click();
+  await settle(page);
   const golden = await import("../src/content/golden");
   for (const [index, chamberId] of FOUR_ROOM_ROUTE.entries()) {
     await expect(page.locator("#chamber-title")).toHaveAttribute("data-chamber-id", chamberId);
     await expect(page.locator("#room-ordinal")).toHaveText(`${String(index + 1).padStart(2, "0")} / 04`);
     const solution = golden.goldenFor(chamberId);
-    await expect.poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.phase)).toBe("recording");
+    expect(await readTape(page), `${chamberId} did not open in recording`).toMatchObject({ phase: "recording" });
     await playAuthoredFrames(page, solution.past.frames);
-    await expect.poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.phase)).toBe("replay");
+    expect(await readTape(page), `${chamberId} did not fold into replay`).toMatchObject({ phase: "replay" });
     await playAuthoredFrames(page, solution.present);
-    await expect(page.locator("#success-card")).toBeVisible();
+    // A room that does not finish is reported with the core's own account of
+    // why, read at the moment playback ended: "the card never appeared" alone
+    // cannot tell a mistimed key from a tape that never opened the door.
+    const outcome = await readTape(page);
+    await settle(page);
+    await expect(page.locator("#success-card"), `${chamberId} ended ${JSON.stringify(outcome)}`).toBeVisible();
     await expect(page.locator("#success-title")).toHaveText(CHAMBERS[chamberId].name);
     await page.locator("#next").click();
+    await settle(page);
     const next = FOUR_ROOM_ROUTE[index + 1];
     if (next) {
       await expect(page.locator("#chamber-title")).toHaveAttribute("data-chamber-id", next);
