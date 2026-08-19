@@ -335,12 +335,27 @@ export class MemoryScene {
     this.engine.dispose();
   }
 
+  /**
+   * Keyboard accessibility: while an overlay button (intro/pause/ending
+   * screens, success card) has focus, Space/Enter must activate that button —
+   * the game must neither preventDefault nor consume the keys.
+   */
+  private overlayHasFocus(): boolean {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement)) return false;
+    const overlay = active.closest<HTMLElement>(".screen, .success-card");
+    // A dismissed overlay can briefly keep focus on its hidden button; only a
+    // visible overlay may claim the keyboard.
+    return overlay !== null && !overlay.hidden;
+  }
+
   private installKeyboard(): void {
     const controlled = new Set([
       "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
       "KeyW", "KeyA", "KeyS", "KeyD", "Space", "KeyE", "KeyR",
     ]);
     window.addEventListener("keydown", (event) => {
+      if (this.overlayHasFocus()) return;
       if ((event.code === "Enter" || event.code === "NumpadEnter") && !event.repeat) {
         this.foldRecording();
         return;
@@ -348,9 +363,11 @@ export class MemoryScene {
       if (!controlled.has(event.code)) return;
       event.preventDefault();
       this.pressedKeys.add(event.code);
-      if (event.code === "KeyR" && !event.repeat) this.rerecord();
+      // R only rerecords during live play (never on the title or while paused).
+      if (event.code === "KeyR" && !event.repeat && !this.pausedByPlayer) this.rerecord();
     });
     window.addEventListener("keyup", (event) => {
+      if (this.overlayHasFocus()) return;
       if (!controlled.has(event.code)) return;
       event.preventDefault();
       this.pressedKeys.delete(event.code);
