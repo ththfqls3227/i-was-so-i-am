@@ -75,6 +75,80 @@ test("a novice finishes Crossing with the fold key by following the on-screen in
   await expect(page.locator("#tutorial-title")).toContainText("과거의 나와 함께");
 });
 
+test("Trace Weight finishes for a slow hand that follows the card", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "One live sloppy-timing journey is enough; the schedule matrix runs in unit tests.");
+  test.setTimeout(60_000);
+  const chamber = CHAMBERS.traceWeight;
+  const winch = chamber.hold;
+  const weight = chamber.forceObject;
+  if (!winch || !weight) throw new Error("Trace Weight must define a winch and a weight");
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "기억 속으로 들어가기" }).click();
+  await page.evaluate(() => window.__I_WAS_SO_I_AM__.switchChamber("traceWeight"));
+  const card = page.locator("#tutorial-card");
+  await expect(card).toHaveAttribute("data-stage", "trace-move-winch");
+
+  await page.keyboard.down("ArrowRight");
+  await page.waitForFunction(
+    (x) => (window.__I_WAS_SO_I_AM__.state?.actors[0]?.x ?? 0) >= x,
+    winch.x - winch.radius,
+    { polling: 10, timeout: 4_000 },
+  );
+  await page.keyboard.up("ArrowRight");
+  await expect(card).toHaveAttribute("data-stage", "trace-grab-winch");
+
+  // Grip a full second longer than the card asks for, then dawdle before
+  // walking — the loose timing that used to hand back a doomed recording.
+  await page.keyboard.down("Space");
+  await expect(card).toHaveAttribute("data-stage", "trace-release", { timeout: 6_000 });
+  await page.waitForTimeout(1_000);
+  await page.keyboard.up("Space");
+  await expect(card).toHaveAttribute("data-stage", "trace-record-push");
+  await page.waitForTimeout(500);
+
+  await page.keyboard.down("ArrowRight");
+  await page.keyboard.down("Space");
+  // Right + action is pressed from inside the winch radius, so the past brushes
+  // the winch again on its way out. The card must not fall back to "let go".
+  await page.waitForTimeout(200);
+  await expect(card).toHaveAttribute("data-stage", "trace-record-push");
+  await expect(card).toHaveAttribute("data-stage", "trace-fold", { timeout: 8_000 });
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.phase), { timeout: 2_000 }).toBe("replay");
+  await page.keyboard.up("ArrowRight");
+  await page.keyboard.up("Space");
+
+  // Pass 2: cross while the echo grips, then push the weight beside it.
+  await page.keyboard.down("ArrowRight");
+  await page.keyboard.down("Space");
+  await expect.poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.door?.latched), { timeout: 6_000 }).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.forceObject?.force), { timeout: 9_000 }).toBe(2);
+  await expect.poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.exit.open), { timeout: 9_000 }).toBe(true);
+  await page.keyboard.up("Space");
+  await page.keyboard.up("ArrowRight");
+
+  // Around the seated weight and into the light.
+  await page.keyboard.down("ArrowUp");
+  await page.waitForFunction(
+    (y) => (window.__I_WAS_SO_I_AM__.state?.actors.find((actor) => actor.id === "present")?.y ?? Infinity) <= y,
+    weight.y - weight.height / 4,
+    { polling: 10, timeout: 4_000 },
+  );
+  await page.keyboard.up("ArrowUp");
+  await page.keyboard.down("ArrowRight");
+  await page.waitForFunction(
+    (x) => (window.__I_WAS_SO_I_AM__.state?.actors.find((actor) => actor.id === "present")?.x ?? 0) >= x,
+    chamber.exit.x + chamber.exit.width / 2,
+    { polling: 10, timeout: 4_000 },
+  );
+  await page.keyboard.up("ArrowRight");
+  await page.keyboard.down("ArrowDown");
+  await expect.poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.success), { timeout: 6_000 }).toBe(true);
+  await page.keyboard.up("ArrowDown");
+  await expect(page.locator("#success-card")).toBeVisible();
+});
+
 test("keeps the fold key discoverable in a narrow desktop window", async ({ page }) => {
   // A narrow window with a fine pointer is still a keyboard player: the prompt
   // that teaches ⏎ must stay, and must not sit on the touch controls.
