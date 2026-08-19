@@ -24,7 +24,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test:dist-smoke": "node scripts/dist-smoke.mjs",
-    "validate": "npm run typecheck && npm run lint && npm run test && npm run test:replay-corpus && npm run test:levels && npm run test:licenses && npm run build && npm run test:dist-smoke"
+    "validate": "npm run typecheck && npm run lint && npm run test && npm run test:replay-corpus && npm run test:levels && npm run test:licenses && npm run build && npm run test:dist-smoke",
+    "gate:submission": "node scripts/submission-gate.mjs"
   },
   "dependencies": {
     "@babylonjs/core": "^9.21.1"

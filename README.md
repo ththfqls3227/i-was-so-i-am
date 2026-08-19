@@ -20,10 +20,12 @@ The presentation uses Babylon.js as a render-only adapter over the deterministic
 ```bash
 npm run validate
 npm run test:e2e
+npm run test:e2e:dist
 npm run test:visual-diff
+npm run gate:submission
 ```
 
-The first command proves the pure-core, replay corpus, level, concept-art provenance, package-license, build, and served-`dist` gates, including the absence of retired flattened PNG art. The second compares the same 100 tapes at every tick in Chromium, Firefox, and WebKit, verifies the complete four-room journey and ending, and exercises real keyboard, touch, pause, resume, storage, and reset paths. The third records a non-gating reference comparison alongside the independent 90/100 visual verdict.
+The first command proves the pure-core, replay corpus, level, concept-art provenance, package-license, build, and served-`dist` gates, including the absence of retired flattened PNG art. The second compares the same 100 tapes at every tick in Chromium, Firefox, and WebKit, verifies the complete four-room journey and ending, and exercises real keyboard, touch, pause, resume, storage, and reset paths against the dev server. The third runs that same suite against a real build instead: the bundle that keeps the test API is built into `dist-e2e/` and served with `vite preview`, so the shipped `dist/` is never the tested one and never learns the test API — `npm run test:e2e:dist:all` widens it to all three engines. The fourth records a non-gating reference comparison alongside the independent 90/100 visual verdict. The last chains the first and third and then prints the gates that still need a hand-started server.
 
 See [the production gate report](docs/prototype/gate-report.md) for the exact evidence and remaining human gates.
 
