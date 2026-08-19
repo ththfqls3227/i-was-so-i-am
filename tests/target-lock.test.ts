@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { distanceBetween } from "../src/core/geometry";
-import { encodeInput, InputBit, NEUTRAL_INPUT, type InputFrame } from "../src/core/input";
+import { encodeInput, NEUTRAL_INPUT, type InputFrame } from "../src/core/input";
 import { Simulation } from "../src/core/simulation";
 import type { ChamberDefinition, Tape } from "../src/core/types";
 import { HANDOFF_CHAMBER, TRACE_WEIGHT_CHAMBER } from "../src/content/chambers";
 import { handoffGolden, recordFoldedTape, traceWeightGolden } from "../src/content/golden";
-import { traceRequiredHoldTicks, traceRequiredTravelTicks } from "../src/content/tutorial-timing";
+import { recordTraceWeightByCard } from "./support/trace-card";
 
 function repeat(frame: InputFrame, count: number): InputFrame[] {
   return Array.from({ length: count }, () => frame);
@@ -15,80 +14,6 @@ const up = encodeInput({ up: true });
 const left = encodeInput({ left: true });
 const holdStill = encodeInput({ actionHeld: true });
 const pushRight = encodeInput({ right: true, actionHeld: true });
-
-/**
- * Encodes frames the way the render layer samples the keyboard, so recordings
- * carry the same ActionPressed/ActionReleased edges a real player produces.
- */
-function keyboardEncoder(): (keys: { right?: boolean; action?: boolean }) => InputFrame {
-  let previousAction = false;
-  return (keys) => {
-    const action = keys.action === true;
-    let frame = encodeInput({ right: keys.right === true, actionHeld: action });
-    if (action && !previousAction) frame |= InputBit.ActionPressed;
-    if (!action && previousAction) frame |= InputBit.ActionReleased;
-    previousAction = action;
-    return frame;
-  };
-}
-
-type TraceStage = "approach" | "grip" | "release" | "travel";
-
-/**
- * Plays the Trace Weight recording card by card, exactly as the tutorial words
- * it: walk to the winch, grip it until the card says to let go, let go, then
- * hold right + action for the travel it asks for, then fold. Cards are obeyed
- * once each, the way a player reads them — the release is a single beat and the
- * push that follows starts while still standing inside the winch radius. Stage
- * thresholds come from the module the tutorial UI reads, never from tuned frame
- * counts: the point of the test is that following the words works.
- */
-function traceWeightTutorialVerbatimTape(): Tape {
-  const chamber = TRACE_WEIGHT_CHAMBER;
-  const hold = chamber.hold;
-  if (!hold) throw new Error("Trace Weight hold is missing");
-  const requiredHold = traceRequiredHoldTicks();
-  const requiredTravel = traceRequiredTravelTicks();
-  const simulation = new Simulation(chamber);
-  const encode = keyboardEncoder();
-  let stage: TraceStage = "approach";
-  let holdActiveSince: number | null = null;
-  let travelledTicks = 0;
-
-  for (let guard = 0; guard < chamber.tapeDurationTicks; guard += 1) {
-    const state = simulation.state;
-    if (state.phase !== "recording") break;
-    const pilot = state.actors[0];
-    if (!pilot) throw new Error("Recording actor is missing");
-    if (stage === "approach" && distanceBetween(pilot.x, pilot.y, hold.x, hold.y) <= hold.radius) stage = "grip";
-    if (stage === "travel" && travelledTicks >= requiredTravel) break; // the card now says: fold
-    const frame = stage === "approach"
-      ? encode({ right: true })
-      : stage === "grip"
-        ? encode({ action: true })
-        : stage === "release"
-          ? encode({}) // "let go and walk toward the weight"
-          : encode({ right: true, action: true }); // "keep moving right and hold action too"
-    simulation.step(frame);
-    const next = simulation.state;
-    if (next.phase !== "recording") break;
-    if (stage === "travel") travelledTicks += 1;
-    if (stage === "release") stage = "travel";
-    if (stage === "grip") {
-      if (next.hold?.active === true) {
-        if (holdActiveSince === null) holdActiveSince = next.tapeTick;
-        if (next.tapeTick - holdActiveSince >= requiredHold) stage = "release";
-      } else {
-        holdActiveSince = null;
-      }
-    }
-  }
-
-  if (!simulation.foldRecording() || !simulation.tape) {
-    throw new Error("The tutorial-verbatim Trace Weight recording could not fold");
-  }
-  return simulation.tape;
-}
 
 /** Replays the tape and, if the present route runs out, waits the window out so a
  * failure reports the structured code instead of a half-finished replay. */
@@ -106,7 +31,9 @@ function run(chamber: ChamberDefinition, tape: Tape, presentFrames: InputFrame[]
 
 describe("target lock releases the target it just lost, not every target", () => {
   it("completes Trace Weight from a tutorial-verbatim recording (winch, release, right + action, fold)", () => {
-    const simulation = run(TRACE_WEIGHT_CHAMBER, traceWeightTutorialVerbatimTape(), traceWeightGolden().present);
+    const verbatim = recordTraceWeightByCard({ reactionTicks: 0 }).tape;
+    if (!verbatim) throw new Error("The tutorial-verbatim recording produced no tape");
+    const simulation = run(TRACE_WEIGHT_CHAMBER, verbatim, traceWeightGolden().present);
     const past = simulation.state.actors.find((actorState) => actorState.id === "past");
     expect(past?.targetId).toBe(TRACE_WEIGHT_CHAMBER.forceObject?.id);
     expect(simulation.state.forceObject?.x).toBe(TRACE_WEIGHT_CHAMBER.forceObject?.maxX);

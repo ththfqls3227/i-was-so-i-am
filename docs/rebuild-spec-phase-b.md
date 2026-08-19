@@ -66,6 +66,26 @@
 - `exitGate`는 기본값 로직을 두되 traceWeight/lastHold=`force`, handoff=`handoff`로 방 정의에 명시했다.
 - 튜토리얼 임계값 2개는 `src/content/tutorial-timing.ts`로 분리 — 회귀 테스트가 UI와 같은 출처를 읽게 하기 위함.
 
+## B5. Trace Weight 「여유 타이밍」 실패 (2026-08-20, 라이브 플레이 발견)
+
+증상: 카드를 그대로 따라가되 **여유 있게** 플레이하면(윈치를 요구치보다 오래 붙들고, 손 떼고 잠깐 머뭇거린 뒤 오른쪽+행동) 2회차에서 `force`가 1을 넘지 못하고 실패. 최소 타이밍 회귀(`target-lock.test.ts`)는 통과하므로 테스트가 못 잡던 구간.
+
+근본 원인 두 가지:
+1. **스테이지 4/4 게이트가 변위가 아니라 경과 틱을 셌다.** `traceRequiredTravelTicks()`(58틱)를 `tapeTick - traceReleaseTick`과 비교 — 손 떼고 오른쪽을 누르기까지의 **사망 시간이 같은 예산에서 차감**된다. 1회차의 과거는 닫힌 문(x=334)에 눌려 있어 화면상으로는 구분이 안 된다. 실측: 윈치 획득 반경 가장자리(x=208)에서 놓으면 걸어야 할 실제 틱은 51~54, 예산은 58 → **머뭇거림 9틱(0.3초)이면 카드가 거짓말**을 한다. fold는 꼬리를 `ActionHeld`만으로 채우므로(손은 남고 발은 멈춤) 메아리가 추 앞에서 얼어붙어 force=1.
+2. **되잡기 UX 결함**: 다음 지시(오른쪽+행동)를 윈치 반경 안에서 누르게 되어 있어 `hold.active`가 다시 켜지고, 카드가 2/4 「손을 떼세요」로 되돌아간다(약 13틱). 그 사이 위 예산이 계속 소모된다.
+
+수정:
+- 카드가 **세지 않고 재생한다**: `TraceRecordingProjection`이 지금까지의 프레임을 **다리가 이미 래치된 챔버 사본**에 흘려보내고, 코어의 `isAlignedPusher`로 「지금 접으면 메아리가 미는가」를 그대로 묻는다. 경과 틱 추정 대신 실제 시뮬레이션 답. 퍼블리시가 틱을 건너뛰어도(프레임 배치) 결과가 동일.
+- **완주 여유** 게이트 추가: 메아리 합류 시점 + `traceFinishTicks()`(추 안착 + 현재의 우회 이동, 챔버 지오메트리에서 유도)가 리플레이 창을 넘으면 fold를 제안하지 않고 「R로 다시 기록」 카드를 띄운다.
+- 되잡기 시 2/4로 되돌아가지 않도록 `released` 신호로 고정.
+- 다른 3개 방은 같은 결함 없음(적재/안착/그립 모두 1회차에서 **관측 가능한 상태**로 게이팅). 회귀 테스트로 고정.
+
+### B5 구현 메모 (2026-08-20)
+- `traceRequiredTravelTicks()` 삭제 — 경과 틱 게이트 자체가 원인이라 대체가 아니라 제거.
+- `Simulation.recordedFrames`(읽기 전용 getter)와 `MemoryScene.recordedFrames` 추가. 코어 동작·체크섬·테이프 포맷 불변.
+- `simulationConstants.forceMovePerTick` 노출(완주 여유 계산이 매직넘버를 쓰지 않게).
+- 테스트: `tests/tutorial-card-honesty.test.ts`(카드 구동 스케줄 매트릭스 96종 + 「카드가 제안한 모든 틱에서 성공」 + 「한 틱 일찍 접으면 실패」 + 나머지 3방 fold 정직성), `tests/support/trace-card.ts`(카드 문구 그대로의 드라이버), e2e `Trace Weight finishes for a slow hand that follows the card`(실키보드·여유 타이밍). 이 e2e는 수정 전 소스에서 `force=2` 대기 실패로 재현됨을 확인.
+
 ## 검증 게이트 (각 단계 후)
 - `npm run validate` 그린 (typecheck, lint, 147+ 유닛, 코퍼스, 레벨, 라이선스, 빌드, dist-smoke).
 - B3 후: `npx playwright test --project=chromium` 그린 + 4개 방 골든 경로 실키보드 통과.

@@ -318,6 +318,11 @@ export class MemoryScene {
     };
   }
 
+  /** Frames recorded so far in this pass — the tutorial projects pass 2 from them. */
+  get recordedFrames(): readonly InputFrame[] {
+    return this.simulation.recordedFrames;
+  }
+
   setEventsAdapter(adapter: MemorySceneEvents): void {
     this.eventsAdapter = adapter;
     this.publish();

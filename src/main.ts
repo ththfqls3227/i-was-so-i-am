@@ -1,10 +1,11 @@
 import "./style.css";
+import type { InputFrame } from "./core/input";
 import { Simulation, simulationConstants } from "./core/simulation";
 import { SIMULATION_VERSION, TICK_RATE, type ActorId, type ChamberId, type FailureCode, type SimulationState, type Tape } from "./core/types";
 import { CHAMBERS } from "./content/chambers";
 import { goldenFor } from "./content/golden";
 import { FOUR_ROOM_ROUTE } from "./content/manifests";
-import { traceRequiredHoldTicks, traceRequiredTravelTicks } from "./content/tutorial-timing";
+import { idleTraceProgress, TraceRecordingProjection, traceFoldWouldFinish, traceRecordingRanOutOfTime, traceRequiredHoldTicks } from "./content/tutorial-timing";
 import { MemoryScene } from "./game/MemoryScene";
 
 interface BrowserRun {
@@ -286,39 +287,20 @@ function presentActor(state: Readonly<SimulationState>): SimulationState["actors
   return state.actors.find((candidate) => candidate.id === "present") ?? null;
 }
 
-// Signals accumulated from the state stream during a recording (state history,
-// still no magic numbers): how long the hold has been gripped and, for Trace
-// Weight, whether it was held long enough and when it was released.
-let lastRecordingTick = 0;
-let holdActiveSinceTick: number | null = null;
-let traceHeldLongEnough = false;
-let traceReleaseTick: number | null = null;
+// Trace Weight's card cannot read its last beat off the live state: the closed
+// bridge pins the recorded past against the door. Its stage facts come from
+// projecting the tape so far through the latched corridor instead.
+const traceProjection = new TraceRecordingProjection();
+let traceProgress = idleTraceProgress();
 
 function resetTutorialSignals(): void {
-  lastRecordingTick = 0;
-  holdActiveSinceTick = null;
-  traceHeldLongEnough = false;
-  traceReleaseTick = null;
+  traceProjection.reset();
+  traceProgress = idleTraceProgress();
 }
 
-function trackTutorialSignals(state: Readonly<SimulationState>): void {
-  if (state.phase !== "recording") {
-    holdActiveSinceTick = null;
-    return;
-  }
-  if (state.tapeTick < lastRecordingTick) resetTutorialSignals();
-  lastRecordingTick = state.tapeTick;
-  if (state.hold?.active) {
-    if (holdActiveSinceTick === null) holdActiveSinceTick = state.tapeTick;
-    if (state.chamberId === "traceWeight" && state.tapeTick - holdActiveSinceTick >= traceRequiredHoldTicks()) {
-      traceHeldLongEnough = true;
-    }
-  } else {
-    holdActiveSinceTick = null;
-    if (state.chamberId === "traceWeight" && traceHeldLongEnough && traceReleaseTick === null) {
-      traceReleaseTick = state.tapeTick;
-    }
-  }
+function trackTutorialSignals(state: Readonly<SimulationState>, recordedFrames: readonly InputFrame[]): void {
+  if (state.chamberId !== "traceWeight" || state.phase !== "recording") return;
+  traceProgress = traceProjection.advance(recordedFrames);
 }
 
 function inputLabel(kind: "move" | "act" | "release" | "reset" | "fold"): { key: string; action: string } {
@@ -472,15 +454,31 @@ function traceWeightTutorial(state: Readonly<SimulationState>, korean: boolean):
   if (state.phase === "recording") {
     const pilot = recordingActor(state);
     const gripping = hold?.active === true;
-    const heldTicks = holdActiveSinceTick === null ? 0 : state.tapeTick - holdActiveSinceTick;
-    const travelTicks = traceReleaseTick === null ? 0 : state.tapeTick - traceReleaseTick;
-    const travelledEnough = traceReleaseTick !== null && travelTicks >= traceRequiredTravelTicks();
+    const heldTicks = traceProgress.gripTicks;
+    // Ready to fold only once the tape so far would leave the echo pushing the
+    // weight, with replay time left to finish — the card never offers the fold
+    // on a recording that cannot work.
+    const travelledEnough = traceFoldWouldFinish(traceProgress);
+    const outOfTime = traceRecordingRanOutOfTime(traceProgress, state.tapeTick);
     const checklist: TutorialMessage["checklist"] = [
-      { text: korean ? "윈치를 충분히 붙들기" : "Hold the winch long enough", state: traceHeldLongEnough ? "done" : "active" },
-      { text: korean ? "오른쪽 + 행동 키 기록" : "Record right + action", state: travelledEnough ? "done" : traceHeldLongEnough ? "active" : "next" },
+      { text: korean ? "윈치를 충분히 붙들기" : "Hold the winch long enough", state: traceProgress.heldLongEnough ? "done" : "active" },
+      { text: korean ? "오른쪽 + 행동 키 기록" : "Record right + action", state: travelledEnough ? "done" : traceProgress.heldLongEnough ? "active" : "next" },
       { text: korean ? "⏎ 시간 접기" : "Fold time with ⏎", state: travelledEnough && canFoldNow(state) ? "active" : "next" },
     ];
-    if (!traceHeldLongEnough) {
+    if (outOfTime) {
+      return {
+        stage: "trace-out-of-time",
+        pass: pass.record,
+        step: korean ? "복구" : "RECOVER",
+        title: korean ? "이 기록에는 밀 시간이 남지 않았습니다" : "This recording has no pushing time left",
+        body: korean
+          ? "윈치는 충분히 오래 붙들면 됩니다 — 더 붙들 필요는 없습니다. R로 다시 기록하세요."
+          : "The winch only needs long enough, not longer. Press R and record it again.",
+        ...tutorialInput("reset"),
+        checklist,
+      };
+    }
+    if (!traceProgress.heldLongEnough) {
       if (!gripping) {
         const nearWinch = Boolean(hold && pilot && distanceToPoint(pilot, hold.x, hold.y) <= hold.radius);
         return {
@@ -506,7 +504,10 @@ function traceWeightTutorial(state: Readonly<SimulationState>, korean: boolean):
         checklist,
       };
     }
-    if (gripping) {
+    // Once the winch has been let go the walk is on. Brushing it again on the
+    // way out — unavoidable, since the next step is pressed from inside its
+    // radius — must not send the card back to "let go".
+    if (gripping && !traceProgress.released) {
       return {
         stage: "trace-release",
         pass: pass.record,
@@ -983,7 +984,7 @@ function updateUi(state: Readonly<SimulationState>, checksum: string): void {
   const chamber = CHAMBERS[state.chamberId];
   currentId = state.chamberId;
   const index = ROUTE.indexOf(state.chamberId);
-  trackTutorialSignals(state);
+  trackTutorialSignals(state, scene.recordedFrames);
   if (fxPhase === "recording" && state.phase === "replay") showPassTransition(state.foldedAtTick !== null);
   fxPhase = state.phase;
   setText("#phase-label", phaseCopy(state.phase));
