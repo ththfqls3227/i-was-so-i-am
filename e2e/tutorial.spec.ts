@@ -176,6 +176,51 @@ test("says so when the action key is being held against nothing", async ({ page 
   await page.keyboard.up("Space");
 });
 
+test("stays quiet where Trace Weight asks for a held action with nothing in reach", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "One engine is enough for a timing-led rehearsal of the push beat.");
+  test.setTimeout(45_000);
+  const winch = CHAMBERS.traceWeight.hold;
+  if (!winch) throw new Error("Trace Weight must define a winch hold");
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "기억 속으로 들어가기" }).click();
+  await page.evaluate(() => window.__I_WAS_SO_I_AM__.switchChamber("traceWeight"));
+  const card = page.locator("#tutorial-card");
+  const nudge = page.locator("#tutorial-nudge");
+
+  await page.keyboard.down("ArrowRight");
+  await page.waitForFunction(
+    (x) => (window.__I_WAS_SO_I_AM__.state?.actors[0]?.x ?? 0) >= x,
+    winch.x - winch.radius,
+    { polling: 10, timeout: 6_000 },
+  );
+  await page.keyboard.up("ArrowRight");
+  await page.keyboard.down("Space");
+  await expect(card).toHaveAttribute("data-stage", "trace-release", { timeout: 8_000 });
+  await page.keyboard.up("Space");
+
+  // This card asks for right plus the action key against a door the past
+  // cannot pass — inputs are recorded, not positions — so the held action has
+  // nothing in reach on purpose. Wait until the winch lockout has actually
+  // emptied the target, then dwell well past the hint's threshold: the hint
+  // must never contradict the instruction the player is following.
+  await page.keyboard.down("ArrowRight");
+  await page.keyboard.down("Space");
+  await expect(card).toHaveAttribute("data-stage", "trace-record-push");
+  await expect
+    .poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.actors[0]?.targetId), { timeout: 8_000 })
+    .toBeNull();
+  const startTick = await page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.tick ?? 0);
+  await expect
+    .poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.tick ?? 0), { timeout: 8_000 })
+    .toBeGreaterThan(startTick + 20);
+  expect(await page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.actors[0]?.targetId)).toBeNull();
+  await expect(nudge).toBeHidden();
+
+  await page.keyboard.up("ArrowRight");
+  await page.keyboard.up("Space");
+});
+
 test("keeps the fold key discoverable in a narrow desktop window", async ({ page }) => {
   // A narrow window with a fine pointer is still a keyboard player: the prompt
   // that teaches ⏎ must stay, and must not sit on the touch controls.

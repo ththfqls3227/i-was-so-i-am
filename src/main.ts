@@ -304,6 +304,14 @@ let traceProgress = idleTraceProgress();
 const NUDGE_AFTER_TICKS = 15;
 let gripsNothingSinceTick: number | null = null;
 
+// Except where the card asks for exactly that. Trace Weight rehearses the push
+// against a door the past cannot pass — inputs are recorded, not positions — so
+// a held action with nothing in reach is the instruction, not a mistake, from
+// the moment it asks for it until the fold that keeps the past pushing. The
+// exemption is keyed to those stage identities so it stays true no matter how
+// long the player lingers on them.
+const STAGES_THAT_ASK_TO_HOLD_NOTHING = new Set(["trace-record-push", "trace-fold", "trace-out-of-time"]);
+
 function resetTutorialSignals(): void {
   traceProjection.reset();
   traceProgress = idleTraceProgress();
@@ -932,7 +940,9 @@ function updateTutorial(state: Readonly<SimulationState>): void {
   setText("#tutorial-action-label", tutorial.action);
   const nudge = queryElement("#tutorial-nudge");
   if (nudge) {
-    const show = gripsNothing(state);
+    // The streak is tracked even on exempt stages, so leaving one does not
+    // hand the nudge a stale head start.
+    const show = gripsNothing(state) && !STAGES_THAT_ASK_TO_HOLD_NOTHING.has(tutorial.stage);
     if (show) {
       setText("#tutorial-nudge", locale === "ko"
         ? "여기엔 잡을 것이 없습니다 — 황금 고리로 가서, 대상을 향해 잡으세요"
