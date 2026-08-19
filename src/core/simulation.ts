@@ -162,7 +162,16 @@ function applyInteractions(state: SimulationState, chamber: ChamberDefinition, g
 
 function replayFailureCode(state: SimulationState): FailureCode {
   if (state.handoff && !state.handoff.stagedByPast) return "carrier-not-staged";
-  if (state.door && !state.door.open) return "door-closed";
+  if (state.handoff && state.door && !state.door.open) return "delivery-gate-closed";
+  if (state.door && !state.door.open && !state.hold?.requiredActor) return "door-closed";
+  if (state.forceObject) {
+    const direction = state.forceObject.pushDirection ?? "right";
+    const seated = direction === "right"
+      ? state.forceObject.x >= state.forceObject.maxX
+      : state.forceObject.x <= state.forceObject.minX;
+    if (!seated) return "block-not-bridged";
+  }
+  if (state.door && !state.door.open) return "hold-released-early";
   return "echo-faded";
 }
 
