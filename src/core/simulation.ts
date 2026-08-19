@@ -178,6 +178,18 @@ function applyInteractions(state: SimulationState, chamber: ChamberDefinition, g
 function replayFailureCode(state: SimulationState): FailureCode {
   if (state.handoff && !state.handoff.stagedByPast) return "carrier-not-staged";
   if (state.handoff && state.door && !state.door.open) return "delivery-gate-closed";
+  // The past did its whole job — staged the carrier and held the gate open —
+  // and the present had the carrier in hand. Nothing about the recording is
+  // wrong, so telling the player to rerecord would send them to fix a tape that
+  // works; the second pass simply ran out of the fixed replay span.
+  if (
+    state.handoff?.stagedByPast === true &&
+    state.handoff.receivedByPresent &&
+    !state.handoff.delivered &&
+    state.door?.open === true
+  ) {
+    return "delivery-too-slow";
+  }
   if (state.door && !state.door.open && !state.hold?.requiredActor) return "door-closed";
   if (state.forceObject) {
     const direction = state.forceObject.pushDirection ?? "right";

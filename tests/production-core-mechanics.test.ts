@@ -174,4 +174,33 @@ describe("Handoff delivery gate", () => {
     expect(simulation.state.success).toBe(false);
     expect(simulation.state.lastError).toBe("delivery-gate-closed");
   });
+
+  // A working tape plus a slow second pass is not a broken recording, and must
+  // not be reported as one: the replay window is fixed by the chamber, so "press
+  // R and record again" would send the player to fix what already works.
+  it("fails with delivery-too-slow when the present receives the carrier but dawdles", () => {
+    const golden = handoffGolden();
+    const simulation = new Simulation(HANDOFF_CHAMBER);
+    expect(simulation.loadTape(golden.past)).toBeNull();
+    // Follow the golden hand only until the carrier changes hands, then stop.
+    for (const frame of golden.present) {
+      if (simulation.state.phase !== "replay" || simulation.state.handoff?.receivedByPresent === true) break;
+      simulation.step(frame);
+    }
+    expect(simulation.state.handoff?.receivedByPresent).toBe(true);
+    while (simulation.state.phase === "replay") simulation.step(NEUTRAL_INPUT);
+    expect(simulation.state.handoff?.stagedByPast).toBe(true);
+    expect(simulation.state.door?.open).toBe(true);
+    expect(simulation.state.handoff?.delivered).toBe(false);
+    expect(simulation.state.success).toBe(false);
+    expect(simulation.state.lastError).toBe("delivery-too-slow");
+  });
+
+  // The idle-handoff timeout still belongs to carrier-not-staged: the new code
+  // is narrower and must not take failures that describe a real recording fault.
+  it("leaves an unstaged handoff timeout reporting carrier-not-staged", () => {
+    const simulation = runToTimeout(HANDOFF_CHAMBER, idleTape(HANDOFF_CHAMBER), []);
+    expect(simulation.state.handoff?.receivedByPresent).toBe(false);
+    expect(simulation.state.lastError).toBe("carrier-not-staged");
+  });
 });

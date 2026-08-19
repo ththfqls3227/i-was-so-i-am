@@ -30,6 +30,7 @@ export type FailureCode =
   | "hold-released-early"
   | "carrier-not-staged"
   | "delivery-gate-closed"
+  | "delivery-too-slow"
   | "block-not-bridged";
 
 export interface Point {

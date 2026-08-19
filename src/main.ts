@@ -53,6 +53,7 @@ const failureCopyMap: Partial<Record<FailureCode, FailureLine>> = {
   "hold-released-early": { ko: "문이 닫혔습니다 — 과거가 손잡이를 놓쳤어요. 붙든 채로 시간을 접으세요.", en: "The door closed — your past let go of the handle. Fold time while still holding." },
   "carrier-not-staged": { ko: "기억 상자가 접점에 도착하지 못했습니다 — 1회차에 상자를 접점까지 옮기세요.", en: "The memory carrier never reached the junction. Carry it there in pass 1." },
   "delivery-gate-closed": { ko: "전달구가 닫혀 있습니다 — 과거가 개폐기를 붙든 채로 시간을 접었는지 확인하세요.", en: "The delivery gate is closed. Make sure your past folds time while still gripping the switch." },
+  "delivery-too-slow": { ko: "시간이 다 됐습니다 — 이번엔 2회차에서 상자를 더 빨리 전달하세요. R로 다시 시작.", en: "Time ran out — deliver the carrier faster in pass 2 this time. Restart with R." },
   "block-not-bridged": { ko: "틈이 그대로입니다 — 돌덩이를 끝까지 밀어야 해요.", en: "The gap remains. Push the block all the way." },
 };
 // Some codes mean different things room to room: the same unseated force object
