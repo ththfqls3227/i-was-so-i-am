@@ -22,7 +22,7 @@ import { DefaultRenderingPipeline } from "@babylonjs/core/PostProcesses/RenderPi
 import { Scene, ScenePerformancePriority } from "@babylonjs/core/scene";
 import { InputBit, NEUTRAL_INPUT, type InputFrame } from "../core/input";
 import { Simulation } from "../core/simulation";
-import { TICK_MS, type ActorId, type ActorState, type ChamberId, type ForceObjectState, type Rect, type SimulationState, type Tape } from "../core/types";
+import { TICK_MS, type ActorId, type ActorState, type ChamberId, type ForceObjectState, type PlateState, type Rect, type SimulationState, type Tape } from "../core/types";
 import { CHAMBERS } from "../content/chambers";
 import { traceRequiredHoldTicks } from "../content/tutorial-timing";
 
@@ -46,6 +46,9 @@ const SCALING_LADDER = [1, 1.25, 1.5] as const;
 
 /** Each room signs its trim — inlays, rune slits, cradle rims — in one colour. */
 const ROOM_ACCENT: Record<ChamberId, { diffuse: Color3; emissive: Color3 }> = {
+  awakening: { diffuse: new Color3(0.05, 0.18, 0.24), emissive: new Color3(0.02, 0.3, 0.44) },
+  secondSelf: { diffuse: new Color3(0.04, 0.19, 0.26), emissive: new Color3(0.018, 0.32, 0.47) },
+  handNotBody: { diffuse: new Color3(0.2, 0.18, 0.26), emissive: new Color3(0.16, 0.14, 0.34) },
   crossing: { diffuse: new Color3(0.03, 0.2, 0.27), emissive: new Color3(0.015, 0.34, 0.5) },
   traceWeight: { diffuse: new Color3(0.3, 0.16, 0.05), emissive: new Color3(0.34, 0.15, 0.03) },
   handoff: { diffuse: new Color3(0.34, 0.25, 0.07), emissive: new Color3(0.36, 0.24, 0.05) },
@@ -114,6 +117,12 @@ interface TargetGuideVisual {
   arrow: Mesh;
 }
 
+interface PlateVisual {
+  pad: Mesh;
+  ring: Mesh;
+  ringMaterial: StandardMaterial;
+}
+
 interface WorldVisuals {
   root: TransformNode;
   motes: ParticleSystem;
@@ -121,6 +130,7 @@ interface WorldVisuals {
   ripple: { mesh: Mesh; material: StandardMaterial };
   bridge: BridgeVisual | null;
   winch: WinchVisual | null;
+  plate: PlateVisual | null;
   weight: WeightVisual | null;
   handoffOrb: Mesh | null;
   handoffDelivery: Mesh | null;
@@ -1038,6 +1048,7 @@ export class MemoryScene {
     }
 
     const winch = chamber.hold ? this.createWinch(chamber.hold.x, chamber.hold.y, chamber.door?.rect ?? null, metal, bronze, cyan, root) : null;
+    const plate = chamber.plate ? this.createPlate(chamber.plate, ashlarEdge, root) : null;
     const weight = chamber.forceObject ? this.createWeight(chamber.forceObject, ashlarEdge, metal, bronze, cyan, amber, root) : null;
 
     let handoffOrb: Mesh | null = null;
@@ -1076,10 +1087,6 @@ export class MemoryScene {
       mouth.position = cradleCenter.add(new Vector3(0, 0.44, 0));
       mouth.material = nicheDark;
       this.registerMesh(mouth, root, false);
-      const junction = MeshBuilder.CreateTorus("handoff-junction", { diameter: chamber.handoff.junction.radius * WORLD_SCALE * 2, thickness: 0.065, tessellation: 36 }, this.scene);
-      junction.position = this.worldPoint(chamber.handoff.junction.x, chamber.handoff.junction.y, 0.08);
-      junction.material = cyanGlass;
-      this.registerMesh(junction, root, false);
     }
 
     const exit = this.createExit(chamber.exit, ashlarEdge, bronze, white, root);
@@ -1092,7 +1099,27 @@ export class MemoryScene {
     // Architecture materials never change after the chamber is built; the
     // signal materials (cyan/amber/portal/rune) keep animating their emissive.
     for (const stoneLike of [metal, bronze, voidMaterial, nicheDark]) stoneLike.freeze();
-    return { root, motes, burst, ripple, bridge, winch, weight, handoffOrb, handoffDelivery, exit, guide };
+    return { root, motes, burst, ripple, bridge, winch, plate, weight, handoffOrb, handoffDelivery, exit, guide };
+  }
+
+  /**
+   * A pressure plate: a slab set into the floor with a ring that lights while
+   * someone stands on it. Built from the chamber's own rect, so a room gets one
+   * exactly when its data has one.
+   */
+  private createPlate(plate: PlateState, stone: StandardMaterial, root: TransformNode): PlateVisual {
+    const pad = this.createBox(`${plate.id}-pad`, plate, 0.13, stone, root, 0.065);
+    const ringMaterial = material(this.scene, `${plate.id}-ring`, new Color3(0.06, 0.14, 0.18), new Color3(0.02, 0.16, 0.24));
+    const ring = MeshBuilder.CreateTorus(`${plate.id}-ring`, {
+      diameter: Math.min(plate.width, plate.height) * WORLD_SCALE * 0.68,
+      thickness: 0.075,
+      tessellation: 40,
+    }, this.scene);
+    ring.position = this.rectCenter(plate, 0.15);
+    ring.material = ringMaterial;
+    this.registerMesh(ring, root, false);
+    this.glow.addIncludedOnlyMesh(ring);
+    return { pad, ring, ringMaterial };
   }
 
   /**
@@ -2185,8 +2212,21 @@ export class MemoryScene {
     const weight = (): Vector3 | null => state.forceObject
       ? this.worldPoint(state.forceObject.x - 24, state.forceObject.y + state.forceObject.height / 2, 0.02)
       : null;
+    const plate = (): Vector3 | null => state.plate ? this.rectCenter(state.plate, 0.02) : null;
 
     switch (state.chamberId) {
+      case "awakening":
+        // The plate is the only thing to do here until the door is up.
+        return state.door?.open === true ? exit() : plate();
+      case "secondSelf":
+        return state.phase === "recording" || state.phase === "rerecord" ? plate() : exit();
+      case "handNotBody":
+        if (state.phase === "recording" || state.phase === "rerecord") {
+          // Nothing to walk to: the recording's whole job is pressing into the
+          // shut door, so point at the door the echo will pass through.
+          return state.door ? this.rectCenter(state.door.rect, 0.02) : exit();
+        }
+        return state.exit.open ? exit() : plate();
       case "crossing":
         return state.phase === "recording" || state.phase === "rerecord" ? hold() : exit();
       case "traceWeight":
@@ -2207,10 +2247,11 @@ export class MemoryScene {
         return exit();
       case "handoff":
         if (!state.handoff) return exit();
-        if (!state.handoff.stagedByPast) return this.worldPoint(state.handoff.x, state.handoff.y, 0.02);
-        if (!state.handoff.receivedByPresent) return this.worldPoint(state.handoff.junction.x, state.handoff.junction.y, 0.02);
-        if (!state.handoff.delivered) return this.rectCenter(state.handoff.delivery, 0.02);
-        return exit();
+        // Pass 1 is only the switch; pass 2 is the box, then the cradle.
+        if (state.phase === "recording" || state.phase === "rerecord") return hold();
+        if (state.handoff.delivered) return exit();
+        if (state.handoff.holder === "present") return this.rectCenter(state.handoff.delivery, 0.02);
+        return this.worldPoint(state.handoff.x, state.handoff.y, 0.02);
       case "lastHold":
         return state.phase === "recording" || state.phase === "rerecord" ? hold() : exit();
     }
@@ -2254,6 +2295,18 @@ export class MemoryScene {
       this.visuals.winch.runeMaterial.emissiveColor = glow;
       const runeScale = state.hold.active ? 1.1 + Math.sin(performance.now() * 0.012) * 0.05 : 1;
       this.visuals.winch.rune.scaling.setAll(runeScale);
+    }
+    if (this.visuals.plate && state.plate) {
+      // Cyan when the echo is holding it down, amber for the living body: the
+      // ring says which self the plate is answering to.
+      const pressedByPast = state.plate.pressedBy.includes("past") && state.phase !== "recording";
+      const glow = !state.plate.active
+        ? new Color3(0.02, 0.16, 0.24)
+        : pressedByPast
+          ? new Color3(0.03, 0.8, 1)
+          : new Color3(1, 0.42, 0.06);
+      this.visuals.plate.ringMaterial.emissiveColor = glow;
+      this.visuals.plate.pad.position.y += ((state.plate.active ? 0.03 : 0.065) - this.visuals.plate.pad.position.y) * 0.2;
     }
     if (this.visuals.weight && state.forceObject) {
       const target = this.rectCenter(state.forceObject, 0);
