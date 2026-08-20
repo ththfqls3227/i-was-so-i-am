@@ -60,7 +60,9 @@ export class Hud {
   private readonly resultHeading = element("h2");
   private readonly resultBody = element("p");
   private readonly resultHint = element("p", "hint");
+  private readonly again = element("button", undefined, "R · 다시 기록");
   private readonly diagnostic = element("div", "diagnostic");
+  private readonly notice = element("p", "notice");
 
   private promptSignature = "";
   private subtitleText = "";
@@ -90,20 +92,26 @@ export class Hud {
     const startButton = element("button", undefined, "클릭해서 시작");
     startButton.id = "start-button";
     startButton.addEventListener("click", () => this.callbacks.onStart());
-    this.title.append(startButton, element("p", "hint", "W A S D 이동 · 마우스 시점 · Space 점프 · ⏎ 기록 끝내기 · R 다시 기록"));
+    this.title.append(
+      startButton,
+      element("p", "hint", "W A S D 이동 · 마우스 시점 · Space 점프\n⏎ 기록 끝내기 · R 다시 기록 · Esc 멈춤"),
+    );
 
     this.result.append(this.resultHeading, this.resultBody);
-    const again = element("button", undefined, "R · 다시 기록");
-    again.id = "rerecord-button";
-    again.addEventListener("click", () => this.callbacks.onRerecord());
-    this.result.append(again, this.resultHint);
+    this.again.id = "rerecord-button";
+    this.again.addEventListener("click", () => this.callbacks.onRerecord());
+    this.result.append(this.again, this.resultHint);
     this.result.hidden = true;
+
+    this.notice.textContent = "마우스 왼쪽 버튼을 누른 채 움직여 시점을 돌리세요";
+    this.notice.hidden = true;
 
     this.root.append(
       this.crosshair,
       this.pass,
       this.tape,
       this.subtitle,
+      this.notice,
       this.prompts,
       this.flash,
       this.diagnostic,
@@ -123,6 +131,10 @@ export class Hud {
     this.pass.hidden = !playing;
 
     this.crosshair.dataset.focus = String(view.focus !== null);
+    // Only say this when it is true. If the browser gave us pointer lock, the
+    // player never needs to know there was another way.
+    const showNotice = playing && view.pointerLockDenied;
+    if (this.notice.hidden === showNotice) this.notice.hidden = !showNotice;
 
     const phaseName = view.phase === "recording" ? "1회차 · 기록" : view.phase === "replay" ? "2회차 · 재생" : view.phase === "success" ? "보관 완료" : "다시 기록";
     if (this.passLabel.textContent !== phaseName) this.passLabel.textContent = phaseName;
@@ -158,8 +170,10 @@ export class Hud {
       if (!view.plateActive && !view.canFold) {
         prompts.push({ key: null, label: "앞의 발판으로 걸어가세요", tone: "plain" });
       }
-      if (view.plateActive) {
+      if (view.plateActive && view.canFold) {
         prompts.push({ key: "⏎", label: "기록 끝내기", tone: "go" });
+      } else if (view.plateActive) {
+        prompts.push({ key: null, label: "발판 위에서 잠시 그대로", tone: "plain" });
       } else if (view.canFold) {
         prompts.push({ key: null, label: "발판을 밟은 채로 기록을 끝내면 좋습니다", tone: "plain" });
         prompts.push({ key: "⏎", label: "기록 끝내기", tone: "plain" });
@@ -223,12 +237,14 @@ export class Hud {
       this.result.dataset.kind = "success";
       this.resultHeading.textContent = "보관 완료";
       this.resultBody.textContent = "당신이 지나간 자리를, 당신이 다시 지나갔습니다.";
-      this.resultHint.textContent = "R · 다시 해보기";
+      this.again.textContent = "R · 다시 해보기";
+      this.resultHint.textContent = "다음 방은 아직 준비 중입니다";
     } else {
       this.result.dataset.kind = "fail";
       this.resultHeading.textContent = "다시 기록";
       this.resultBody.textContent = view.lastError ? FAILURE_COPY[view.lastError] : "이번 재생은 끝났습니다.";
-      this.resultHint.textContent = "R을 눌러도 됩니다";
+      this.again.textContent = "R · 다시 기록";
+      this.resultHint.textContent = "";
     }
   }
 

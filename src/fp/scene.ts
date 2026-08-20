@@ -49,6 +49,8 @@ export interface ViewModel {
   fps: number;
   paused: boolean;
   started: boolean;
+  /** The browser refused pointer lock, so looking around means dragging. */
+  pointerLockDenied: boolean;
 }
 
 export interface SceneEvents {
@@ -104,6 +106,10 @@ export class FirstPersonScene {
   private pitch = 0;
   private sensitivity = DEFAULT_MOUSE_SENSITIVITY;
   private pointerLocked = false;
+  private dragging = false;
+  private pointerLockDenied = false;
+  private lastPointerX = 0;
+  private lastPointerY = 0;
 
   private previous = new Map<ActorId, Snapshot>();
   private current = new Map<ActorId, Snapshot>();
@@ -778,15 +784,50 @@ export class FirstPersonScene {
     // Held keys must not survive losing focus, or the echo records a walk the
     // player never took.
     this.canvas.addEventListener("blur", () => this.pressed.clear());
+    // The promise rejection is the modern signal and pointerlockerror is the one
+    // every browser sends. Chromium also refuses the lock outright while the
+    // browser is under automation, which is why this path has to be real.
+    document.addEventListener("pointerlockerror", () => {
+      this.pointerLockDenied = true;
+    });
     document.addEventListener("pointerlockchange", () => {
       this.pointerLocked = document.pointerLockElement === this.canvas;
       // Escape releases the pointer; the game has to stop with it, or the tape
       // keeps recording an empty room while the player reads their email.
       if (!this.pointerLocked && this.started) this.pause();
     });
-    document.addEventListener("mousemove", (event) => {
-      if (!this.pointerLocked) return;
-      this.look(event.movementX, event.movementY);
+    // Pointer events, not mouse events. Babylon's own input manager consumes
+    // pointerdown on the canvas, and a consumed pointerdown suppresses the
+    // compatibility mousedown/mousemove that would otherwise follow — so a
+    // mouse-event listener here receives nothing at all.
+    //
+    // Two ways to look. Pointer lock is the good one; dragging is the one that
+    // still works when a browser refuses the lock, which it may do for reasons
+    // the player has no control over. A first-person game with no way to turn is
+    // not a game, so the fallback is always wired rather than a setting.
+    this.canvas.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      this.dragging = true;
+      this.lastPointerX = event.clientX;
+      this.lastPointerY = event.clientY;
+    });
+    document.addEventListener("pointerup", () => {
+      this.dragging = false;
+    });
+    document.addEventListener("pointercancel", () => {
+      this.dragging = false;
+    });
+    document.addEventListener("pointermove", (event) => {
+      if (this.pointerLocked) {
+        this.look(event.movementX, event.movementY);
+        return;
+      }
+      if (!this.dragging) return;
+      // movementX is only dependable under pointer lock, so the drag path
+      // measures the delta itself.
+      this.look(event.clientX - this.lastPointerX, event.clientY - this.lastPointerY);
+      this.lastPointerX = event.clientX;
+      this.lastPointerY = event.clientY;
     });
   }
 
@@ -830,7 +871,20 @@ export class FirstPersonScene {
 
   requestPointerLock(): void {
     this.canvas.focus();
-    void this.canvas.requestPointerLock();
+    // Newer browsers return a promise that rejects when the request is denied;
+    // older ones return nothing. A denial is not fatal, it just means the player
+    // turns by dragging, so record it and let the HUD say so.
+    const request: unknown = this.canvas.requestPointerLock();
+    if (request instanceof Promise) {
+      request.then(
+        () => {
+          this.pointerLockDenied = false;
+        },
+        () => {
+          this.pointerLockDenied = true;
+        },
+      );
+    }
   }
 
   fold(): boolean {
@@ -1037,6 +1091,7 @@ export class FirstPersonScene {
       fps: this.fps,
       paused: this.paused,
       started: this.started,
+      pointerLockDenied: this.pointerLockDenied && !this.pointerLocked,
     };
   }
 

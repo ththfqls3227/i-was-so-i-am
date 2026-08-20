@@ -49,10 +49,12 @@ export const AWAKENING: RoomDefinition = {
   version: 1,
   name: "깨어남",
   subtitle: "Awakening",
-  // Ten seconds of recording, sixteen of replay. Folding early does not shorten
-  // the second pass: the window is the room's, not the tape's.
-  tapeDurationTicks: 300,
-  replayGraceTicks: 180,
+  // Fifteen seconds of recording, twenty of replay. Ten was enough to walk the
+  // route and not enough for a player who stops to look at the room, and having
+  // the tape end on its own is a confusing way to meet the second pass.
+  // Folding early does not shorten it: the span is the room's, not the tape's.
+  tapeDurationTicks: 450,
+  replayGraceTicks: 150,
   spawn: { x: 0, y: 0, z: SPAWN_Z, yawUnits: 0 },
   brushes,
   plates: [

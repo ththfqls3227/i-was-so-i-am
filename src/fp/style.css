@@ -179,6 +179,21 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
 }
 .subtitle[data-shown="true"] { opacity: 1; }
 
+.notice {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 42px);
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 5px 12px;
+  border-radius: 6px;
+  background: #0b0f16b0;
+  font-size: 0.74rem;
+  letter-spacing: 0.02em;
+  color: #b7c3d0;
+  white-space: nowrap;
+}
+
 /* ---- fold flash ---- */
 .flash {
   position: absolute;
@@ -203,8 +218,14 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
   gap: 18px;
   text-align: center;
   pointer-events: auto;
-  background: radial-gradient(ellipse at 50% 46%, #04070bb8 0%, #04070be8 58%, #020407f7 100%);
-  backdrop-filter: blur(2px);
+  /* A scrim, not a curtain: the chamber has to stay legible behind the title,
+     because the room is the first thing worth looking at. */
+  background: radial-gradient(ellipse at 50% 46%, #04070b5c 0%, #04070bb0 56%, #020407d6 100%);
+  backdrop-filter: blur(1.5px);
+}
+
+.result {
+  background: radial-gradient(ellipse at 50% 46%, #04070b47 0%, #04070b9e 58%, #020407c9 100%);
 }
 .overlay h1 {
   margin: 0;
@@ -242,7 +263,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
 }
 .overlay button:hover { background: #241705; transform: translateY(-1px); }
 .overlay button:focus-visible { outline: 2px solid var(--amber); outline-offset: 4px; }
-.overlay .hint { font-size: 0.72rem; letter-spacing: 0.14em; color: #6d7d8d; text-transform: uppercase; }
+.overlay .hint { font-size: 0.72rem; line-height: 2; letter-spacing: 0.14em; color: #8794a3; text-transform: uppercase; white-space: pre-line; }
 
 .result h2 {
   margin: 0;

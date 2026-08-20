@@ -59,8 +59,9 @@ scene.attach({
 
 scene.start();
 
-// Clicking the canvas after Escape puts you straight back in.
-scene.canvas.addEventListener("click", () => {
+// Clicking the canvas after Escape puts you straight back in. Pointerdown for the
+// same reason the look controls use it: Babylon eats the compatibility events.
+scene.canvas.addEventListener("pointerdown", () => {
   if (scene.hasStarted && scene.isPaused) {
     scene.resume();
     scene.requestPointerLock();
