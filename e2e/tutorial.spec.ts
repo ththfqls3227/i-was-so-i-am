@@ -323,10 +323,13 @@ test("Hand, Not Body offers the fold only once the projected echo has the switch
   await page.keyboard.up("ArrowRight");
   await page.keyboard.up("Space");
 
-  // Pass 2: stand on the plate until the echo's grip opens the light.
+  // Pass 2: stand on the plate until the echo's grip opens the light. The
+  // present is wherever the lurch left it when the keys came up, which is what
+  // the plate's width is for — walking straight up must always find it.
   await expect(card).toHaveAttribute("data-stage", "hand-step-plate");
   await page.keyboard.down("ArrowUp");
-  await expect(card).toHaveAttribute("data-stage", "hand-hold-plate", { timeout: 6_000 });
+  await expect.poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.plate?.active), { timeout: 6_000 }).toBe(true);
+  await expect(card).toHaveAttribute("data-stage", "hand-hold-plate");
   await page.keyboard.up("ArrowUp");
   await expect.poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.door?.open), { timeout: 4_000 }).toBe(true);
   await expect.poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.exit.open), { timeout: 9_000 }).toBe(true);

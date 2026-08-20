@@ -83,7 +83,13 @@ export const HAND_NOT_BODY_CHAMBER: ChamberDefinition = {
   // The living body is the only weight this plate answers to — during the
   // recording the past walks straight over it and the door stays shut, which is
   // exactly the lesson the room is built to teach.
-  plate: { id: "hand-plate", ...createRect(6, 4, 13, 10), active: false, pressedBy: [], requiredActor: "present" },
+  //
+  // It covers the whole upper chamber wall to wall, because the fold lands with
+  // right and action physically held: the present lurches rightward for as long
+  // as the player takes to let go, as far as the shut door if they are slow. Any
+  // spot up here has to count, or walking up would miss the pad it was told to
+  // stand on.
+  plate: { id: "hand-plate", ...createRect(3, 3, 24, 11), active: false, pressedBy: [], requiredActor: "present" },
   // Seated against the far wall: an echo that keeps walking right ends up
   // pressed into the switch rather than past it, so every recorded tick beyond
   // the one it arrives on is slack rather than an overshoot.

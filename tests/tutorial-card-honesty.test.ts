@@ -290,6 +290,26 @@ describe("Hand, Not Body's card offers the fold only on a recording that reaches
     expect(stranded.state.lastError).toBe("hold-released-early");
   });
 
+  it("cannot strand the present off the plate however long the fold's keys stay down", () => {
+    // The fold lands with right and action held, so pass 2 opens with the
+    // present already walking. Whatever that lurch costs — up to being pressed
+    // against the shut door — walking straight up has to find the plate.
+    const tape = handNotBodyGolden().past;
+    const stranded: number[] = [];
+    for (let lurchTicks = 0; lurchTicks <= 40; lurchTicks += 4) {
+      const simulation = new Simulation(HAND_NOT_BODY_CHAMBER);
+      if (simulation.loadTape(tape)) throw new Error("The golden tape was rejected");
+      for (let tick = 0; tick < lurchTicks && simulation.state.phase === "replay"; tick += 1) simulation.step(pushRight);
+      let pressed = false;
+      while (simulation.state.phase === "replay" && !pressed) {
+        simulation.step(up);
+        pressed = simulation.state.plate?.active === true;
+      }
+      if (!pressed) stranded.push(lurchTicks);
+    }
+    expect(stranded).toEqual([]);
+  });
+
   it("keeps the promise for a player who holds both keys far longer than needed", () => {
     // Every extra recorded tick is slack, not overshoot: the echo ends up
     // pressed into the switch by the far wall rather than walking past it.
