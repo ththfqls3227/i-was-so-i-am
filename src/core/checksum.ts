@@ -34,6 +34,7 @@ export function canonicalState(state: SimulationState): unknown {
     actors: [...state.actors].sort((a, b) => a.id.localeCompare(b.id)),
     door: state.door,
     hold: state.hold,
+    plate: state.plate,
     forceObject: state.forceObject,
     handoff: state.handoff,
     exit: state.exit,

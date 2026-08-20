@@ -1,6 +1,11 @@
-import { distanceBetween, pointInsideRect } from "../geometry";
-import type { ActorState, ChamberDefinition, SimulationState } from "../types";
+import { pointInsideRect } from "../geometry";
+import type { ActorState, ChamberDefinition, HandoffMechanismState, SimulationState } from "../types";
 import { exitGateOf } from "./exit";
+
+/** Whether this self is allowed to lift the carrier at all. */
+export function mayCarry(actorId: ActorState["id"], handoff: HandoffMechanismState): boolean {
+  return handoff.carriedBy === undefined || handoff.carriedBy.includes(actorId);
+}
 
 export function applyHandoff(state: SimulationState, chamber: ChamberDefinition, actors: readonly ActorState[]): void {
   const handoff = state.handoff;
@@ -10,18 +15,13 @@ export function applyHandoff(state: SimulationState, chamber: ChamberDefinition,
     : null;
   if (holder && !holder.actionHeld) {
     handoff.holder = null;
-  } else if (holder) {
-    handoff.x = holder.x;
-    handoff.y = holder.y;
-  } else {
+  } else if (!holder) {
     const claimant = actors.find((actorState) =>
-      actorState.actionHeld &&
-      actorState.targetId === handoff.id &&
-      (actorState.id === "past" ? !handoff.stagedByPast : handoff.stagedByPast),
+      actorState.actionHeld && actorState.targetId === handoff.id && mayCarry(actorState.id, handoff),
     );
     if (claimant) {
       handoff.holder = claimant.id;
-      if (claimant.id === "present") handoff.receivedByPresent = true;
+      if (claimant.id === "present") handoff.carriedByPresent = true;
       // The box is in one pair of hands now: nobody else keeps reaching for it,
       // otherwise the other self follows it around and locks itself out of the
       // affordance it was actually standing next to.
@@ -37,27 +37,7 @@ export function applyHandoff(state: SimulationState, chamber: ChamberDefinition,
   if (activeHolder) {
     handoff.x = activeHolder.x;
     handoff.y = activeHolder.y;
-    if (
-      activeHolder.id === "present" &&
-      handoff.receivedByPresent &&
-      Math.abs(activeHolder.y - handoff.junction.y) >= handoff.junction.radius * 2
-    ) {
-      handoff.redirectedByPresent = true;
-    }
-    if (
-      activeHolder.id === "past" &&
-      distanceBetween(activeHolder.x, activeHolder.y, handoff.junction.x, handoff.junction.y) <= handoff.junction.radius
-    ) {
-      handoff.stagedByPast = true;
-      handoff.holder = null;
-      handoff.x = handoff.junction.x;
-      handoff.y = handoff.junction.y;
-      activeHolder.targetId = null;
-    } else if (
-      activeHolder.id === "present" &&
-      handoff.redirectedByPresent &&
-      pointInsideRect(activeHolder.x, activeHolder.y, handoff.delivery)
-    ) {
+    if (pointInsideRect(activeHolder.x, activeHolder.y, handoff.delivery)) {
       handoff.delivered = true;
       handoff.holder = null;
       activeHolder.targetId = null;

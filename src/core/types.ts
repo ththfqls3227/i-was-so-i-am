@@ -6,7 +6,14 @@ export const SIMULATION_VERSION = "production-2.0.0";
 export const TAPE_FORMAT_VERSION = 1;
 export const POSITION_SCALE = 10;
 
-export type ChamberId = "traceWeight" | "crossing" | "handoff" | "lastHold";
+export type ChamberId =
+  | "awakening"
+  | "secondSelf"
+  | "crossing"
+  | "handNotBody"
+  | "traceWeight"
+  | "handoff"
+  | "lastHold";
 export type Phase = "recording" | "replay" | "success" | "rerecord";
 export type ActorId = "past" | "present";
 
@@ -27,8 +34,9 @@ export type FailureCode =
   | "tape-invalid"
   | "echo-faded"
   | "door-closed"
+  | "plate-unpressed"
   | "hold-released-early"
-  | "carrier-not-staged"
+  | "carrier-not-carried"
   | "delivery-gate-closed"
   | "delivery-too-slow"
   | "block-not-bridged";
@@ -63,10 +71,25 @@ export interface DoorState {
   rect: Rect;
   open: boolean;
   /** Mechanism that gates this door. Defaults to "hold" when the chamber has a hold; doors without a gate keep their authored open state. */
-  gatedBy?: "hold";
+  gatedBy?: "hold" | "plate";
   latchWhenPresentBeyondX?: number;
+  /** A one-way release: the first moment the gate opens this door, it stays open. */
+  latchOnOpen?: boolean;
   latched?: boolean;
   blocksPast?: boolean;
+}
+
+/**
+ * A floor plate: active for as long as an actor stands on it. No action key —
+ * standing is the whole input, which is why it is the first mechanism a player
+ * meets. `requiredActor` narrows it to one self, so a plate can ask for the echo
+ * (cooperation) or for the living body (a door the past can never open alone).
+ */
+export interface PlateState extends Rect {
+  id: string;
+  active: boolean;
+  pressedBy: ActorId[];
+  requiredActor?: ActorId;
 }
 
 export interface HoldMechanismState extends Point {
@@ -91,12 +114,12 @@ export interface ForceObjectState extends Rect {
 export interface HandoffMechanismState extends Point {
   id: string;
   radius: number;
-  junction: Point & { radius: number };
+  /** Actors allowed to lift the carrier. Undefined lets either self carry it. */
+  carriedBy?: ActorId[];
   delivery: Rect;
   holder: ActorId | null;
-  stagedByPast: boolean;
-  receivedByPresent: boolean;
-  redirectedByPresent: boolean;
+  /** The present had the carrier in hand at some point — separates "never picked it up" from "too slow". */
+  carriedByPresent: boolean;
   delivered: boolean;
 }
 
@@ -117,6 +140,7 @@ export interface ChamberDefinition {
   walls: Rect[];
   door?: DoorState;
   hold?: HoldMechanismState;
+  plate?: PlateState;
   forceObject?: ForceObjectState;
   handoff?: HandoffMechanismState;
   /**
@@ -124,7 +148,7 @@ export interface ChamberDefinition {
    * chamber has one, else the force object; a chamber with neither keeps its
    * authored exit state. Only the designated mechanism writes `exit.open`.
    */
-  exitGate?: "force" | "handoff";
+  exitGate?: "force" | "handoff" | "hold";
   exit: ExitState;
 }
 
@@ -149,6 +173,7 @@ export interface SimulationState {
   actors: ActorState[];
   door: DoorState | null;
   hold: HoldMechanismState | null;
+  plate: PlateState | null;
   forceObject: ForceObjectState | null;
   handoff: HandoffMechanismState | null;
   exit: ExitState;

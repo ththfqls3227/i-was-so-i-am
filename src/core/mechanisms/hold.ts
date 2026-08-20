@@ -1,4 +1,5 @@
 import type { ActorState, ChamberDefinition, SimulationState } from "../types";
+import { exitGateOf } from "./exit";
 
 export function applyHold(
   state: SimulationState,
@@ -17,4 +18,5 @@ export function applyHold(
     .sort();
   hold.creditedActors = credited;
   hold.active = hold.requiredActor ? credited.includes(hold.requiredActor) : credited.length > 0;
+  if (exitGateOf(chamber) === "hold") state.exit.open = hold.active;
 }

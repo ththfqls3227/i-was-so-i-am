@@ -13,8 +13,9 @@ import { hasInput, InputBit, movementIntent, NEUTRAL_INPUT, type InputFrame } fr
 import { applyDoor } from "./mechanisms/door";
 import { exitGateOf } from "./mechanisms/exit";
 import { applyForce } from "./mechanisms/force";
-import { applyHandoff } from "./mechanisms/handoff";
+import { applyHandoff, mayCarry } from "./mechanisms/handoff";
 import { applyHold } from "./mechanisms/hold";
+import { applyPlate } from "./mechanisms/plate";
 import { createTape, replayFrame, validateTape } from "./replay";
 import {
   POSITION_SCALE,
@@ -61,6 +62,7 @@ export function createInitialState(chamber: ChamberDefinition, phase: Simulation
     actors: phase === "recording" ? [actor("past", chamber)] : [actor("past", chamber), actor("present", chamber)],
     door: chamber.door ? clone(chamber.door) : null,
     hold: chamber.hold ? clone(chamber.hold) : null,
+    plate: chamber.plate ? clone(chamber.plate) : null,
     forceObject: chamber.forceObject ? clone(chamber.forceObject) : null,
     handoff: chamber.handoff ? clone(chamber.handoff) : null,
     exit: clone(chamber.exit),
@@ -110,7 +112,7 @@ function eligibleTarget(actorState: ActorState, state: SimulationState): { id: s
       y: state.forceObject.y + state.forceObject.height / 2,
     });
   }
-  if (state.handoff && !carrierHeldByAnother(actorState, state)) {
+  if (state.handoff && mayCarry(actorState.id, state.handoff) && !carrierHeldByAnother(actorState, state)) {
     targets.push({
       id: state.handoff.id,
       distance: distanceBetween(actorState.x, actorState.y, state.handoff.x, state.handoff.y),
@@ -161,6 +163,7 @@ function updateAction(actorState: ActorState, frame: InputFrame, state: Simulati
 
 function applyInteractions(state: SimulationState, chamber: ChamberDefinition, gracePastTargetId: string | null): void {
   applyHold(state, chamber, state.actors, gracePastTargetId);
+  applyPlate(state, chamber, state.actors);
   applyDoor(state, chamber, state.actors);
   applyForce(state, chamber, state.actors);
   applyHandoff(state, chamber, state.actors);
@@ -175,20 +178,20 @@ function applyInteractions(state: SimulationState, chamber: ChamberDefinition, g
   if (exitGateOf(chamber) === null) state.exit.open = chamber.exit.open;
 }
 
-function replayFailureCode(state: SimulationState): FailureCode {
-  if (state.handoff && !state.handoff.stagedByPast) return "carrier-not-staged";
-  if (state.handoff && state.door && !state.door.open) return "delivery-gate-closed";
-  // The past did its whole job — staged the carrier and held the gate open —
-  // and the present had the carrier in hand. Nothing about the recording is
-  // wrong, so telling the player to rerecord would send them to fix a tape that
-  // works; the second pass simply ran out of the fixed replay span.
-  if (
-    state.handoff?.stagedByPast === true &&
-    state.handoff.receivedByPresent &&
-    !state.handoff.delivered &&
-    state.door?.open === true
-  ) {
-    return "delivery-too-slow";
+function replayFailureCode(state: SimulationState, chamber: ChamberDefinition): FailureCode {
+  if (state.handoff && !state.handoff.delivered) {
+    // The gate the past was supposed to hold open never opened: the recording is
+    // what needs fixing.
+    if (state.door && !state.door.open) return "delivery-gate-closed";
+    // The past did its whole job and the present had the carrier in hand.
+    // Nothing about the recording is wrong, so telling the player to rerecord
+    // would send them to fix a tape that works; the second pass simply ran out
+    // of the fixed replay span.
+    if (state.handoff.carriedByPresent) return "delivery-too-slow";
+    return "carrier-not-carried";
+  }
+  if (state.plate && state.door && !state.door.open && (state.door.gatedBy ?? "hold") === "plate") {
+    return "plate-unpressed";
   }
   if (state.door && !state.door.open && !state.hold?.requiredActor) return "door-closed";
   if (state.forceObject) {
@@ -199,6 +202,9 @@ function replayFailureCode(state: SimulationState): FailureCode {
     if (!seated) return "block-not-bridged";
   }
   if (state.door && !state.door.open) return "hold-released-early";
+  // A chamber whose exit answers to a grip: the way out stayed shut because the
+  // hand on the switch never closed.
+  if (exitGateOf(chamber) === "hold" && !state.exit.open) return "hold-released-early";
   return "echo-faded";
 }
 
@@ -323,7 +329,7 @@ export class Simulation {
         this.current.tapeTick += 1;
         if (!this.current.success && this.current.tapeTick >= graceEnd) {
           this.current.phase = "rerecord";
-          this.current.lastError = replayFailureCode(this.current);
+          this.current.lastError = replayFailureCode(this.current, this.chamber);
         }
       }
     }

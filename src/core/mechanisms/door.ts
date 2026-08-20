@@ -4,17 +4,21 @@ export function applyDoor(state: SimulationState, chamber: ChamberDefinition, ac
   const door = state.door;
   if (!door) return;
   const gate = door.gatedBy ?? (state.hold ? "hold" : null);
-  if (gate !== "hold") return;
-  const hold = state.hold;
-  if (!hold) return;
+  const gateOpen = gate === "hold"
+    ? state.hold?.active === true
+    : gate === "plate"
+      ? state.plate?.active === true
+      : null;
+  if (gateOpen === null) return;
   const present = actors.find((actorState) => actorState.id === "present");
   if (
-    hold.active &&
+    gateOpen &&
     present &&
     door.latchWhenPresentBeyondX !== undefined &&
     present.x >= door.latchWhenPresentBeyondX
   ) {
     door.latched = true;
   }
-  door.open = hold.active || door.latched === true;
+  if (gateOpen && door.latchOnOpen) door.latched = true;
+  door.open = gateOpen || door.latched === true;
 }

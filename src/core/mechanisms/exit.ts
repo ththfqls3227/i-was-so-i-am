@@ -5,7 +5,7 @@ import type { ChamberDefinition } from "../types";
  * Chambers authored before `exitGate` existed keep their old behaviour: the
  * handoff owns the exit when there is one, otherwise the force object does.
  */
-export function exitGateOf(chamber: ChamberDefinition): "force" | "handoff" | null {
+export function exitGateOf(chamber: ChamberDefinition): "force" | "handoff" | "hold" | null {
   if (chamber.exitGate) return chamber.exitGate;
   if (chamber.handoff) return "handoff";
   if (chamber.forceObject) return "force";
