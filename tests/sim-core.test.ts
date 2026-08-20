@@ -148,6 +148,35 @@ describe("collision", () => {
     expect(actorOf(simulation.state, "present").y).toBeCloseTo(0, 6);
   });
 
+  it("stays in the world when walked into every wall from every angle", () => {
+    // The first vertical resolver decided by nearest face, so a body flush
+    // against a 4 m wall was read as being under a ceiling and pushed through
+    // the floor — after which nothing collided and the player ran off to z=60.
+    for (let units = 0; units < YAW_UNITS; units += 128) {
+      const simulation = fresh();
+      drive(simulation, framesFor([{ forward: true, yawUnits: units, ticks: 200 }]));
+      const actor = actorOf(simulation.state, "present");
+      expect(actor.y).toBeGreaterThanOrEqual(-0.05);
+      expect(actor.y).toBeLessThan(0.05);
+      expect(Math.abs(actor.x)).toBeLessThanOrEqual(6.1);
+      expect(actor.z).toBeGreaterThan(-0.5);
+      expect(actor.z).toBeLessThan(19);
+    }
+  });
+
+  it("keeps its footing while sliding along a wall", () => {
+    const simulation = fresh();
+    // Press into the east wall and walk the length of it.
+    drive(simulation, framesFor([
+      { forward: true, right: true, yawUnits: 0, ticks: 60 },
+      { forward: true, right: true, yawUnits: 0, ticks: 60 },
+    ]));
+    const actor = actorOf(simulation.state, "present");
+    expect(actor.grounded).toBe(true);
+    expect(actor.y).toBeCloseTo(0, 6);
+    expect(actor.x).toBeCloseTo(6 - PLAYER_RADIUS, 2);
+  });
+
   it("will not let a closed door be walked through", () => {
     const simulation = fresh();
     // Skirt the plate down the east side, then turn for the doorway.
