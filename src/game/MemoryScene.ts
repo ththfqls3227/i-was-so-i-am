@@ -22,8 +22,9 @@ import { DefaultRenderingPipeline } from "@babylonjs/core/PostProcesses/RenderPi
 import { Scene, ScenePerformancePriority } from "@babylonjs/core/scene";
 import { InputBit, NEUTRAL_INPUT, type InputFrame } from "../core/input";
 import { Simulation } from "../core/simulation";
-import { TICK_MS, type ActorId, type ActorState, type ChamberId, type ForceObjectState, type PlateState, type Rect, type SimulationState, type Tape } from "../core/types";
+import { POSITION_SCALE, TICK_MS, type ActorId, type ActorState, type ChamberId, type ForceObjectState, type PlateState, type Rect, type SimulationState, type Tape } from "../core/types";
 import { CHAMBERS } from "../content/chambers";
+import { CHAMBER_ROUTE } from "../content/manifests";
 import { traceRequiredHoldTicks } from "../content/tutorial-timing";
 
 const WORLD_SCALE = 0.02;
@@ -43,6 +44,46 @@ const CAMERA_ALPHA_EXIT = -2.14;
  * integrated GPU) lands on the last rung instead of dropping frames.
  */
 const SCALING_LADDER = [1, 1.25, 1.5] as const;
+
+
+/**
+ * Suggested walking routes per chamber, in level units. Authored rather than
+ * derived: the point of a route line is that a designer decided where the
+ * player should go, including the detours a straight line would miss.
+ */
+const ROUTE_GUIDES: Partial<Record<ChamberId, {
+  present: readonly (readonly [number, number])[];
+  past: readonly (readonly [number, number])[];
+}>> = {
+  awakening: {
+    present: [[8, 18], [24, 17.5], [38, 19], [52, 19]],
+    past: [[8, 18], [24, 17.5]],
+  },
+  secondSelf: {
+    present: [[8, 22], [20, 19], [36, 23], [52, 23]],
+    past: [[8, 22], [16, 14], [19, 9]],
+  },
+  crossing: {
+    present: [[10, 22], [32, 22], [39, 22], [70, 22]],
+    past: [[10, 22], [26, 22]],
+  },
+  handNotBody: {
+    present: [[8, 20], [12, 13], [15, 8], [9, 31]],
+    past: [[8, 20], [28, 20], [51, 20]],
+  },
+  traceWeight: {
+    present: [[10, 22], [35, 22], [52, 22], [70, 22]],
+    past: [[10, 22], [24, 22], [50, 22]],
+  },
+  handoff: {
+    present: [[10, 22], [20, 32], [36, 24], [48, 21], [62, 20], [72, 21]],
+    past: [[10, 22], [16, 13], [20, 8]],
+  },
+  lastHold: {
+    present: [[10, 22], [32, 22], [43, 22], [70, 22]],
+    past: [[10, 22], [32, 30], [38, 22]],
+  },
+};
 
 /** Each room signs its trim — inlays, rune slits, cradle rims — in one colour. */
 const ROOM_ACCENT: Record<ChamberId, { diffuse: Color3; emissive: Color3 }> = {
@@ -237,11 +278,11 @@ export class MemoryScene {
     this.engine.setHardwareScalingLevel(SCALING_LADDER[this.scalingRung] ?? 1);
     this.scene = new Scene(this.engine);
     this.scene.performancePriority = ScenePerformancePriority.Aggressive;
-    this.scene.clearColor = new Color4(0.004, 0.008, 0.014, 1);
-    this.scene.ambientColor = new Color3(0.11, 0.135, 0.18);
-    this.scene.fogMode = Scene.FOGMODE_EXP2;
-    this.scene.fogDensity = 0.016;
-    this.scene.fogColor = new Color3(0.014, 0.028, 0.05);
+    // Clean test chamber: the room is lit, not gloomy. Everything warm no
+    // longer has to come from a doorway, so the fog and the vault ambient go.
+    this.scene.clearColor = new Color4(0.055, 0.06, 0.072, 1);
+    this.scene.ambientColor = new Color3(0.15, 0.155, 0.17);
+    this.scene.fogMode = Scene.FOGMODE_NONE;
 
     this.camera = new ArcRotateCamera(
       "memory-camera",
@@ -260,47 +301,50 @@ export class MemoryScene {
     this.pipeline.fxaaEnabled = true;
     this.pipeline.samples = this.automatedRenderInterval === 0 ? 4 : 1;
     this.pipeline.bloomEnabled = true;
-    this.pipeline.bloomThreshold = 0.65;
-    this.pipeline.bloomWeight = 0.25;
-    this.pipeline.bloomKernel = 48;
+    // A white room reaches any low threshold everywhere at once; bloom is for
+    // the emissive signals now, not for the walls.
+    this.pipeline.bloomThreshold = 0.92;
+    this.pipeline.bloomWeight = 0.16;
+    this.pipeline.bloomKernel = 40;
     const grade = this.pipeline.imageProcessing;
     grade.toneMappingEnabled = true;
     grade.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
-    grade.contrast = 1.14;
-    grade.exposure = 1.4;
+    grade.contrast = 1.05;
+    grade.exposure = 1.05;
     grade.vignetteEnabled = true;
-    grade.vignetteWeight = 1.65;
-    grade.vignetteStretch = 0.35;
-    grade.vignetteColor = new Color4(0.012, 0.024, 0.06, 1);
+    grade.vignetteWeight = 0.45;
+    grade.vignetteStretch = 0.4;
+    grade.vignetteColor = new Color4(0.06, 0.07, 0.1, 1);
     grade.vignetteBlendMode = ImageProcessingConfiguration.VIGNETTEMODE_MULTIPLY;
 
-    // Cool steel-blue ambient stands in for the vault's own gloom; every warm
-    // value in the room comes from the doorway instead.
-    const sky = new HemisphericLight("memory-sky", new Vector3(-0.2, 1, 0.35), this.scene);
-    sky.diffuse = new Color3(0.36, 0.5, 0.72);
-    sky.groundColor = new Color3(0.022, 0.03, 0.048);
-    sky.intensity = 2.0;
-    const key = new DirectionalLight("memory-key", new Vector3(-0.72, -0.66, -0.2), this.scene);
-    key.position = new Vector3(9.5, 7.4, 1.6);
-    key.diffuse = new Color3(1, 0.68, 0.42);
-    key.specular = new Color3(0.5, 0.36, 0.2);
-    key.intensity = 4.2;
+    // Even neutral daylight from the ceiling, with one soft directional to keep
+    // objects from floating: contact shadow, not mood.
+    const sky = new HemisphericLight("memory-sky", new Vector3(0, 1, 0), this.scene);
+    sky.diffuse = new Color3(0.95, 0.96, 1);
+    sky.groundColor = new Color3(0.4, 0.41, 0.45);
+    sky.intensity = 2.1;
+    const key = new DirectionalLight("memory-key", new Vector3(-0.42, -1, -0.28), this.scene);
+    key.position = new Vector3(7, 11, 4);
+    key.diffuse = new Color3(1, 0.99, 0.96);
+    key.specular = new Color3(0.28, 0.28, 0.3);
+    key.intensity = 1.5;
+    // The accent fills stay, dialled to tint rather than illuminate.
     const temporal = new PointLight("temporal-fill", new Vector3(-5.7, 2.6, 1), this.scene);
     temporal.diffuse = new Color3(0.08, 0.68, 1);
-    temporal.intensity = 2.8;
+    temporal.intensity = 0.9;
     temporal.range = 7;
     const living = new PointLight("living-fill", new Vector3(3.5, 3.2, -1.5), this.scene);
-    living.diffuse = new Color3(1, 0.5, 0.16);
-    living.intensity = 2.6;
+    living.diffuse = new Color3(1, 0.6, 0.24);
+    living.intensity = 0.8;
     living.range = 7;
 
     this.shadows = new ShadowGenerator(1024, key);
     this.shadows.useBlurExponentialShadowMap = true;
-    this.shadows.blurKernel = 8;
-    this.shadows.bias = 0.0009;
-    this.shadows.darkness = 0.12;
+    this.shadows.blurKernel = 12;
+    this.shadows.bias = 0.0012;
+    this.shadows.darkness = 0.62;
     this.glow = new GlowLayer("memory-glow", this.scene, { blurKernelSize: 24 });
-    this.glow.intensity = 0.55;
+    this.glow.intensity = 0.5;
 
     this.visuals = this.rebuildWorld();
     this.installKeyboard();
@@ -587,9 +631,13 @@ export class MemoryScene {
   }
 
   private heightContext(size: number): CanvasRenderingContext2D {
+    return this.canvasContext(size, size);
+  }
+
+  private canvasContext(width: number, height: number): CanvasRenderingContext2D {
     const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
+    canvas.width = width;
+    canvas.height = height;
     const context = canvas.getContext("2d");
     if (!context) throw new Error("2D canvas context unavailable");
     return context;
@@ -817,6 +865,92 @@ export class MemoryScene {
     return stone;
   }
 
+  /**
+   * Off-white wall panelling: large modules, a recessed seam between them and a
+   * micro-bevel at every edge. The bevel is the whole point — on a white wall
+   * with even light, the seam shadow is the only thing giving the surface scale.
+   */
+  private createPanelMaterial(name: string, seed: number, scale: number, options: {
+    columns: number;
+    rows: number;
+    base: string;
+    seam: string;
+    bevel: number;
+  }): StandardMaterial {
+    const size = 1024;
+    const { columns, rows, base, seam, bevel } = options;
+    const panelWidth = size / columns;
+    const panelHeight = size / rows;
+    const gap = 6;
+    const random = this.seededRandom(seed);
+    const texture = new DynamicTexture(`${name}-albedo`, { width: size, height: size }, this.scene, false);
+    const context = texture.getContext();
+    const height = this.heightContext(size);
+    context.fillStyle = seam;
+    context.fillRect(0, 0, size, size);
+    height.fillStyle = "#3a3a3a";
+    height.fillRect(0, 0, size, size);
+
+    for (let row = 0; row < rows; row += 1) {
+      for (let column = 0; column < columns; column += 1) {
+        const x = column * panelWidth + gap / 2;
+        const y = row * panelHeight + gap / 2;
+        const width = panelWidth - gap;
+        const depth = panelHeight - gap;
+        // Panels vary by a hair only: this is a manufactured surface.
+        const tint = 1 - random() * 0.045;
+        context.fillStyle = base;
+        context.fillRect(x, y, width, depth);
+        context.fillStyle = `rgba(0, 0, 0, ${(1 - tint) * 1.4})`;
+        context.fillRect(x, y, width, depth);
+        height.fillStyle = "rgb(196, 196, 196)";
+        height.fillRect(x, y, width, depth);
+        // Chamfer: the lit top-left edge and the shadowed bottom-right one.
+        const lip = Math.max(3, bevel);
+        height.fillStyle = "rgb(150, 150, 150)";
+        height.fillRect(x, y + depth - lip, width, lip);
+        height.fillRect(x + width - lip, y, lip, depth);
+        height.fillStyle = "rgb(228, 228, 228)";
+        height.fillRect(x, y, width, lip);
+        height.fillRect(x, y, lip, depth);
+        // A fastener at two corners reads as assembly without adding noise.
+        if ((row + column) % 2 === 0) {
+          for (const [fx, fy] of [[x + 16, y + 16], [x + width - 16, y + depth - 16]] as const) {
+            context.fillStyle = "rgba(120, 122, 126, 0.5)";
+            context.beginPath();
+            context.arc(fx, fy, 4.5, 0, Math.PI * 2);
+            context.fill();
+            height.fillStyle = "rgb(120, 120, 120)";
+            height.beginPath();
+            height.arc(fx, fy, 4.5, 0, Math.PI * 2);
+            height.fill();
+          }
+        }
+      }
+    }
+
+    // Faint dirt in the seams keeps it from looking like untextured plastic.
+    for (let index = 0; index < 900; index += 1) {
+      const grain = random() > 0.5 ? 255 : 96;
+      context.fillStyle = `rgba(${grain}, ${grain}, ${grain}, ${0.012 + random() * 0.022})`;
+      context.fillRect(random() * size, random() * size, 1 + random() * 2, 1 + random() * 2);
+    }
+
+    texture.wrapU = Texture.WRAP_ADDRESSMODE;
+    texture.wrapV = Texture.WRAP_ADDRESSMODE;
+    texture.uScale = scale;
+    texture.vScale = scale;
+    texture.update(false);
+    const panel = material(this.scene, name, new Color3(0.93, 0.93, 0.94), Color3.Black(), 1, new Color3(0.05, 0.05, 0.06));
+    panel.diffuseTexture = texture;
+    const relief = this.normalMapFromHeight(`${name}-normal`, height.getImageData(0, 0, size, size).data, size, 1.5);
+    relief.uScale = scale;
+    relief.vScale = scale;
+    panel.bumpTexture = relief;
+    panel.specularPower = 64;
+    return panel;
+  }
+
   private createBox(name: string, rect: Rect, height: number, boxMaterial: StandardMaterial, root: TransformNode, y = height / 2): Mesh {
     const mesh = MeshBuilder.CreateBox(name, {
       width: rect.width * WORLD_SCALE,
@@ -852,9 +986,15 @@ export class MemoryScene {
   private stoneMaterials(): { ashlar: StandardMaterial; ashlarEdge: StandardMaterial; flagstone: StandardMaterial } {
     if (!this.sharedStone) {
       this.sharedStone = {
-        ashlar: this.createAshlarMaterial("basalt", 1861, 2.2),
-        ashlarEdge: this.createAshlarMaterial("basalt-edge", 6577, 1.6),
-        flagstone: this.createFlagstoneMaterial("chamber-floor", 3391, 2.6),
+        ashlar: this.createPanelMaterial("panel-wall", 1861, 1.4, {
+          columns: 3, rows: 3, base: "#e8e6e0", seam: "#b9b7b1", bevel: 5,
+        }),
+        ashlarEdge: this.createPanelMaterial("panel-trim", 6577, 1.1, {
+          columns: 2, rows: 2, base: "#dedcd6", seam: "#a9a7a2", bevel: 6,
+        }),
+        flagstone: this.createPanelMaterial("panel-floor", 3391, 2.1, {
+          columns: 2, rows: 2, base: "#dcdad4", seam: "#9d9b96", bevel: 7,
+        }),
       };
     }
     return this.sharedStone;
@@ -890,7 +1030,16 @@ export class MemoryScene {
     const bronze = material(this.scene, "memory-bronze", new Color3(0.27, 0.185, 0.082), new Color3(0.006, 0.003, 0.001), 1, new Color3(0.2, 0.14, 0.06));
     bronze.specularPower = 18;
     const voidMaterial = material(this.scene, "memory-void", new Color3(0.001, 0.003, 0.007), new Color3(0, 0.012, 0.03));
-    const nicheDark = material(this.scene, "vault-niche", new Color3(0.012, 0.016, 0.022), Color3.Black(), 1, Color3.Black());
+    // Dark zones mark where the room does something; they are the only places
+    // the value drops in a chamber that is otherwise off-white.
+    const darkZone = material(this.scene, "mechanism-zone", new Color3(0.16, 0.17, 0.2), Color3.Black(), 1, new Color3(0.1, 0.1, 0.12));
+    const nicheDark = darkZone;
+    const observationDark = material(this.scene, "observation-void", new Color3(0.22, 0.23, 0.27), new Color3(0.055, 0.062, 0.078), 1, new Color3(0.05, 0.05, 0.06));
+    observationDark.ambientColor = new Color3(0.5, 0.52, 0.58);
+    const glassMaterial = material(this.scene, "observation-glass", new Color3(0.55, 0.66, 0.74), new Color3(0.07, 0.11, 0.15), 0.3, new Color3(0.9, 0.95, 1));
+    glassMaterial.specularPower = 96;
+    const lightStrip = material(this.scene, "ceiling-strip", new Color3(1, 1, 1), new Color3(0.95, 0.96, 1));
+    lightStrip.disableLighting = true;
     const cyan = material(this.scene, "temporal-cyan", new Color3(0.025, 0.24, 0.32), new Color3(0.02, 0.68, 0.94));
     // Half the emissive of the signal cyan and outside the glow layer: the
     // depth markers must never compete with the echo for the eye.
@@ -967,53 +1116,111 @@ export class MemoryScene {
       }
     }
 
-    const backWall = MeshBuilder.CreateBox("memory-vault-backdrop", { width: roomWidth + 12, depth: 0.48, height: 8 }, this.scene);
+    const backWall = MeshBuilder.CreateBox("chamber-back-wall", { width: roomWidth + 12, depth: 0.48, height: 8 }, this.scene);
     backWall.position = new Vector3(2.2, 3.65, roomDepth / 2 - 0.18);
     backWall.material = ashlar;
     this.registerMesh(backWall, root);
 
-    // Engaged columns with recessed niches between them, flush to the vault
-    // wall — the floating beams and free-standing pillars are gone.
-    for (let index = 0; index < 8; index += 1) {
-      const x = -7.2 + index * 2.65;
-      const columnZ = roomDepth / 2 - 0.62;
-      const columnHeight = 3.7 + (index % 2) * 0.3;
-      const column = MeshBuilder.CreateBox(`vault-column-${index}`, { width: 0.82, depth: 0.62, height: columnHeight }, this.scene);
-      column.position = new Vector3(x, columnHeight / 2, columnZ);
-      column.material = ashlarEdge;
-      this.registerMesh(column, root);
-      const base = MeshBuilder.CreateBox(`vault-column-base-${index}`, { width: 1.02, depth: 0.78, height: 0.34 }, this.scene);
-      base.position = new Vector3(x, 0.17, columnZ);
-      base.material = ashlar;
-      this.registerMesh(base, root);
-      const capital = MeshBuilder.CreateBox(`vault-column-capital-${index}`, { width: 1.02, depth: 0.8, height: 0.22 }, this.scene);
-      capital.position = new Vector3(x, columnHeight + 0.11, columnZ);
-      capital.material = ashlar;
-      this.registerMesh(capital, root);
+    // Structural ribs between panel bays — the facility's frame showing through
+    // its cladding. No capitals, no niches: this is a built room, not a vault.
+    const backZ = roomDepth / 2 - 0.52;
+    const bayCount = Math.max(4, Math.round(roomWidth / 3.1));
+    const baySpan = (roomWidth + 3) / bayCount;
+    for (let index = 0; index <= bayCount; index += 1) {
+      const x = -(roomWidth + 3) / 2 + index * baySpan + 1.6;
+      const rib = MeshBuilder.CreateBox(`chamber-rib-${index}`, { width: 0.3, depth: 0.34, height: 4.6 }, this.scene);
+      rib.position = new Vector3(x, 2.3, backZ);
+      rib.material = ashlarEdge;
+      this.registerMesh(rib, root);
+      const shoe = MeshBuilder.CreateBox(`chamber-rib-shoe-${index}`, { width: 0.46, depth: 0.44, height: 0.22 }, this.scene);
+      shoe.position = new Vector3(x, 0.11, backZ);
+      shoe.material = darkZone;
+      this.registerMesh(shoe, root);
+    }
+    // A service band at head height ties the bays together.
+    const band = MeshBuilder.CreateBox("chamber-service-band", { width: roomWidth + 6, depth: 0.16, height: 0.26 }, this.scene);
+    band.position = new Vector3(0, 3.62, backZ - 0.24);
+    band.material = darkZone;
+    this.registerMesh(band, root);
 
-      if (index < 7) {
-        const nicheX = x + 1.325;
-        const niche = MeshBuilder.CreateBox(`vault-niche-${index}`, { width: 1.5, depth: 0.34, height: 2.15 }, this.scene);
-        niche.position = new Vector3(nicheX, 1.42, columnZ + 0.2);
-        niche.material = nicheDark;
-        this.registerMesh(niche, root, false);
-        const nicheArch = MeshBuilder.CreateCylinder(`vault-niche-arch-${index}`, {
-          diameter: 1.5,
-          height: 0.34,
-          tessellation: 18,
-        }, this.scene);
-        nicheArch.rotation.x = Math.PI / 2;
-        nicheArch.position = new Vector3(nicheX, 2.5, columnZ + 0.2);
-        nicheArch.material = nicheDark;
-        this.registerMesh(nicheArch, root, false);
-        // Only the two nearest the time well carry a lit rune slit.
-        if (index < 2) {
-          const slit = MeshBuilder.CreateBox(`wall-rune-${index}`, { width: 0.16, depth: 0.05, height: 1.15 }, this.scene);
-          slit.position = new Vector3(nicheX, 1.5, columnZ + 0.02);
-          slit.material = accent;
-          this.registerMesh(slit, root, false);
-        }
-      }
+    // Ceiling strips: the room's actual light source, and the only thing above
+    // the walls the camera ever sees.
+    for (const [index, z] of [-roomDepth * 0.22, roomDepth * 0.24].entries()) {
+      const housing = MeshBuilder.CreateBox(`ceiling-strip-housing-${index}`, {
+        width: roomWidth * 0.82,
+        depth: 0.44,
+        height: 0.18,
+      }, this.scene);
+      housing.position = new Vector3(0, 4.62, z);
+      housing.material = ashlarEdge;
+      this.registerMesh(housing, root, false);
+      const strip = MeshBuilder.CreateBox(`ceiling-strip-${index}`, {
+        width: roomWidth * 0.8,
+        depth: 0.3,
+        height: 0.06,
+      }, this.scene);
+      strip.position = new Vector3(0, 4.52, z);
+      strip.material = lightStrip;
+      strip.isPickable = false;
+      strip.receiveShadows = false;
+      strip.parent = root;
+      this.glow.addIncludedOnlyMesh(strip);
+    }
+
+    // One observation window per chamber: an empty room watching this one.
+    const windowX = roomWidth * 0.18;
+    const observation = MeshBuilder.CreateBox("observation-void", { width: 4.4, depth: 0.5, height: 1.9 }, this.scene);
+    observation.position = new Vector3(windowX, 2.35, backZ + 0.18);
+    observation.material = observationDark;
+    this.registerMesh(observation, root, false);
+    const glass = MeshBuilder.CreateBox("observation-glass", { width: 4.4, depth: 0.06, height: 1.9 }, this.scene);
+    glass.position = new Vector3(windowX, 2.35, backZ - 0.12);
+    glass.material = glassMaterial;
+    glass.isPickable = false;
+    glass.receiveShadows = false;
+    glass.parent = root;
+    for (const [index, offset] of [-2.28, 2.28].entries()) {
+      const mullion = MeshBuilder.CreateBox(`observation-mullion-${index}`, { width: 0.22, depth: 0.4, height: 2.2 }, this.scene);
+      mullion.position = new Vector3(windowX + offset, 2.35, backZ - 0.02);
+      mullion.material = ashlarEdge;
+      this.registerMesh(mullion, root);
+    }
+    for (const [index, y] of [1.36, 3.34].entries()) {
+      const transom = MeshBuilder.CreateBox(`observation-transom-${index}`, { width: 4.9, depth: 0.4, height: 0.2 }, this.scene);
+      transom.position = new Vector3(windowX, y, backZ - 0.02);
+      transom.material = ashlarEdge;
+      this.registerMesh(transom, root);
+    }
+
+    this.createChamberSign(root, backZ, roomWidth);
+    this.createRouteLines(root);
+
+    // Dark zones sit under whatever the room asks you to operate.
+    const unit = 1 / POSITION_SCALE;
+    if (chamber.plate) {
+      this.addMechanismZone("plate", [
+        (chamber.plate.x + chamber.plate.width / 2) * unit,
+        (chamber.plate.y + chamber.plate.height / 2) * unit,
+      ], [chamber.plate.width * unit + 2.4, chamber.plate.height * unit + 2.4], darkZone, accent, root);
+    }
+    if (chamber.hold) {
+      this.addMechanismZone("hold", [chamber.hold.x * unit, chamber.hold.y * unit], [7, 7], darkZone, accent, root);
+    }
+    if (chamber.forceObject) {
+      const force = chamber.forceObject;
+      const spanLeft = force.minX * unit;
+      const spanRight = (force.maxX + force.width) * unit;
+      this.addMechanismZone("force", [
+        (spanLeft + spanRight) / 2,
+        (force.y + force.height / 2) * unit,
+      ], [spanRight - spanLeft + 2, force.height * unit + 2.4], darkZone, accent, root);
+    }
+    if (chamber.handoff) {
+      this.addMechanismZone("carrier", [chamber.handoff.x * unit, chamber.handoff.y * unit], [6, 6], darkZone, accent, root);
+      this.addMechanismZone("delivery", [
+        (chamber.handoff.delivery.x + chamber.handoff.delivery.width / 2) * unit,
+        (chamber.handoff.delivery.y + chamber.handoff.delivery.height / 2) * unit,
+      ], [chamber.handoff.delivery.width * unit + 1.6, chamber.handoff.delivery.height * unit + 1.6], darkZone, accent, root);
     }
 
     const spawn = this.worldPoint(chamber.spawn.x, chamber.spawn.y, 0.04);
@@ -1038,17 +1245,15 @@ export class MemoryScene {
     // rooms span a chasm, the handoff gate is a portcullis in a wall.
     let bridge: BridgeVisual | null = null;
     if (chamber.door) {
-      if (chamber.door.id.includes("gate")) {
-        bridge = this.createPortcullis(chamber.door.rect, ashlarEdge, metal, bronze, root);
-      } else if (chamber.door.id.includes("door")) {
-        bridge = this.createHeavyPortal(chamber.door.rect, ashlarEdge, metal, bronze, root);
+      if (!chamber.door.id.includes("bridge")) {
+        bridge = this.createSlideDoor(chamber.door.rect, ashlarEdge, darkZone, accent, root);
       } else {
         bridge = this.createChasmBridge(chamber.door.rect, roomDepth, ashlarEdge, metal, bronze, cyan, cyanGlass, chasmRune, voidMaterial, root);
       }
     }
 
-    const winch = chamber.hold ? this.createWinch(chamber.hold.x, chamber.hold.y, chamber.door?.rect ?? null, metal, bronze, cyan, root) : null;
-    const plate = chamber.plate ? this.createPlate(chamber.plate, ashlarEdge, root) : null;
+    const winch = chamber.hold ? this.createWinch(chamber.hold.x, chamber.hold.y, chamber.door?.rect ?? null, ashlarEdge, darkZone, accent, root) : null;
+    const plate = chamber.plate ? this.createPlate(chamber.plate, ashlarEdge, darkZone, accent, root) : null;
     const weight = chamber.forceObject ? this.createWeight(chamber.forceObject, ashlarEdge, metal, bronze, cyan, amber, root) : null;
 
     let handoffOrb: Mesh | null = null;
@@ -1107,18 +1312,79 @@ export class MemoryScene {
    * someone stands on it. Built from the chamber's own rect, so a room gets one
    * exactly when its data has one.
    */
-  private createPlate(plate: PlateState, stone: StandardMaterial, root: TransformNode): PlateVisual {
-    const pad = this.createBox(`${plate.id}-pad`, plate, 0.13, stone, root, 0.065);
-    const ringMaterial = material(this.scene, `${plate.id}-ring`, new Color3(0.06, 0.14, 0.18), new Color3(0.02, 0.16, 0.24));
+  /**
+   * Pressure pad: a circular plate sunk into its own dark bay, with a ring that
+   * lights while it is held down. Hand, Not Body's plate is deliberately the
+   * size of the floor, so that one gets a bordered field with corner brackets
+   * instead — a giant pad has to read as a pad, not as the room's floor.
+   */
+  private createPlate(
+    plate: PlateState,
+    panel: StandardMaterial,
+    dark: StandardMaterial,
+    accent: StandardMaterial,
+    root: TransformNode,
+  ): PlateVisual {
+    const width = plate.width * WORLD_SCALE;
+    const depth = plate.height * WORLD_SCALE;
+    const oversized = Math.max(width, depth) > 3.4;
+    const pad = this.createBox(`${plate.id}-pad`, plate, oversized ? 0.06 : 0.12, dark, root, oversized ? 0.03 : 0.06);
+    const ringMaterial = material(this.scene, `${plate.id}-ring`, new Color3(0.05, 0.16, 0.22), new Color3(0.03, 0.3, 0.44));
+    ringMaterial.ambientColor = Color3.Black();
+
+    if (oversized) {
+      // Bordered field: brackets at the corners and a hatched inner margin, so
+      // the whole bay reads as one instrument.
+      const centre = this.rectCenter(plate, 0.035);
+      for (const [index, sx] of [-1, 1].entries()) {
+        for (const [jndex, sz] of [-1, 1].entries()) {
+          const bracketLong = MeshBuilder.CreateBox(`${plate.id}-bracket-x-${index}-${jndex}`, {
+            width: width * 0.22, depth: 0.14, height: 0.05,
+          }, this.scene);
+          bracketLong.position = centre.add(new Vector3(sx * (width / 2 - width * 0.11), 0.01, sz * (depth / 2 - 0.07)));
+          bracketLong.material = accent;
+          bracketLong.isPickable = false;
+          bracketLong.parent = root;
+          this.glow.addIncludedOnlyMesh(bracketLong);
+          const bracketShort = MeshBuilder.CreateBox(`${plate.id}-bracket-z-${index}-${jndex}`, {
+            width: 0.14, depth: depth * 0.22, height: 0.05,
+          }, this.scene);
+          bracketShort.position = centre.add(new Vector3(sx * (width / 2 - 0.07), 0.01, sz * (depth / 2 - depth * 0.11)));
+          bracketShort.material = accent;
+          bracketShort.isPickable = false;
+          bracketShort.parent = root;
+          this.glow.addIncludedOnlyMesh(bracketShort);
+        }
+      }
+      const hatchCount = Math.max(3, Math.round(width / 0.9));
+      for (let index = 0; index < hatchCount; index += 1) {
+        const hatch = MeshBuilder.CreateBox(`${plate.id}-hatch-${index}`, { width: 0.06, depth: depth * 0.86, height: 0.04 }, this.scene);
+        hatch.position = centre.add(new Vector3(-width / 2 + (index + 0.5) * (width / hatchCount), 0.005, 0));
+        hatch.material = panel;
+        hatch.isPickable = false;
+        hatch.parent = root;
+      }
+    }
+
     const ring = MeshBuilder.CreateTorus(`${plate.id}-ring`, {
-      diameter: Math.min(plate.width, plate.height) * WORLD_SCALE * 0.68,
-      thickness: 0.075,
-      tessellation: 40,
+      diameter: oversized ? Math.min(width, depth) * 0.42 : Math.min(width, depth) * 0.72,
+      thickness: oversized ? 0.06 : 0.08,
+      tessellation: 44,
     }, this.scene);
-    ring.position = this.rectCenter(plate, 0.15);
+    ring.position = this.rectCenter(plate, oversized ? 0.075 : 0.145);
     ring.material = ringMaterial;
     this.registerMesh(ring, root, false);
     this.glow.addIncludedOnlyMesh(ring);
+    if (!oversized) {
+      const collar = MeshBuilder.CreateCylinder(`${plate.id}-collar`, {
+        diameter: Math.min(width, depth) * 0.92,
+        height: 0.09,
+        tessellation: 40,
+      }, this.scene);
+      collar.position = this.rectCenter(plate, 0.045);
+      collar.material = panel;
+      this.registerMesh(collar, root);
+    }
     return { pad, ring, ringMaterial };
   }
 
@@ -1127,6 +1393,68 @@ export class MemoryScene {
    * contrast, so its edge trim is thin and its depth carries a low fog band
    * rather than more glowing geometry.
    */
+  /**
+   * Clean-chamber gate: a vertical slide door in a lit frame. It replaces both
+   * the vault's portcullis and its monumental slab — a test facility opens the
+   * way with machinery, and the same shape reads at every scale.
+   */
+  private createSlideDoor(
+    rect: Rect,
+    panel: StandardMaterial,
+    dark: StandardMaterial,
+    accent: StandardMaterial,
+    root: TransformNode,
+  ): BridgeVisual {
+    const centre = this.rectCenter(rect, 0);
+    const span = Math.max(1.6, rect.height * WORLD_SCALE);
+    const frame = new TransformNode("gate-frame", this.scene);
+    frame.parent = root;
+    frame.position = new Vector3(centre.x, 0, centre.z);
+    for (const z of [-span / 2 - 0.22, span / 2 + 0.22]) {
+      const jamb = MeshBuilder.CreateBox(`gate-jamb-${z}`, { width: 0.46, depth: 0.44, height: 3.1 }, this.scene);
+      jamb.position = new Vector3(0, 1.55, z);
+      jamb.material = panel;
+      this.registerMesh(jamb, frame);
+      const light = MeshBuilder.CreateBox(`gate-jamb-light-${z}`, { width: 0.08, depth: 0.1, height: 2.3 }, this.scene);
+      light.position = new Vector3(-0.25, 1.5, z);
+      light.material = accent;
+      light.isPickable = false;
+      light.receiveShadows = false;
+      light.parent = frame;
+      this.glow.addIncludedOnlyMesh(light);
+    }
+    const head = MeshBuilder.CreateBox("gate-head", { width: 0.62, depth: span + 1.05, height: 0.62 }, this.scene);
+    head.position = new Vector3(0, 3.32, 0);
+    head.material = panel;
+    this.registerMesh(head, frame);
+    const sill = MeshBuilder.CreateBox("gate-sill", { width: 0.6, depth: span + 0.5, height: 0.06 }, this.scene);
+    sill.position = new Vector3(0, 0.03, 0);
+    sill.material = dark;
+    this.registerMesh(sill, frame);
+
+    const leaf = new TransformNode("gate-leaf", this.scene);
+    leaf.parent = root;
+    leaf.position = new Vector3(centre.x, 0, centre.z);
+    const slab = MeshBuilder.CreateBox("gate-slab", { width: 0.3, depth: span + 0.1, height: 2.95 }, this.scene);
+    slab.position = new Vector3(0, 1.48, 0);
+    slab.material = panel;
+    this.registerMesh(slab, leaf);
+    // A chevron band so the door's travel is legible while it moves.
+    for (const [index, y] of [1.0, 1.96].entries()) {
+      const chevron = MeshBuilder.CreateBox(`gate-chevron-${index}`, { width: 0.34, depth: span * 0.72, height: 0.16 }, this.scene);
+      chevron.position = new Vector3(0, y, 0);
+      chevron.material = dark;
+      this.registerMesh(chevron, leaf);
+    }
+    const lip = MeshBuilder.CreateBox("gate-lip", { width: 0.36, depth: span + 0.12, height: 0.1 }, this.scene);
+    lip.position = new Vector3(0, 0.06, 0);
+    lip.material = accent;
+    lip.isPickable = false;
+    lip.parent = leaf;
+    this.glow.addIncludedOnlyMesh(lip);
+    return { root: leaf, openY: 3.05, closedY: 0 };
+  }
+
   private createChasmBridge(
     rect: Rect,
     roomDepth: number,
@@ -1229,129 +1557,6 @@ export class MemoryScene {
    * the tutorial calls it a handle. So the mechanism is dressed as a monumental
    * slab in a bronze-banded frame, held up rather than bridged across.
    */
-  private createHeavyPortal(
-    rect: Rect,
-    stone: StandardMaterial,
-    metal: StandardMaterial,
-    bronze: StandardMaterial,
-    root: TransformNode,
-  ): BridgeVisual {
-    const center = this.rectCenter(rect, 0);
-    const span = Math.max(1.6, rect.height * WORLD_SCALE);
-    const frame = new TransformNode("portal-frame", this.scene);
-    frame.parent = root;
-    frame.position = new Vector3(center.x, 0, center.z);
-    for (const z of [-span / 2 - 0.3, span / 2 + 0.3]) {
-      const pier = MeshBuilder.CreateBox(`portal-pier-${z}`, { width: 0.78, depth: 0.58, height: 3.5 }, this.scene);
-      pier.position = new Vector3(0, 1.75, z);
-      pier.material = stone;
-      this.registerMesh(pier, frame);
-      const corbel = MeshBuilder.CreateBox(`portal-corbel-${z}`, { width: 0.96, depth: 0.72, height: 0.26 }, this.scene);
-      corbel.position = new Vector3(0, 3.36, z);
-      corbel.material = stone;
-      this.registerMesh(corbel, frame);
-    }
-    const lintel = MeshBuilder.CreateBox("portal-lintel", { width: 0.86, depth: span + 1.7, height: 0.62 }, this.scene);
-    lintel.position = new Vector3(0, 3.78, 0);
-    lintel.material = stone;
-    this.registerMesh(lintel, frame);
-    const threshold = MeshBuilder.CreateBox("portal-threshold", { width: 0.82, depth: span + 0.9, height: 0.09 }, this.scene);
-    threshold.position = new Vector3(0, 0.045, 0);
-    threshold.material = bronze;
-    this.registerMesh(threshold, frame);
-    // The handle the past grips, on the room's side of the slab.
-    for (const z of [-span * 0.22, span * 0.22]) {
-      const handle = MeshBuilder.CreateTorus(`portal-handle-${z}`, { diameter: 0.42, thickness: 0.06, tessellation: 20 }, this.scene);
-      handle.position = new Vector3(-0.42, 1.15, z);
-      handle.rotation.y = Math.PI / 2;
-      handle.material = bronze;
-      this.registerMesh(handle, frame);
-    }
-
-    const leaf = new TransformNode("portal-leaf", this.scene);
-    leaf.parent = root;
-    leaf.position = new Vector3(center.x, 0, center.z);
-    const slab = MeshBuilder.CreateBox("portal-slab", { width: 0.46, depth: span + 0.5, height: 3.3 }, this.scene);
-    slab.position = new Vector3(0, 1.65, 0);
-    slab.material = stone;
-    this.registerMesh(slab, leaf);
-    for (const y of [0.62, 1.62, 2.62]) {
-      const band = MeshBuilder.CreateBox(`portal-band-${y}`, { width: 0.54, depth: span + 0.56, height: 0.14 }, this.scene);
-      band.position = new Vector3(0, y, 0);
-      band.material = bronze;
-      this.registerMesh(band, leaf);
-      for (const z of [-span * 0.3, 0, span * 0.3]) {
-        const stud = MeshBuilder.CreateCylinder(`portal-stud-${y}-${z}`, { diameter: 0.11, height: 0.08, tessellation: 8 }, this.scene);
-        stud.position = new Vector3(-0.29, y, z);
-        stud.rotation.z = Math.PI / 2;
-        stud.material = metal;
-        this.registerMesh(stud, leaf);
-      }
-    }
-    return { root: leaf, openY: 3.28, closedY: 0 };
-  }
-
-  private createPortcullis(
-    rect: Rect,
-    stone: StandardMaterial,
-    metal: StandardMaterial,
-    bronze: StandardMaterial,
-    root: TransformNode,
-  ): BridgeVisual {
-    const center = this.rectCenter(rect, 0);
-    const span = Math.max(1.4, rect.height * WORLD_SCALE);
-    const frameRoot = new TransformNode("portcullis-frame", this.scene);
-    frameRoot.parent = root;
-    frameRoot.position = new Vector3(center.x, 0, center.z);
-    for (const z of [-span / 2 - 0.16, span / 2 + 0.16]) {
-      const jamb = MeshBuilder.CreateBox(`portcullis-jamb-${z}`, { width: 0.55, depth: 0.42, height: 2.9 }, this.scene);
-      jamb.position = new Vector3(0, 1.45, z);
-      jamb.material = stone;
-      this.registerMesh(jamb, frameRoot);
-    }
-    const lintel = MeshBuilder.CreateBox("portcullis-lintel", { width: 0.62, depth: span + 1.1, height: 0.46 }, this.scene);
-    lintel.position = new Vector3(0, 3.05, 0);
-    lintel.material = stone;
-    this.registerMesh(lintel, frameRoot);
-    const sill = MeshBuilder.CreateBox("portcullis-sill", { width: 0.6, depth: span + 0.8, height: 0.1 }, this.scene);
-    sill.position = new Vector3(0, 0.05, 0);
-    sill.material = bronze;
-    this.registerMesh(sill, frameRoot);
-
-    const gate = new TransformNode("portcullis-gate", this.scene);
-    gate.parent = root;
-    gate.position = new Vector3(center.x, 0, center.z);
-    const barCount = Math.max(4, Math.round(span / 0.36));
-    for (let index = 0; index < barCount; index += 1) {
-      const z = -span / 2 + (index + 0.5) * (span / barCount);
-      const bar = MeshBuilder.CreateCylinder(`portcullis-bar-${index}`, {
-        diameter: 0.1,
-        height: 2.5,
-        tessellation: 8,
-      }, this.scene);
-      bar.position = new Vector3(0, 1.3, z);
-      bar.material = metal;
-      this.registerMesh(bar, gate);
-      const tip = MeshBuilder.CreateCylinder(`portcullis-tip-${index}`, {
-        diameterTop: 0.1,
-        diameterBottom: 0,
-        height: 0.22,
-        tessellation: 8,
-      }, this.scene);
-      tip.position = new Vector3(0, 0.16, z);
-      tip.rotation.z = Math.PI;
-      tip.material = metal;
-      this.registerMesh(tip, gate);
-    }
-    for (const y of [0.75, 1.95]) {
-      const brace = MeshBuilder.CreateBox(`portcullis-brace-${y}`, { width: 0.08, depth: span, height: 0.09 }, this.scene);
-      brace.position = new Vector3(0, y, 0);
-      brace.material = bronze;
-      this.registerMesh(brace, gate);
-    }
-    return { root: gate, openY: 2.55, closedY: 0 };
-  }
-
   private createMoteTexture(): DynamicTexture {
     const texture = new DynamicTexture("mote-texture", { width: 64, height: 64 }, this.scene, false);
     const context = texture.getContext();
@@ -1440,6 +1645,263 @@ export class MemoryScene {
     return { mesh, material: rippleMaterial };
   }
 
+  /**
+   * Entry sign: chamber number, route progress and the mechanisms this room
+   * uses. This is the room's primary silent guidance — the tutorial card is the
+   * second line of explanation, not the first.
+   */
+  /**
+   * Floor guidance, authored per chamber in level units: an amber solid line for
+   * what the present should walk, a cyan dashed one for what the recording
+   * should. Same language as the gold target ring, read before any card is.
+   */
+  private createRouteLines(worldRoot: TransformNode): void {
+    const guide = ROUTE_GUIDES[this.simulation.chamber.id];
+    if (!guide) return;
+    const presentMaterial = material(this.scene, "route-present", new Color3(0.5, 0.28, 0.04), new Color3(0.85, 0.46, 0.06), 0.95);
+    presentMaterial.ambientColor = Color3.Black();
+    const pastMaterial = material(this.scene, "route-past", new Color3(0.04, 0.34, 0.46), new Color3(0.06, 0.62, 0.86), 0.95);
+    pastMaterial.ambientColor = Color3.Black();
+
+    const draw = (points: readonly (readonly [number, number])[], lineMaterial: StandardMaterial, dashed: boolean, name: string): void => {
+      for (let index = 0; index < points.length - 1; index += 1) {
+        const from = points[index];
+        const to = points[index + 1];
+        if (!from || !to) continue;
+        const start = this.worldPoint(from[0] * POSITION_SCALE, from[1] * POSITION_SCALE, 0.045);
+        const end = this.worldPoint(to[0] * POSITION_SCALE, to[1] * POSITION_SCALE, 0.045);
+        const span = Vector3.Distance(start, end);
+        if (span < 0.05) continue;
+        const angle = Math.atan2(end.z - start.z, end.x - start.x);
+        const segments = dashed ? Math.max(1, Math.round(span / 0.44)) : 1;
+        for (let piece = 0; piece < segments; piece += 1) {
+          const pieceLength = dashed ? (span / segments) * 0.55 : span;
+          const centre = dashed
+            ? Vector3.Lerp(start, end, (piece + 0.5) / segments)
+            : Vector3.Lerp(start, end, 0.5);
+          const strip = MeshBuilder.CreateBox(`${name}-${index}-${piece}`, {
+            width: pieceLength,
+            depth: 0.13,
+            height: 0.012,
+          }, this.scene);
+          strip.position = centre;
+          strip.rotation.y = -angle;
+          strip.material = lineMaterial;
+          strip.isPickable = false;
+          strip.receiveShadows = false;
+          strip.parent = worldRoot;
+          this.glow.addIncludedOnlyMesh(strip);
+        }
+      }
+    };
+    draw(guide.present, presentMaterial, false, "route-present");
+    draw(guide.past, pastMaterial, true, "route-past");
+  }
+
+  /**
+   * Dark zones: the floor drops to the mechanism palette wherever the room does
+   * something, so an off-white chamber still tells you where to look.
+   */
+  private addMechanismZone(
+    name: string,
+    centre: readonly [number, number],
+    size: readonly [number, number],
+    zoneMaterial: StandardMaterial,
+    accent: StandardMaterial,
+    worldRoot: TransformNode,
+  ): void {
+    const pad = MeshBuilder.CreateBox(`${name}-zone`, {
+      width: size[0] * POSITION_SCALE * WORLD_SCALE,
+      depth: size[1] * POSITION_SCALE * WORLD_SCALE,
+      height: 0.03,
+    }, this.scene);
+    pad.position = this.worldPoint(centre[0] * POSITION_SCALE, centre[1] * POSITION_SCALE, 0.015);
+    pad.material = zoneMaterial;
+    this.registerMesh(pad, worldRoot, false);
+    for (const [index, side] of [-1, 1].entries()) {
+      const edge = MeshBuilder.CreateBox(`${name}-zone-edge-${index}`, {
+        width: size[0] * POSITION_SCALE * WORLD_SCALE,
+        depth: 0.05,
+        height: 0.034,
+      }, this.scene);
+      edge.position = this.worldPoint(centre[0] * POSITION_SCALE, centre[1] * POSITION_SCALE, 0.017)
+        .add(new Vector3(0, 0, side * size[1] * POSITION_SCALE * WORLD_SCALE / 2));
+      edge.material = accent;
+      edge.isPickable = false;
+      edge.receiveShadows = false;
+      edge.parent = worldRoot;
+    }
+  }
+
+  private createChamberSign(worldRoot: TransformNode, backZ: number, roomWidth: number): void {
+    const chamber = this.simulation.chamber;
+    const index = CHAMBER_ROUTE.indexOf(chamber.id);
+    const position = index < 0 ? 1 : index + 1;
+    const total = CHAMBER_ROUTE.length;
+    const width = 1024;
+    const height = 512;
+    const texture = new DynamicTexture(`chamber-sign-${chamber.id}`, { width, height }, this.scene, true);
+    const context = this.canvasContext(width, height);
+    context.fillStyle = "#20242b";
+    context.fillRect(0, 0, width, height);
+    context.fillStyle = "#2b3038";
+    context.fillRect(12, 12, width - 24, height - 24);
+
+    // Number block.
+    context.fillStyle = "#f2f4f7";
+    context.font = "bold 300px 'Helvetica Neue', Helvetica, Arial, sans-serif";
+    context.textAlign = "left";
+    context.textBaseline = "alphabetic";
+    context.fillText(String(position).padStart(2, "0"), 54, 330);
+
+    // Progress: filled pips for cleared ground, hollow for what is left.
+    const pipWidth = (width - 660) / total;
+    for (let pip = 0; pip < total; pip += 1) {
+      const x = 600 + pip * pipWidth;
+      context.fillStyle = pip < position ? "#f0b45a" : "#4a515c";
+      context.fillRect(x, 96, pipWidth - 10, 16);
+    }
+    context.fillStyle = "#aeb6c2";
+    context.font = "500 58px 'Helvetica Neue', Helvetica, Arial, sans-serif";
+    context.fillText(`${String(position).padStart(2, "0")} / ${String(total).padStart(2, "0")}`, 600, 76);
+
+    // Mechanism pictograms: what this room asks of you, as tiles.
+    const icons: string[] = ["record"];
+    if (chamber.plate) icons.push("plate");
+    if (chamber.hold) icons.push("switch");
+    if (chamber.forceObject) icons.push("weight");
+    if (chamber.handoff) icons.push("carrier");
+    if (chamber.plate?.requiredActor === "past" || chamber.hold?.requiredActor === "past" || chamber.forceObject || chamber.handoff) {
+      icons.splice(1, 0, "echo");
+    }
+    const tile = 118;
+    const gap = 20;
+    for (const [slot, icon] of icons.slice(0, 5).entries()) {
+      const x = 600 + slot * (tile + gap);
+      const y = 170;
+      context.fillStyle = "#1b1f25";
+      context.fillRect(x, y, tile, tile);
+      context.strokeStyle = "#59616d";
+      context.lineWidth = 3;
+      context.strokeRect(x + 1.5, y + 1.5, tile - 3, tile - 3);
+      this.drawMechanismGlyph(context, icon, x + tile / 2, y + tile / 2, tile * 0.34);
+    }
+
+    // A hairline rule and the facility's own label for the room.
+    context.strokeStyle = "#454c56";
+    context.lineWidth = 4;
+    context.beginPath();
+    context.moveTo(54, 372);
+    context.lineTo(width - 54, 372);
+    context.stroke();
+    context.fillStyle = "#8e96a2";
+    context.font = "500 52px 'Helvetica Neue', Helvetica, Arial, sans-serif";
+    context.fillText(chamber.name.toUpperCase(), 54, 444);
+    // The texture pipeline inverts Y on the way to the plane; pre-flip once here
+    // so the sign reads upright from the room side.
+    const mirrored = this.canvasContext(width, height);
+    mirrored.translate(0, height);
+    mirrored.scale(1, -1);
+    mirrored.drawImage(context.canvas, 0, 0);
+    texture.getContext().drawImage(mirrored.canvas, 0, 0);
+    texture.update(false);
+
+    const signMaterial = material(this.scene, `chamber-sign-${chamber.id}-material`, new Color3(0.9, 0.9, 0.92), new Color3(0.34, 0.35, 0.38));
+    signMaterial.diffuseTexture = texture;
+    signMaterial.emissiveTexture = texture;
+    signMaterial.ambientColor = Color3.Black();
+    signMaterial.backFaceCulling = false;
+
+    const board = MeshBuilder.CreatePlane(`chamber-sign-${chamber.id}-board`, { width: 3.4, height: 1.7 }, this.scene);
+    board.position = new Vector3(-roomWidth * 0.2, 2.62, backZ - 0.3);
+    board.material = signMaterial;
+    board.isPickable = false;
+    board.receiveShadows = false;
+    board.parent = worldRoot;
+    const frame = MeshBuilder.CreateBox(`chamber-sign-${chamber.id}-frame`, { width: 3.62, depth: 0.16, height: 1.92 }, this.scene);
+    frame.position = new Vector3(-roomWidth * 0.2, 2.62, backZ - 0.21);
+    frame.material = this.stoneMaterials().ashlarEdge;
+    this.registerMesh(frame, worldRoot);
+  }
+
+  private drawMechanismGlyph(context: CanvasRenderingContext2D, icon: string, cx: number, cy: number, radius: number): void {
+    context.strokeStyle = "#dfe5ec";
+    context.fillStyle = "#dfe5ec";
+    context.lineWidth = 6;
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    if (icon === "record") {
+      context.beginPath();
+      context.arc(cx, cy, radius, 0, Math.PI * 2);
+      context.stroke();
+      context.fillStyle = "#f0b45a";
+      context.beginPath();
+      context.arc(cx, cy, radius * 0.42, 0, Math.PI * 2);
+      context.fill();
+      return;
+    }
+    if (icon === "echo") {
+      context.strokeStyle = "#5fd0f5";
+      for (const [offset, alpha] of [[-radius * 0.42, 1], [radius * 0.42, 0.45]] as const) {
+        context.globalAlpha = alpha;
+        context.beginPath();
+        context.arc(cx + offset, cy - radius * 0.45, radius * 0.34, 0, Math.PI * 2);
+        context.stroke();
+        context.beginPath();
+        context.moveTo(cx + offset, cy - radius * 0.08);
+        context.lineTo(cx + offset, cy + radius * 0.62);
+        context.stroke();
+      }
+      context.globalAlpha = 1;
+      return;
+    }
+    if (icon === "plate") {
+      context.beginPath();
+      context.ellipse(cx, cy + radius * 0.25, radius, radius * 0.44, 0, 0, Math.PI * 2);
+      context.stroke();
+      context.strokeStyle = "#5fd0f5";
+      context.beginPath();
+      context.ellipse(cx, cy + radius * 0.25, radius * 0.52, radius * 0.22, 0, 0, Math.PI * 2);
+      context.stroke();
+      context.beginPath();
+      context.moveTo(cx, cy - radius * 0.9);
+      context.lineTo(cx, cy - radius * 0.25);
+      context.stroke();
+      return;
+    }
+    if (icon === "switch") {
+      context.beginPath();
+      context.moveTo(cx - radius * 0.7, cy + radius * 0.8);
+      context.lineTo(cx + radius * 0.7, cy + radius * 0.8);
+      context.stroke();
+      context.beginPath();
+      context.moveTo(cx, cy + radius * 0.8);
+      context.lineTo(cx + radius * 0.55, cy - radius * 0.75);
+      context.stroke();
+      context.fillStyle = "#f0b45a";
+      context.beginPath();
+      context.arc(cx + radius * 0.55, cy - radius * 0.85, radius * 0.26, 0, Math.PI * 2);
+      context.fill();
+      return;
+    }
+    if (icon === "weight") {
+      context.strokeRect(cx - radius * 0.8, cy - radius * 0.6, radius * 1.6, radius * 1.3);
+      context.beginPath();
+      context.moveTo(cx - radius * 0.4, cy - radius * 0.6);
+      context.lineTo(cx - radius * 0.4, cy + radius * 0.7);
+      context.moveTo(cx + radius * 0.4, cy - radius * 0.6);
+      context.lineTo(cx + radius * 0.4, cy + radius * 0.7);
+      context.stroke();
+      return;
+    }
+    // carrier
+    context.strokeRect(cx - radius * 0.72, cy - radius * 0.72, radius * 1.44, radius * 1.44);
+    context.strokeStyle = "#5fd0f5";
+    context.beginPath();
+    context.arc(cx, cy, radius * 0.3, 0, Math.PI * 2);
+    context.stroke();
+  }
+
   private createTargetGuide(worldRoot: TransformNode): TargetGuideVisual {
     const root = new TransformNode("tutorial-target-root", this.scene);
     root.parent = worldRoot;
@@ -1473,88 +1935,77 @@ export class MemoryScene {
     return { root, ring, arrow };
   }
 
+  /**
+   * The hold mechanism as a pillar lever: a column with a lit collar and an arm
+   * that swings while it is held. Same silhouette in every room that uses it, so
+   * "this is the thing you grab" is learned once.
+   */
   private createWinch(
     x: number,
     y: number,
     door: Rect | null,
-    metal: StandardMaterial,
-    bronze: StandardMaterial,
-    cyan: StandardMaterial,
+    panel: StandardMaterial,
+    dark: StandardMaterial,
+    accent: StandardMaterial,
     worldRoot: TransformNode,
   ): WinchVisual {
     const root = new TransformNode("winch-root", this.scene);
     root.position = this.worldPoint(x, y, 0);
     root.parent = worldRoot;
-    const base = MeshBuilder.CreateBox("winch-base", { width: 1.55, depth: 1.25, height: 0.18 }, this.scene);
-    base.position.y = 0.1;
-    base.material = metal;
+
+    const base = MeshBuilder.CreateCylinder("winch-base", { diameter: 1.34, height: 0.16, tessellation: 32 }, this.scene);
+    base.position.y = 0.08;
+    base.material = dark;
     this.registerMesh(base, root);
-    for (const z of [-0.46, 0.46]) {
-      const support = MeshBuilder.CreateBox(`winch-support-${z}`, { width: 0.16, depth: 0.18, height: 1.22 }, this.scene);
-      support.position = new Vector3(0, 0.69, z);
-      support.rotation.z = z < 0 ? -0.1 : 0.1;
-      support.material = bronze;
-      this.registerMesh(support, root);
-    }
-    const drum = MeshBuilder.CreateCylinder("winch-drum", { diameter: 0.78, height: 1.08, tessellation: 24 }, this.scene);
-    drum.position.y = 0.83;
+    const column = MeshBuilder.CreateCylinder("winch-column", { diameter: 0.44, height: 1.16, tessellation: 24 }, this.scene);
+    column.position.y = 0.74;
+    column.material = panel;
+    this.registerMesh(column, root);
+    const shoulder = MeshBuilder.CreateCylinder("winch-shoulder", { diameter: 0.62, height: 0.2, tessellation: 24 }, this.scene);
+    shoulder.position.y = 1.36;
+    shoulder.material = dark;
+    this.registerMesh(shoulder, root);
+
+    // The hub the arm turns on, and the arm itself.
+    const drum = MeshBuilder.CreateCylinder("winch-drum", { diameter: 0.4, height: 0.24, tessellation: 20 }, this.scene);
+    drum.position.y = 1.48;
     drum.rotation.x = Math.PI / 2;
-    drum.material = metal;
+    drum.material = panel;
     this.registerMesh(drum, root);
-    // Rope coiled along the drum, so the winch reads as something that spools.
-    for (let index = 0; index < 7; index += 1) {
-      const coil = MeshBuilder.CreateTorus(`winch-coil-${index}`, { diameter: 0.86, thickness: 0.075, tessellation: 20 }, this.scene);
-      coil.position = new Vector3(0, 0.83, -0.42 + index * 0.14);
-      coil.rotation.x = Math.PI / 2;
-      coil.material = bronze;
-      this.registerMesh(coil, root);
-    }
-    for (const z of [-0.58, 0.58]) {
-      const wheel = MeshBuilder.CreateTorus(`winch-wheel-${z}`, { diameter: 0.92, thickness: 0.11, tessellation: 28 }, this.scene);
-      wheel.position = new Vector3(0, 0.83, z);
-      wheel.rotation.x = Math.PI / 2;
-      wheel.material = bronze;
-      this.registerMesh(wheel, root);
-      for (let spoke = 0; spoke < 6; spoke += 1) {
-        const arm = MeshBuilder.CreateBox(`winch-spoke-${z}-${spoke}`, { width: 0.85, depth: 0.055, height: 0.05 }, this.scene);
-        arm.position = new Vector3(0, 0.83, z);
-        arm.rotation.z = spoke * Math.PI / 6;
-        arm.material = metal;
-        this.registerMesh(arm, root);
-      }
-    }
     const crank = new TransformNode("winch-crank", this.scene);
-    crank.position = new Vector3(0, 0.83, -0.69);
+    crank.position = new Vector3(0, 1.48, 0);
     crank.parent = root;
-    const crankArm = MeshBuilder.CreateBox("winch-crank-arm", { width: 0.08, depth: 0.08, height: 0.7 }, this.scene);
-    crankArm.position.y = 0.28;
-    crankArm.material = bronze;
-    this.registerMesh(crankArm, crank);
-    const handle = MeshBuilder.CreateCylinder("winch-handle", { diameter: 0.13, height: 0.38, tessellation: 12 }, this.scene);
-    handle.position = new Vector3(0, 0.62, -0.12);
-    handle.rotation.x = Math.PI / 2;
-    handle.material = metal;
-    this.registerMesh(handle, crank);
-    const runeMaterial = material(this.scene, "winch-rune", new Color3(0.015, 0.16, 0.2), new Color3(0.01, 0.2, 0.3));
-    const rune = MeshBuilder.CreateTorus("winch-rune", { diameter: 1.26, thickness: 0.055, tessellation: 32 }, this.scene);
-    rune.position.y = 0.22;
+    const arm = MeshBuilder.CreateBox("winch-crank-arm", { width: 0.11, depth: 0.11, height: 0.78 }, this.scene);
+    arm.position.y = 0.3;
+    arm.material = dark;
+    this.registerMesh(arm, crank);
+    const grip = MeshBuilder.CreateCylinder("winch-handle", { diameter: 0.15, height: 0.34, tessellation: 14 }, this.scene);
+    grip.position = new Vector3(0, 0.66, 0);
+    grip.rotation.x = Math.PI / 2;
+    grip.material = accent;
+    this.registerMesh(grip, crank, false);
+    this.glow.addIncludedOnlyMesh(grip);
+
+    // The collar is the state light: it brightens while the lever is held.
+    const runeMaterial = material(this.scene, "winch-rune", new Color3(0.05, 0.16, 0.22), new Color3(0.02, 0.22, 0.32));
+    runeMaterial.ambientColor = Color3.Black();
+    const rune = MeshBuilder.CreateTorus("winch-rune", { diameter: 1.12, thickness: 0.06, tessellation: 36 }, this.scene);
+    rune.position.y = 0.17;
     rune.material = runeMaterial;
     this.registerMesh(rune, root, false);
     this.glow.addIncludedOnlyMesh(rune);
+
     if (door) {
-      const doorCenter = this.rectCenter(door, 0.62);
-      const start = root.position.add(new Vector3(0.55, 0.88, 0));
-      const cable = MeshBuilder.CreateTube("winch-cable", { path: [start, doorCenter], radius: 0.025, tessellation: 8 }, this.scene);
-      cable.material = bronze;
-      this.registerMesh(cable, worldRoot, false);
+      // A conduit from the lever to what it drives, so the link is visible.
+      const doorCentre = this.rectCenter(door, 0.06);
+      const start = root.position.add(new Vector3(0, 0.06, 0));
+      const conduit = MeshBuilder.CreateTube("winch-cable", { path: [start, doorCentre], radius: 0.035, tessellation: 8 }, this.scene);
+      conduit.material = dark;
+      this.registerMesh(conduit, worldRoot, false);
     }
     return { root, drum, crank, rune, runeMaterial };
   }
 
-  /**
-   * Last Hold's "bridge stone" is rubble the past shoves into a gap — faceted
-   * boulders with hand-worn grips, not a crated weight riding rails.
-   */
   private dressBoulderCluster(
     root: TransformNode,
     rect: ForceObjectState,
@@ -1724,6 +2175,11 @@ export class MemoryScene {
     return { root, cyanSigil, amberSigil, cyanMaterial, amberMaterial };
   }
 
+  /**
+   * The way out of a lit facility is a lit corridor, not a cave. The opening
+   * keeps a bright face and a vertical slide door; what used to be a volumetric
+   * shaft is now a soft floor spill, because a beam does not read against white.
+   */
   private createExit(
     rect: Rect,
     stone: StandardMaterial,
@@ -1736,120 +2192,95 @@ export class MemoryScene {
     root.rotation.y = EXIT_YAW;
     root.parent = worldRoot;
     const depth = Math.max(2.35, rect.height * WORLD_SCALE * 1.05);
+
     const approach = MeshBuilder.CreateBox("exit-approach", { width: 4.2, depth: 3.15, height: 0.04 }, this.scene);
     approach.position = new Vector3(-1.65, -0.02, 0);
     approach.material = stone;
     this.registerMesh(approach, root);
-    const portalMaterial = material(this.scene, "exit-portal-light", new Color3(0.62, 0.5, 0.3), new Color3(0.82, 0.64, 0.34), 0.74);
-    const portal = MeshBuilder.CreateBox("exit-portal", { width: 0.08, depth: 0.8, height: 1.4 }, this.scene);
-    portal.position = new Vector3(4.55, 0.84, 0);
+    const corridorFloor = MeshBuilder.CreateBox("exit-corridor-floor", { width: 4.6, depth: depth - 0.2, height: 0.05 }, this.scene);
+    corridorFloor.position = new Vector3(2.2, -0.012, 0);
+    corridorFloor.material = stone;
+    this.registerMesh(corridorFloor, root);
+
+    const corridorWall = material(this.scene, "exit-corridor-wall", new Color3(0.86, 0.87, 0.89), Color3.Black(), 1, new Color3(0.06, 0.06, 0.07));
+    for (const z of [-1, 1]) {
+      const side = MeshBuilder.CreateBox(`exit-corridor-side-${z}`, { width: 4.6, depth: 0.3, height: 3.5 }, this.scene);
+      side.position = new Vector3(2.2, 1.7, z * (depth / 2 - 0.05));
+      side.material = corridorWall;
+      this.registerMesh(side, root);
+    }
+    const corridorCeiling = MeshBuilder.CreateBox("exit-corridor-ceiling", { width: 4.6, depth: depth + 0.2, height: 0.26 }, this.scene);
+    corridorCeiling.position = new Vector3(2.2, 3.5, 0);
+    corridorCeiling.material = corridorWall;
+    this.registerMesh(corridorCeiling, root);
+    // The corridor is lit from its own ceiling, which is what sells depth.
+    const corridorStrip = material(this.scene, "exit-corridor-strip", new Color3(1, 1, 1), new Color3(1, 0.99, 0.94));
+    corridorStrip.disableLighting = true;
+    const strip = MeshBuilder.CreateBox("exit-corridor-lamp", { width: 3.6, depth: 0.26, height: 0.05 }, this.scene);
+    strip.position = new Vector3(2.3, 3.34, 0);
+    strip.material = corridorStrip;
+    strip.isPickable = false;
+    strip.parent = root;
+    this.glow.addIncludedOnlyMesh(strip);
+
+    // Doorway frame, then the bright face the player walks toward.
+    for (const z of [-1, 1]) {
+      const jamb = MeshBuilder.CreateBox(`exit-jamb-${z}`, { width: 0.34, depth: 0.36, height: 3.3 }, this.scene);
+      jamb.position = new Vector3(0.1, 1.65, z * (depth / 2 - 0.12));
+      jamb.material = stone;
+      this.registerMesh(jamb, root);
+    }
+    const header = MeshBuilder.CreateBox("exit-header", { width: 0.34, depth: depth + 0.2, height: 0.34 }, this.scene);
+    header.position = new Vector3(0.1, 3.3, 0);
+    header.material = stone;
+    this.registerMesh(header, root);
+    const threshold = MeshBuilder.CreateBox("exit-threshold", { width: 0.3, depth: depth - 0.1, height: 0.05 }, this.scene);
+    threshold.position = new Vector3(0.1, 0.025, 0);
+    threshold.material = bronze;
+    this.registerMesh(threshold, root);
+
+    const portalMaterial = material(this.scene, "exit-portal-light", new Color3(0.9, 0.92, 0.95), new Color3(0.92, 0.94, 1), 0.9);
+    portalMaterial.disableLighting = true;
+    const portal = MeshBuilder.CreateBox("exit-portal", { width: 0.06, depth: depth * 0.62, height: 2.4 }, this.scene);
+    portal.position = new Vector3(4.4, 1.28, 0);
     portal.material = portalMaterial;
     this.registerMesh(portal, root, false);
     this.glow.addIncludedOnlyMesh(portal);
-    const tunnelStone = material(this.scene, "exit-tunnel-stone", new Color3(0.11, 0.105, 0.088), new Color3(0.03, 0.022, 0.013), 1, new Color3(0.12, 0.1, 0.07));
-    // The arch must stay a dark frame around the light. It sits closest to the
-    // exit lamp and the raised fill, so it opts out of most of the ambient
-    // floor the rest of the vault relies on.
-    tunnelStone.ambientColor = new Color3(0.3, 0.3, 0.34);
-    const tunnelFloor = MeshBuilder.CreateBox("exit-tunnel-floor", { width: 4.4, depth: depth - 0.24, height: 0.035 }, this.scene);
-    tunnelFloor.position = new Vector3(2.1, -0.017, 0);
-    tunnelFloor.material = tunnelStone;
-    this.registerMesh(tunnelFloor, root);
-    // Two converging walls carry the perspective, with a frame at each end.
-    // Four nested rings read as a barcode of dark bars rather than as depth.
-    const farArchRim = material(this.scene, "exit-far-arch-rim", new Color3(0.42, 0.25, 0.08), new Color3(0.15, 0.065, 0.015));
-    for (const z of [-1, 1]) {
-      const side = MeshBuilder.CreateBox(`exit-tunnel-side-${z}`, { width: 4.5, depth: 0.32, height: 3.5 }, this.scene);
-      side.position = new Vector3(2.2, 1.6, z * (depth / 2 - 0.06));
-      side.rotation.y = z * -0.055;
-      side.material = tunnelStone;
-      this.registerMesh(side, root);
-    }
-    const ceiling = MeshBuilder.CreateBox("exit-tunnel-ceiling", { width: 4.5, depth: depth + 0.2, height: 0.3 }, this.scene);
-    ceiling.position = new Vector3(2.2, 3.4, 0);
-    ceiling.material = tunnelStone;
-    this.registerMesh(ceiling, root);
-    for (const [index, spec] of [
-      { x: 0.2, height: 3.55, span: depth, inset: bronze },
-      { x: 4.25, height: 2.35, span: depth * 0.62, inset: farArchRim },
-    ].entries()) {
-      for (const z of [-spec.span / 2, spec.span / 2]) {
-        const jamb = MeshBuilder.CreateBox(`exit-arch-upright-${index}-${z}`, { width: 0.3, depth: 0.32, height: spec.height }, this.scene);
-        jamb.position = new Vector3(spec.x, spec.height / 2, z);
-        jamb.material = tunnelStone;
-        this.registerMesh(jamb, root);
-        if (index === 0) {
-          const reveal = MeshBuilder.CreateBox(`exit-arch-inset-${index}-${z}`, { width: 0.06, depth: 0.12, height: spec.height * 0.8 }, this.scene);
-          reveal.position = new Vector3(spec.x - 0.18, spec.height * 0.42, z * 0.94);
-          reveal.material = spec.inset;
-          this.registerMesh(reveal, root, false);
-        }
-      }
-      const lintel = MeshBuilder.CreateBox(`exit-arch-top-${index}`, { width: 0.3, depth: spec.span + 0.36, height: 0.32 }, this.scene);
-      lintel.position = new Vector3(spec.x, spec.height, 0);
-      lintel.material = tunnelStone;
-      this.registerMesh(lintel, root);
-    }
-    const lightPathMaterial = material(this.scene, "exit-light-path", new Color3(0.32, 0.22, 0.1), new Color3(0.42, 0.27, 0.1), 0.42);
-    const approachLight = MeshBuilder.CreateBox("exit-approach-light", { width: 3.4, depth: 0.34, height: 0.026 }, this.scene);
-    approachLight.position = new Vector3(-1.62, 0.14, 0);
-    approachLight.material = lightPathMaterial;
-    this.registerMesh(approachLight, root, false);
-    const slab = MeshBuilder.CreateBox("exit-slab", { width: 0.18, depth: depth - 0.36, height: 3.45 }, this.scene);
-    slab.position = new Vector3(-0.03, 1.84, 0);
+
+    // Vertical slide door: it lifts into the header when the room lets you out.
+    const slab = MeshBuilder.CreateBox("exit-slab", { width: 0.2, depth: depth - 0.3, height: 3.1 }, this.scene);
+    slab.position = new Vector3(0.1, 1.7, 0);
     slab.material = stone;
     this.registerMesh(slab, root);
-    // A broken arch over the mouth: the vault has already half-collapsed here,
-    // which is what makes the light beyond it read as outside.
-    const ruinRandom = this.seededRandom(1471);
-    for (let index = 0; index < 7; index += 1) {
-      if (index === 3 || index === 5) continue;
-      const angle = -0.62 + index * 0.21;
-      const voussoir = MeshBuilder.CreateBox(`exit-broken-arch-${index}`, {
-        width: 0.34,
-        depth: 0.52,
-        height: 0.46 + ruinRandom() * 0.12,
-      }, this.scene);
-      voussoir.position = new Vector3(
-        0.42 + Math.sin(angle) * 0.3,
-        3.68 + Math.cos(angle) * 0.42,
-        Math.sin(angle) * 1.5,
-      );
-      voussoir.rotation.x = angle * 0.85;
-      voussoir.rotation.z = (ruinRandom() - 0.5) * 0.16;
-      voussoir.material = stone;
-      this.registerMesh(voussoir, root);
+    for (const y of [0.7, 1.7, 2.7]) {
+      const doorRib = MeshBuilder.CreateBox(`exit-slab-rib-${y}`, { width: 0.26, depth: depth - 0.44, height: 0.12 }, this.scene);
+      doorRib.position = new Vector3(0.1, y, 0);
+      doorRib.material = bronze;
+      doorRib.parent = slab;
+      doorRib.position = new Vector3(0, y - 1.7, 0);
+      doorRib.isPickable = false;
+      this.registerMesh(doorRib, slab);
     }
-    const lintelStub = MeshBuilder.CreateBox("exit-arch-stub", { width: 0.4, depth: 0.9, height: 0.34 }, this.scene);
-    lintelStub.position = new Vector3(0.42, 3.42, -1.24);
-    lintelStub.rotation.x = 0.12;
-    lintelStub.material = stone;
-    this.registerMesh(lintelStub, root);
 
-    const light = new PointLight("exit-beacon", new Vector3(4.72, 0.88, 0), this.scene);
-    light.diffuse = new Color3(1, 0.86, 0.62);
-    light.intensity = 2.6;
-    light.range = 7.5;
+    const light = new PointLight("exit-beacon", new Vector3(3.6, 1.6, 0), this.scene);
+    light.diffuse = new Color3(1, 0.99, 0.95);
+    light.intensity = 1.6;
+    light.range = 8;
     light.parent = root;
     const { shaft, shaftMaterial, spillMaterial, beamMaterial } = this.createLightShaft(root);
     void white;
     return { root, portal, slab, portalMaterial, light, shaft, shaftMaterial, spillMaterial, beamMaterial };
   }
 
-  /**
-   * Procedural light-shaft texture: a soft blob whose centre can be pushed
-   * toward one edge, so the same helper makes both the doorway halo and the
-   * floor spill that streams away from it.
-   */
   private createShaftTexture(name: string, centerY: number): DynamicTexture {
     const texture = new DynamicTexture(name, { width: 256, height: 256 }, this.scene, false);
     const context = texture.getContext();
     context.fillStyle = "#000000";
     context.fillRect(0, 0, 256, 256);
     const falloff = context.createRadialGradient(128, centerY, 4, 128, centerY, 206);
-    falloff.addColorStop(0, "#fff2da");
-    falloff.addColorStop(0.24, "#d7a165");
-    falloff.addColorStop(0.58, "#432c15");
+    falloff.addColorStop(0, "#f4f7fb");
+    falloff.addColorStop(0.24, "#b9c2cb");
+    falloff.addColorStop(0.58, "#3c4147");
     falloff.addColorStop(1, "#000000");
     context.fillStyle = falloff;
     context.fillRect(0, 0, 256, 256);
@@ -1876,10 +2307,10 @@ export class MemoryScene {
     const texture = new DynamicTexture("exit-beam-ramp", { width: 32, height: 256 }, this.scene, false);
     const context = texture.getContext();
     const ramp = context.createLinearGradient(0, 0, 0, 256);
-    ramp.addColorStop(0, "#c9a274");
-    ramp.addColorStop(0.32, "#8a6136");
-    ramp.addColorStop(0.7, "#33220f");
-    ramp.addColorStop(1, "#0a0603");
+    ramp.addColorStop(0, "#cfd6dd");
+    ramp.addColorStop(0.32, "#8b939c");
+    ramp.addColorStop(0.7, "#33383d");
+    ramp.addColorStop(1, "#0a0b0c");
     context.fillStyle = ramp;
     context.fillRect(0, 0, 32, 256);
     texture.update(false);
@@ -1991,30 +2422,47 @@ export class MemoryScene {
     const ramp = new DynamicTexture(`echo-ramp-${id}`, { width: 16, height: 256 }, this.scene, false);
     const context = ramp.getContext();
     const gradient = context.createLinearGradient(0, 0, 0, 256);
-    gradient.addColorStop(0, "#a8e9ff");
-    gradient.addColorStop(0.22, "#4fc6f5");
-    gradient.addColorStop(0.55, "#1a86bd");
-    gradient.addColorStop(0.82, "#0d5c86");
-    gradient.addColorStop(1, "#083c58");
+    gradient.addColorStop(0, "#9fe8ff");
+    gradient.addColorStop(0.22, "#43b8e8");
+    gradient.addColorStop(0.55, "#1e8ec0");
+    gradient.addColorStop(0.82, "#136e99");
+    gradient.addColorStop(1, "#0d4f72");
     context.fillStyle = gradient;
     context.fillRect(0, 0, 16, 256);
     for (let index = 0; index < 30; index += 1) {
       const y = Math.random() * 256;
-      context.fillStyle = `rgba(170, 230, 255, ${0.04 + Math.random() * 0.09})`;
+      context.fillStyle = `rgba(190, 240, 255, ${0.06 + Math.random() * 0.12})`;
       context.fillRect(0, y, 16, 1 + Math.random() * 2);
     }
     ramp.update(false);
     ramp.wrapV = Texture.WRAP_ADDRESSMODE;
 
-    const build = (name: string, strength: number): StandardMaterial => {
-      const echoMaterial = material(this.scene, name, Color3.Black(), new Color3(strength, strength, strength), 1, Color3.Black());
+    // Additive was the right answer against a dark vault and the wrong one here:
+    // adding light to an already-white room returns white, so the echo vanished.
+    // It is alpha-blended now, and a Fresnel rim does the work additive used to —
+    // the silhouette stays bright while the body reads as translucent volume,
+    // which holds against both the panels and the dark mechanism zones.
+    const build = (name: string, alpha: number, rimStrength: number): StandardMaterial => {
+      const echoMaterial = material(this.scene, name, new Color3(0.03, 0.28, 0.4), new Color3(1, 1, 1), alpha, Color3.Black());
       echoMaterial.emissiveTexture = ramp;
       echoMaterial.disableLighting = true;
-      echoMaterial.alphaMode = Constants.ALPHA_ADD;
-      echoMaterial.disableDepthWrite = true;
+      // The shared material() helper turns on a depth pre-pass for anything
+      // translucent, which was harmless in the vault and renders the echo as a
+      // black silhouette here. The ghost owns its own depth behaviour.
+      echoMaterial.needDepthPrePass = false;
+      echoMaterial.backFaceCulling = true;
+      // Opt out of the room's ambient: the ghost is its own light source, and a
+      // flat grey added on top is what turned it into a white smudge.
+      echoMaterial.ambientColor = Color3.Black();
+      const rim = new FresnelParameters();
+      rim.bias = 0.24;
+      rim.power = 1.4;
+      rim.leftColor = new Color3(rimStrength * 1.3, rimStrength * 1.3, rimStrength * 1.3);
+      rim.rightColor = new Color3(rimStrength * 0.62, rimStrength * 0.62, rimStrength * 0.62);
+      echoMaterial.emissiveFresnelParameters = rim;
       return echoMaterial;
     };
-    return { core: build(`echo-core-${id}`, 0.34), fade: build(`echo-fade-${id}`, 0.17) };
+    return { core: build(`echo-core-${id}`, 0.88, 1), fade: build(`echo-fade-${id}`, 0.62, 0.8) };
   }
 
   private bodyMaterials(echo: boolean): { jacket: StandardMaterial; skin: StandardMaterial; cloth: StandardMaterial; extremity: StandardMaterial } {
@@ -2026,9 +2474,9 @@ export class MemoryScene {
       return this.echoMaterials;
     }
     if (!this.presentMaterials) {
-      const cloth = material(this.scene, "present-cloth", new Color3(0.115, 0.12, 0.14));
+      const cloth = material(this.scene, "present-cloth", new Color3(0.17, 0.18, 0.21));
       this.presentMaterials = {
-        jacket: material(this.scene, "present-jacket", new Color3(0.52, 0.31, 0.12), new Color3(0.05, 0.014, 0)),
+        jacket: material(this.scene, "present-jacket", new Color3(0.62, 0.33, 0.09), new Color3(0.03, 0.008, 0)),
         skin: material(this.scene, "present-skin", new Color3(0.46, 0.3, 0.21)),
         cloth,
         extremity: cloth,
@@ -2345,7 +2793,7 @@ export class MemoryScene {
     const restAlpha = focusExit ? CAMERA_ALPHA_EXIT : CAMERA_ALPHA;
     this.camera.alpha += (restAlpha + this.idleDrift() - this.camera.alpha) * 0.12;
     this.camera.radius += ((focusExit ? CAMERA_RADIUS_EXIT : CAMERA_RADIUS) - this.camera.radius) * 0.12;
-    const shaftReach = exitOpen ? 0.15 : 0.06;
+    const shaftReach = exitOpen ? 0.09 : 0.035;
     this.visuals.exit.light.intensity = exitOpen ? 3 + Math.sin(performance.now() * 0.004) * 0.25 : 1.1;
     this.visuals.exit.portalMaterial.emissiveColor = exitOpen ? new Color3(0.65, 0.42, 0.18) : new Color3(0.08, 0.08, 0.07);
     this.visuals.exit.portalMaterial.alpha = exitOpen ? 0.65 : 0.16;
