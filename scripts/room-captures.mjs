@@ -26,15 +26,30 @@ const keysForFrame = (frame) => {
   return keys;
 };
 
-const beyondDoor = (state) => (state.actors.find((a) => a.id === "present")?.x ?? 0) > (state.door?.rect.x ?? 0) + 40;
+// Beat predicates run in-page, once per animation frame. Polling them over the
+// wire missed narrow windows — Trace Weight's "both pushing while the exit is
+// open" can open and close between two round trips.
 const beats = {
-  awakening: (state) => state.door?.open === true && beyondDoor(state),
-  secondSelf: (state) => state.door?.open === true && beyondDoor(state),
-  crossing: (state) => state.exit.open === true && beyondDoor(state),
-  handNotBody: (state) => state.exit.open === true,
-  traceWeight: (state) => state.forceObject?.force === state.forceObject?.threshold && state.exit.open === true,
-  handoff: (state) => state.handoff?.holder === "present",
-  lastHold: (state) => state.exit.open === true && (state.actors.find((a) => a.id === "present")?.x ?? 0) >= state.exit.x - 220,
+  crossing: "state.exit.open === true && (state.actors.find(a => a.id === 'present')?.x ?? 0) > (state.door?.rect.x ?? 0) + 40",
+  traceWeight: "state.forceObject?.force === state.forceObject?.threshold && state.exit.open === true",
+  handoff: "state.handoff?.carriedByPresent === true || state.handoff?.delivered === true",
+  lastHold: "state.exit.open === true && (state.actors.find(a => a.id === 'present')?.x ?? 0) >= state.exit.x - 220",
+  awakening: "state.door?.open === true",
+  secondSelf: "state.door?.open === true",
+  handNotBody: "state.exit.open === true",
+};
+
+const installBeatWatcher = async (page, expression) => {
+  await page.evaluate((source) => {
+    const predicate = new Function("state", `return Boolean(${source});`);
+    globalThis.__BEAT_HIT__ = false;
+    const tick = () => {
+      const state = globalThis.__I_WAS_SO_I_AM__?.state;
+      if (state && !globalThis.__BEAT_HIT__ && predicate(state)) globalThis.__BEAT_HIT__ = true;
+      globalThis.requestAnimationFrame(tick);
+    };
+    globalThis.requestAnimationFrame(tick);
+  }, expression);
 };
 
 await mkdir(outputDirectory, { recursive: true });
@@ -68,6 +83,7 @@ try {
       return module.goldenFor(id).present;
     }, room);
 
+    await installBeatWatcher(page, beats[room] ?? "false");
     let held = new Set();
     let consumed = 0;
     let captured = false;
@@ -82,8 +98,12 @@ try {
       consumed = runEnd;
       const targetTick = startTick + consumed;
       for (;;) {
-        const state = await page.evaluate(() => globalThis.__I_WAS_SO_I_AM__.state);
-        if (state && beats[room](state)) {
+        const progress = await page.evaluate(() => ({
+          hit: globalThis.__BEAT_HIT__ === true,
+          phase: globalThis.__I_WAS_SO_I_AM__.state?.phase,
+          tapeTick: globalThis.__I_WAS_SO_I_AM__.state?.tapeTick ?? 0,
+        }));
+        if (progress.hit) {
           await setHeldKeys(held, new Set());
           held = new Set();
           await page.waitForTimeout(900);
@@ -92,7 +112,7 @@ try {
           captured = true;
           break;
         }
-        if (state?.phase === "rerecord" || (state?.tapeTick ?? 0) >= targetTick) break;
+        if (progress.phase === "rerecord" || progress.tapeTick >= targetTick) break;
         await page.waitForTimeout(8);
       }
     }
