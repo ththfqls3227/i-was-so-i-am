@@ -21,6 +21,7 @@
     "test:mcp": "node scripts/mcp-browser-smoke.mjs",
     "test:performance": "node scripts/performance-smoke.mjs",
     "test:fp-smoke": "node scripts/fp-smoke.mjs",
+    "test:fp-cross-engine": "node scripts/fp-cross-engine.mjs",
     "captures:fp": "node scripts/fp-captures.mjs",
     "test:visual-diff": "node scripts/visual-diff.mjs",
     "build": "tsc --noEmit && vite build",
