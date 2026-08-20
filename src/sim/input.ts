@@ -80,5 +80,3 @@ export function moveIntent(frame: Frame): { forward: -1 | 0 | 1; strafe: -1 | 0 
     strafe: strafeAxis === 0 ? 0 : strafeAxis > 0 ? 1 : -1,
   };
 }
-</content>
-</invoke>

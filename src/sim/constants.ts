@@ -45,5 +45,3 @@ export const MAX_TAPE_TICKS = TICK_RATE * 30;
 
 /** Collision solver passes. Three is enough to seat a box in an inside corner. */
 export const COLLISION_PASSES = 4;
-</content>
-</invoke>

@@ -18,24 +18,45 @@ const RADIANS_PER_UNIT = TAU / YAW_UNITS;
 const QUADRANT_UNITS = YAW_UNITS / 4;
 const OCTANT_UNITS = YAW_UNITS / 8;
 
-/** Taylor series for sine, carried to the term where the |x| <= PI/4 remainder falls below 1e-12. */
+/**
+ * Taylor series for sine, carried far enough that the |x| <= PI/4 remainder
+ * (x^17/17!) lands below 1e-16 — under the resolution of a double, so the tables
+ * are as exact as the type allows. Every factorial below is an integer a double
+ * holds exactly, and every operation is a spec-pinned `+ - * /`.
+ */
 function sinCore(x: number): number {
   const x2 = x * x;
   return (
     x *
     (1 +
-      x2 * (-1 / 6 + x2 * (1 / 120 + x2 * (-1 / 5040 + x2 * (1 / 362880 + x2 * (-1 / 39916800))))))
+      x2 *
+        (-1 / 6 +
+          x2 *
+            (1 / 120 +
+              x2 *
+                (-1 / 5040 +
+                  x2 *
+                    (1 / 362880 +
+                      x2 * (-1 / 39916800 + x2 * (1 / 6227020800 + x2 * (-1 / 1307674368000))))))))
   );
 }
 
-/** The matching cosine series over the same interval. */
+/** The matching cosine series over the same interval, to x^16/16!. */
 function cosCore(x: number): number {
   const x2 = x * x;
   return (
     1 +
     x2 *
       (-1 / 2 +
-        x2 * (1 / 24 + x2 * (-1 / 720 + x2 * (1 / 40320 + x2 * (-1 / 3628800 + x2 * (1 / 479001600))))))
+        x2 *
+          (1 / 24 +
+            x2 *
+              (-1 / 720 +
+                x2 *
+                  (1 / 40320 +
+                    x2 *
+                      (-1 / 3628800 +
+                        x2 * (1 / 479001600 + x2 * (-1 / 87178291200 + x2 * (1 / 20922789888000))))))))
   );
 }
 
@@ -101,5 +122,3 @@ export function yawUnitsFromRadians(radians: number): number {
 export function radiansFromYawUnits(units: number): number {
   return wrapYawUnits(units) * RADIANS_PER_UNIT;
 }
-</content>
-</invoke>

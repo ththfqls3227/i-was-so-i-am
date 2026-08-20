@@ -87,7 +87,7 @@ export interface RoomDefinition {
   version: number;
   name: string;
   subtitle: string;
-  /** Length of a full recording, and therefore of the replay window before grace. */
+  /** Length of a full recording, and therefore of the replay span before grace. */
   tapeDurationTicks: number;
   /** Extra ticks the present gets after the tape ends, before the run is called. */
   replayGraceTicks: number;
@@ -122,9 +122,7 @@ export interface SimState {
   roomId: string;
   roomVersion: number;
   phase: Phase;
-  /** Ticks since the run began, across every phase. */
-  tick: number;
-  /** Ticks into the current recording or replay. */
+  /** Ticks into the current recording or replay. The only clock the world has. */
   tapeTick: number;
   actors: ActorState[];
   plates: PlateState[];
@@ -132,7 +130,12 @@ export interface SimState {
   exitOpen: boolean;
   success: boolean;
   lastError: FailureCode | null;
-  /** Recording tick the player folded at, or null when the tape ran its full length. Render flourish only. */
+  /**
+   * Recording tick the player folded at, or null when the tape ran its full
+   * length. This describes how the tape was authored, not the state of the
+   * world, so it is deliberately outside the checksum — a tape loaded from
+   * elsewhere has no fold point but must still replay identically.
+   */
   foldedAtTick: number | null;
 }
 
@@ -146,5 +149,3 @@ export interface Tape {
   frames: Frame[];
   checksum: string;
 }
-</content>
-</invoke>

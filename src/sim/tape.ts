@@ -47,5 +47,3 @@ export function validateTape(room: RoomDefinition, tape: Tape): FailureCode | nu
 export function replayFrame(tape: Tape, tick: number): Frame {
   return tick >= 0 && tick < tape.duration ? (tape.frames[tick] ?? NEUTRAL_FRAME) : NEUTRAL_FRAME;
 }
-</content>
-</invoke>

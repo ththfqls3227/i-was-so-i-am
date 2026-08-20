@@ -26,7 +26,9 @@ export function checksumValue(value: unknown): string {
 /**
  * Every field the simulation is allowed to diverge on. Actors are sorted by id
  * because the replay phase adds the echo to the list and ordering must not
- * decide the hash.
+ * decide the hash. `foldedAtTick` is left out on purpose: it records how the
+ * tape was authored, not what the world is doing, and a tape loaded from a
+ * corpus has to hash the same as the recording it came from.
  */
 export function canonicalState(state: SimState): unknown {
   return {
@@ -34,7 +36,6 @@ export function canonicalState(state: SimState): unknown {
     roomId: state.roomId,
     roomVersion: state.roomVersion,
     phase: state.phase,
-    tick: state.tick,
     tapeTick: state.tapeTick,
     actors: [...state.actors].sort((a, b) => a.id.localeCompare(b.id)),
     plates: state.plates,
@@ -42,12 +43,9 @@ export function canonicalState(state: SimState): unknown {
     exitOpen: state.exitOpen,
     success: state.success,
     lastError: state.lastError,
-    foldedAtTick: state.foldedAtTick,
   };
 }
 
 export function checksumState(state: SimState): string {
   return checksumValue(canonicalState(state));
 }
-</content>
-</invoke>
