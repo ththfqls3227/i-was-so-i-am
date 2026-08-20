@@ -119,3 +119,12 @@ body:not(.has-started) .stage { border-radius:20px; }
 @media (max-width:900px),(pointer:coarse) { body.has-started .touch-controls { display:flex; } }
 @media (max-width:760px) { .shell { padding:14px; }.topbar { align-items:start; }.eyebrow { max-width:190px; }.room-progress i { width:70px; }.mission { grid-template-columns:1fr auto; padding:12px 14px; }.tape-panel { grid-column:1/-1; }.rerecord { grid-column:2;grid-row:1;}.debug { grid-column:1/-1; }.screen { padding:18px; }.screen small { display:none; }.screen h2 { font-size:clamp(2.4rem,13vw,4.3rem); margin-bottom:12px; }.screen>p:not(.screen-kicker) { line-height:1.5; margin:6px 0; }.loop-explainer { grid-template-columns:1fr; gap:6px; }.loop-explainer>i { display:none; }.loop-explainer>div { padding:8px 10px; }.primary { margin-top:12px; }.success-card { bottom:12px; }.tutorial-card,body.has-success .tutorial-card { position:relative; left:auto; right:auto; top:auto; bottom:auto; width:100%; grid-template-columns:minmax(0,1fr) auto; gap:8px 10px; padding:10px 12px; border-width:1px 0 0; border-radius:0; opacity:1; }.tutorial-instruction strong { font-size:.95rem; }.tutorial-instruction p { display:block; font-size:.74rem; line-height:1.42; }.tutorial-action { min-width:86px; }.tutorial-checklist { gap:4px; }.tutorial-checklist li { font-size:.62rem; padding:4px 6px; } }
 @media (prefers-reduced-motion:reduce) { * { animation-duration:.01ms!important; transition-duration:.01ms!important; } .pass-banner,.fold-flash { animation:none!important; } }
+.chamber-select { width:min(760px,100%); display:flex; flex-wrap:wrap; justify-content:center; gap:12px 18px; margin:16px 0 2px; }
+.chamber-select section { display:grid; gap:6px; justify-items:center; }
+.chamber-select h3 { margin:0; color:#8d98a8; font:400 .58rem/1 inherit; letter-spacing:.24em; }
+.chamber-select section>div { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; }
+.chamber-select button { padding:7px 11px; border:1px solid #445063; border-radius:9px; background:#0b1119d9; color:#c4cbd3; font-size:.72rem; letter-spacing:.03em; cursor:pointer; }
+.chamber-select button[data-state="next"] { border-color:var(--gold); color:#f4eee2; }
+.chamber-select button:hover:not(:disabled) { border-color:var(--gold); color:#f4eee2; }
+.chamber-select button:disabled { opacity:.35; cursor:not-allowed; }
+@media (max-width:760px) { .chamber-select { gap:8px 12px; margin:10px 0 0; }.chamber-select button { padding:5px 8px; font-size:.64rem; } }

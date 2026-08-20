@@ -4,8 +4,18 @@ import { Simulation, simulationConstants } from "./core/simulation";
 import { SIMULATION_VERSION, TICK_RATE, type ActorId, type ChamberId, type FailureCode, type SimulationState, type Tape } from "./core/types";
 import { CHAMBERS } from "./content/chambers";
 import { goldenFor } from "./content/golden";
-import { FOUR_ROOM_ROUTE } from "./content/manifests";
-import { idleTraceProgress, TraceRecordingProjection, traceFoldWouldFinish, traceRecordingRanOutOfTime, traceRequiredHoldTicks } from "./content/tutorial-timing";
+import { CHAMBER_ROUTE, CHAMBER_SECTORS } from "./content/manifests";
+import {
+  HandRecordingProjection,
+  handFoldWouldFinish,
+  handRecordingRanOutOfTime,
+  idleHandProgress,
+  idleTraceProgress,
+  TraceRecordingProjection,
+  traceFoldWouldFinish,
+  traceRecordingRanOutOfTime,
+  traceRequiredHoldTicks,
+} from "./content/tutorial-timing";
 import { AudioEngine } from "./audio/engine";
 import { MemoryScene } from "./game/MemoryScene";
 
@@ -35,15 +45,18 @@ declare global {
 }
 
 type Locale = "ko" | "en";
-const ROUTE: ChamberId[] = [...FOUR_ROOM_ROUTE];
-const FIRST_ROOM: ChamberId = ROUTE[0] ?? "crossing";
+const ROUTE: ChamberId[] = [...CHAMBER_ROUTE];
+const FIRST_ROOM: ChamberId = ROUTE[0] ?? "awakening";
 const BUILD_ID = "production-journey-20260814";
 const PROGRESS_KEY = "i-was-so-i-am:progress:v1";
 const EXPOSE_TEST_API = import.meta.env.DEV || import.meta.env.VITE_E2E === "true";
 const SHOW_DEBUG_DETAILS = import.meta.env.VITE_PRESENTATION === "true";
 const roomNames: Record<ChamberId, { ko: string; en: string }> = {
-  traceWeight: { ko: "무게의 흔적", en: "Trace Weight" },
+  awakening: { ko: "깨어남", en: "Awakening" },
+  secondSelf: { ko: "두 번째 나", en: "Second Self" },
   crossing: { ko: "건너는 기억", en: "Crossing" },
+  handNotBody: { ko: "몸이 아니라 손", en: "Hand, Not Body" },
+  traceWeight: { ko: "무게의 흔적", en: "Trace Weight" },
   handoff: { ko: "이어받은 마음", en: "Handoff" },
   lastHold: { ko: "마지막 붙듦", en: "Last Hold" },
 };
@@ -54,7 +67,8 @@ const failureCopyMap: Partial<Record<FailureCode, FailureLine>> = {
   "echo-faded": { ko: "메아리가 사라졌습니다 — R로 다시 기록하세요.", en: "The echo has faded. Rerecord with R." },
   "door-closed": { ko: "다리가 닫혔습니다 — R로 다시 기록하고, 윈치를 잡은 채 ⏎로 접으세요.", en: "The bridge closed. Rerecord with R and fold with ⏎ while gripping the winch." },
   "hold-released-early": { ko: "문이 닫혔습니다 — 과거가 손잡이를 놓쳤어요. 붙든 채로 시간을 접으세요.", en: "The door closed — your past let go of the handle. Fold time while still holding." },
-  "carrier-not-staged": { ko: "기억 상자가 접점에 도착하지 못했습니다 — 1회차에 상자를 접점까지 옮기세요.", en: "The memory carrier never reached the junction. Carry it there in pass 1." },
+  "plate-unpressed": { ko: "발판이 눌리지 않았습니다 — 발판 위에 올라서면 문이 열립니다.", en: "Nothing was standing on the plate. The door opens while someone stands on it." },
+  "carrier-not-carried": { ko: "상자가 받침대에 그대로 있습니다 — 상자 곁에서 행동 키를 누른 채 옮기세요.", en: "The carrier never left its pedestal. Hold the action key beside it and carry it." },
   "delivery-gate-closed": { ko: "전달구가 닫혀 있습니다 — 과거가 개폐기를 붙든 채로 시간을 접었는지 확인하세요.", en: "The delivery gate is closed. Make sure your past folds time while still gripping the switch." },
   "delivery-too-slow": { ko: "시간이 다 됐습니다 — 이번엔 2회차에서 상자를 더 빨리 전달하세요. R로 다시 시작.", en: "Time ran out — deliver the carrier faster in pass 2 this time. Restart with R." },
   "block-not-bridged": { ko: "틈이 그대로입니다 — 돌덩이를 끝까지 밀어야 해요.", en: "The gap remains. Push the block all the way." },
@@ -64,6 +78,19 @@ const failureCopyMap: Partial<Record<FailureCode, FailureLine>> = {
 const roomFailureCopyMap: Partial<Record<ChamberId, Partial<Record<FailureCode, FailureLine>>>> = {
   traceWeight: {
     "block-not-bridged": { ko: "무게추를 함께 끝까지 밀어야 해요 — 과거와 같은 면에 서세요.", en: "The weight needs both of you pushing to the end — stand on the same side as your past." },
+  },
+  awakening: {
+    // Nothing here is the recording's fault: chamber 00 is solvable by the
+    // present alone, so both codes describe what to do this pass, not a retake.
+    "plate-unpressed": { ko: "발판 위로 올라서세요 — 문이 열립니다.", en: "Step onto the plate and the door opens." },
+    "echo-faded": { ko: "시간이 다 됐습니다 — 발판을 밟고 열린 문을 지나 빛으로 가세요.", en: "Time ran out. Press the plate, cross the open door, and step into the light." },
+  },
+  secondSelf: {
+    "plate-unpressed": { ko: "메아리가 발판 위에 없습니다 — 1회차에서 발판 위에 선 채로 ⏎로 기록을 끝내세요.", en: "The echo is not on the plate. In pass 1, fold time with ⏎ while standing on it." },
+  },
+  handNotBody: {
+    "plate-unpressed": { ko: "발판이 비어 있습니다 — 2회차에서 발판 위에 서 있어야 메아리의 문이 열립니다.", en: "The plate was empty. Stand on it in pass 2 so the echo's door opens." },
+    "hold-released-early": { ko: "메아리가 스위치에 닿지 못했습니다 — 더 오래 걸은 뒤 기록을 끝내거나, 발판을 더 빨리 밟으세요.", en: "The echo never reached the switch. Record a longer walk before folding, or step onto the plate sooner." },
   },
 };
 
@@ -164,6 +191,7 @@ root.innerHTML = `
           <div><b>2</b><strong id="second-pass-title"></strong><span id="second-pass-copy"></span></div>
         </div>
         <button class="primary" id="play-button"></button>
+        <div class="chamber-select" id="chamber-select"></div>
         <small id="intro-controls"></small>
       </div>
       <div class="screen pause-screen" id="pause-screen" hidden>
@@ -217,7 +245,12 @@ interface SavedProgress {
   nextRoom: ChamberId;
   locale: Locale;
   muted?: boolean;
+  /** Chambers finished at least once. Absent in records written before chamber select existed. */
+  cleared?: ChamberId[];
 }
+
+/** Chambers finished so far, in route order. Drives which select buttons unlock. */
+let clearedRooms: ChamberId[] = [];
 
 function readProgress(): SavedProgress | null {
   try {
@@ -225,7 +258,12 @@ function readProgress(): SavedProgress | null {
     if (!raw) return null;
     const value = JSON.parse(raw) as Partial<SavedProgress>;
     if (!ROUTE.includes(value.nextRoom as ChamberId) || (value.locale !== "ko" && value.locale !== "en")) return null;
-    return value as SavedProgress;
+    // An older record simply has no cleared list; everything before its next
+    // room was plainly finished, so the archive opens where the player left it.
+    const cleared = Array.isArray(value.cleared)
+      ? value.cleared.filter((id): id is ChamberId => ROUTE.includes(id))
+      : ROUTE.slice(0, ROUTE.indexOf(value.nextRoom as ChamberId));
+    return { ...(value as SavedProgress), cleared };
   } catch {
     return null;
   }
@@ -233,18 +271,85 @@ function readProgress(): SavedProgress | null {
 
 function writeProgress(nextRoom: ChamberId): void {
   try {
-    localStorage.setItem(PROGRESS_KEY, JSON.stringify({ nextRoom, locale, muted: audio.isMuted } satisfies SavedProgress));
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify({
+      nextRoom,
+      locale,
+      muted: audio.isMuted,
+      cleared: clearedRooms,
+    } satisfies SavedProgress));
   } catch {
     // Progress is optional; storage denial must never block play.
   }
 }
 
+function markCleared(id: ChamberId): void {
+  if (clearedRooms.includes(id)) return;
+  clearedRooms = ROUTE.filter((room) => room === id || clearedRooms.includes(room));
+  updateChamberSelect();
+}
+
 function clearProgress(): void {
+  clearedRooms = [];
+  updateChamberSelect();
   try {
     localStorage.removeItem(PROGRESS_KEY);
   } catch {
     // Progress is optional; storage denial must never block play.
   }
+}
+
+// ---------------------------------------------------------------------------
+// Chamber select. Built once, on the title screen, and never rebuilt: a room
+// change only rewrites the labels and the disabled flags of buttons that
+// already exist, so entering a chamber allocates nothing.
+// ---------------------------------------------------------------------------
+const chamberSelectButtons = new Map<ChamberId, HTMLButtonElement>();
+const chamberSelectHeadings: Array<[HTMLElement, (typeof CHAMBER_SECTORS)[number]]> = [];
+
+function buildChamberSelect(): void {
+  const host = queryElement("#chamber-select");
+  if (!host) return;
+  for (const sector of CHAMBER_SECTORS) {
+    const group = document.createElement("section");
+    const heading = document.createElement("h3");
+    chamberSelectHeadings.push([heading, sector]);
+    group.appendChild(heading);
+    const row = document.createElement("div");
+    for (const id of sector.chambers) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.chamber = id;
+      button.addEventListener("click", () => { enterChamber(id); });
+      row.appendChild(button);
+      chamberSelectButtons.set(id, button);
+    }
+    group.appendChild(row);
+    host.appendChild(group);
+  }
+}
+
+function updateChamberSelect(): void {
+  const next = ROUTE.find((id) => !clearedRooms.includes(id)) ?? null;
+  for (const [heading, sector] of chamberSelectHeadings) {
+    const name = sector.name[locale];
+    if (heading.textContent !== name) heading.textContent = name;
+  }
+  for (const [id, button] of chamberSelectButtons) {
+    const cleared = clearedRooms.includes(id);
+    const unlocked = cleared || id === next;
+    const label = `${String(ROUTE.indexOf(id) + 1).padStart(2, "0")} ${roomNames[id][locale]}`;
+    if (button.textContent !== label) button.textContent = label;
+    if (button.disabled !== !unlocked) button.disabled = !unlocked;
+    const stateLabel = cleared ? "cleared" : unlocked ? "next" : "locked";
+    if (button.dataset.state !== stateLabel) button.dataset.state = stateLabel;
+  }
+}
+
+function enterChamber(id: ChamberId): void {
+  audio.trigger("ui");
+  writeProgress(id);
+  switchChamber(id);
+  beginJourney();
 }
 
 function setText(selector: string, value: string): void {
@@ -298,6 +403,11 @@ function presentActor(state: Readonly<SimulationState>): SimulationState["actors
 const traceProjection = new TraceRecordingProjection();
 let traceProgress = idleTraceProgress();
 
+// Hand, Not Body has the same blind spot for the same reason — the past is
+// pinned against a door it cannot open — so its card reads a projection too.
+const handProjection = new HandRecordingProjection();
+let handProgress = idleHandProgress();
+
 // A held action key that never lands on anything is the one dead end the
 // stage copy cannot describe: the actor looks busy while gripping nothing, and
 // nothing on screen changes. After this many ticks of it, say so.
@@ -310,11 +420,21 @@ let gripsNothingSinceTick: number | null = null;
 // the moment it asks for it until the fold that keeps the past pushing. The
 // exemption is keyed to those stage identities so it stays true no matter how
 // long the player lingers on them.
-const STAGES_THAT_ASK_TO_HOLD_NOTHING = new Set(["trace-record-push", "trace-fold", "trace-out-of-time"]);
+const STAGES_THAT_ASK_TO_HOLD_NOTHING = new Set([
+  "trace-record-push",
+  "trace-fold",
+  "trace-out-of-time",
+  "hand-record-walk",
+  "hand-record-wait",
+  "hand-fold",
+  "hand-out-of-time",
+]);
 
 function resetTutorialSignals(): void {
   traceProjection.reset();
   traceProgress = idleTraceProgress();
+  handProjection.reset();
+  handProgress = idleHandProgress();
   gripsNothingSinceTick = null;
 }
 
@@ -340,8 +460,17 @@ function gripsNothing(state: Readonly<SimulationState>): boolean {
 }
 
 function trackTutorialSignals(state: Readonly<SimulationState>, recordedFrames: readonly InputFrame[]): void {
-  if (state.chamberId !== "traceWeight" || state.phase !== "recording") return;
-  traceProgress = traceProjection.advance(recordedFrames);
+  if (state.phase !== "recording") return;
+  if (state.chamberId === "traceWeight") traceProgress = traceProjection.advance(recordedFrames);
+  if (state.chamberId === "handNotBody") handProgress = handProjection.advance(recordedFrames);
+}
+
+/** True while the controlled actor is standing on the chamber's plate. */
+function standsOnPlate(state: Readonly<SimulationState>): boolean {
+  const plate = state.plate;
+  const actor = controlledActor(state);
+  if (!plate || !actor) return false;
+  return actor.x >= plate.x && actor.x <= plate.x + plate.width && actor.y >= plate.y && actor.y <= plate.y + plate.height;
 }
 
 function inputLabel(kind: "move" | "act" | "release" | "reset" | "fold"): { key: string; action: string } {
@@ -376,6 +505,289 @@ function rerecordMessage(state: Readonly<SimulationState>, korean: boolean): Tut
     checklist: [
       { text: korean ? "R로 즉시 다시 기록" : "Rerecord now with R", state: "active" },
     ],
+  };
+}
+
+function awakeningTutorial(state: Readonly<SimulationState>, korean: boolean): TutorialMessage {
+  const pass = passLabels(korean);
+  const onPlate = standsOnPlate(state);
+  if (state.phase === "recording") {
+    // Nothing recorded here is load-bearing: the present presses the plate
+    // itself in pass 2, so any fold past the one-second minimum finishes.
+    const checklist: TutorialMessage["checklist"] = [
+      { text: korean ? "발판 위로 걸어가기" : "Walk onto the plate", state: onPlate ? "done" : "active" },
+      { text: korean ? "문이 열리는 것 보기" : "Watch the door open", state: state.door?.open ? "done" : onPlate ? "active" : "next" },
+      { text: korean ? "⏎로 기록 끝내기" : "End the recording with ⏎", state: canFoldNow(state) ? "active" : "next" },
+    ];
+    if (!onPlate && !state.door?.open) {
+      return {
+        stage: "awakening-move-plate",
+        pass: pass.record,
+        step: "1 / 3",
+        title: korean ? "발판 위로 올라서세요" : "Step onto the plate",
+        body: korean ? "이 방에서 하는 모든 행동이 그대로 기록됩니다." : "Everything you do in this room is recorded exactly.",
+        ...tutorialInput("move"),
+        checklist,
+      };
+    }
+    if (!canFoldNow(state)) {
+      return {
+        stage: "awakening-watch-door",
+        pass: pass.record,
+        step: "2 / 3",
+        title: korean ? "문이 열렸습니다" : "The door is open",
+        body: korean ? "발판이 잠금을 풀었습니다 — 문은 이제 닫히지 않습니다." : "The plate released the lock — the door stays up now.",
+        ...tutorialInput("move"),
+        checklist,
+      };
+    }
+    return {
+      stage: "awakening-fold",
+      pass: pass.record,
+      step: "3 / 3",
+      title: korean ? "⏎로 기록을 끝내세요" : "End the recording with ⏎",
+      body: korean ? "지금 자세 그대로 기록을 마칩니다. 곧바로 2회차가 시작됩니다." : "The recording ends in this pose, and pass 2 begins right away.",
+      ...tutorialInput("fold"),
+      checklist,
+    };
+  }
+  const doorOpen = state.door?.open === true;
+  const checklist: TutorialMessage["checklist"] = [
+    { text: korean ? "발판 밟기" : "Press the plate", state: doorOpen ? "done" : "active" },
+    { text: korean ? "문 지나가기" : "Pass the door", state: state.success ? "done" : doorOpen ? "active" : "next" },
+    { text: korean ? "빛으로 들어가기" : "Enter the light", state: state.success ? "done" : doorOpen ? "active" : "next" },
+  ];
+  if (state.success) {
+    return {
+      stage: "awakening-complete",
+      pass: korean ? "기억 완성" : "MEMORY COMPLETE",
+      step: korean ? "완료" : "DONE",
+      title: korean ? "첫 기억을 지나왔습니다" : "You moved through the first memory",
+      body: korean ? "여기까지는 혼자서도 됩니다. 다음 방부터는 아닙니다." : "This far you can go alone. Not from the next room on.",
+      key: "✓",
+      action: korean ? "다음 기억으로" : "Continue",
+      checklist,
+    };
+  }
+  if (!doorOpen) {
+    return {
+      stage: "awakening-step-plate",
+      pass: pass.cooperate,
+      step: "1 / 2",
+      title: korean ? "발판을 밟으세요" : "Step onto the plate",
+      body: korean ? "청록색 과거는 자기 기록을 따라갈 뿐입니다 — 문은 당신이 여세요." : "Your cyan past only repeats its recording — open the door yourself.",
+      ...tutorialInput("move"),
+      checklist,
+    };
+  }
+  return {
+    stage: "awakening-exit",
+    pass: pass.cooperate,
+    step: "2 / 2",
+    title: korean ? "열린 문을 지나 빛으로 가세요" : "Cross the open door into the light",
+    body: korean ? "발판이 문을 풀어 두었습니다." : "The plate left the door unlocked.",
+    ...tutorialInput("move"),
+    checklist,
+  };
+}
+
+function secondSelfTutorial(state: Readonly<SimulationState>, korean: boolean): TutorialMessage {
+  const pass = passLabels(korean);
+  const onPlate = standsOnPlate(state);
+  if (state.phase === "recording") {
+    // The plate only answers to the echo, and the fold keeps the pose but not
+    // the walk: standing on it right now is exactly what makes the fold work,
+    // and it is visible on screen, so the card can gate on the live state.
+    const foldReady = onPlate && canFoldNow(state);
+    const checklist: TutorialMessage["checklist"] = [
+      { text: korean ? "발판 위에 서기" : "Stand on the plate", state: onPlate ? "done" : "active" },
+      { text: korean ? "선 채로 ⏎ 기록 끝내기" : "Fold with ⏎ while standing on it", state: foldReady ? "active" : "next" },
+      { text: korean ? "2회차에 문 지나가기" : "Cross in pass 2", state: "next" },
+    ];
+    if (!onPlate) {
+      return {
+        stage: "secondSelf-move-plate",
+        pass: pass.record,
+        step: "1 / 2",
+        title: korean ? "위쪽 발판 위에 서세요" : "Stand on the plate above",
+        body: korean ? "이 발판은 메아리의 무게만 인식합니다 — 지금의 나는 문을 열 수 없습니다." : "This plate only feels the echo's weight — your present self cannot open the door.",
+        ...tutorialInput("move"),
+        checklist,
+      };
+    }
+    if (!canFoldNow(state)) {
+      return {
+        stage: "secondSelf-hold-plate",
+        pass: pass.record,
+        step: "1 / 2",
+        title: korean ? "그대로 서 계세요" : "Stay standing",
+        body: korean ? "곧 기록을 끝낼 수 있습니다." : "You will be able to end the recording in a moment.",
+        ...tutorialInput("move"),
+        checklist,
+      };
+    }
+    return {
+      stage: "secondSelf-fold",
+      pass: pass.record,
+      step: "2 / 2",
+      title: korean ? "⏎ — 여기 선 채로 기록을 끝내세요" : "⏎ — end the recording standing right here",
+      body: korean ? "메아리는 남은 시간 동안 이 발판 위에 서 있게 됩니다." : "Your echo stays on this plate for the rest of the replay.",
+      ...tutorialInput("fold"),
+      checklist,
+    };
+  }
+  const doorOpen = state.door?.open === true;
+  const present = presentActor(state);
+  const beyondDoor = Boolean(present && state.door && present.x > state.door.rect.x + state.door.rect.width);
+  const checklist: TutorialMessage["checklist"] = [
+    { text: korean ? "메아리가 발판을 누름" : "The echo holds the plate", state: doorOpen ? "done" : "next" },
+    { text: korean ? "열린 문 지나가기" : "Cross the open door", state: beyondDoor ? "done" : doorOpen ? "active" : "next" },
+    { text: korean ? "빛으로 들어가기" : "Enter the light", state: state.success ? "done" : beyondDoor ? "active" : "next" },
+  ];
+  if (state.success) {
+    return {
+      stage: "secondSelf-complete",
+      pass: korean ? "기억 완성" : "MEMORY COMPLETE",
+      step: korean ? "완료" : "DONE",
+      title: korean ? "혼자서는 열 수 없는 문이었습니다" : "That door could not be opened alone",
+      body: korean ? "메아리가 서 있어 주었기에 지나올 수 있었습니다." : "You crossed because your echo stood there.",
+      key: "✓",
+      action: korean ? "다음 기억으로" : "Continue",
+      checklist,
+    };
+  }
+  if (!doorOpen) {
+    return {
+      stage: "secondSelf-wait-door",
+      pass: pass.cooperate,
+      step: "1 / 2",
+      title: korean ? "메아리가 발판에 도착하면 문이 열립니다" : "The door opens once the echo reaches the plate",
+      body: korean ? "문 앞으로 가서 기다리세요." : "Walk to the door and wait there.",
+      ...tutorialInput("move"),
+      checklist,
+    };
+  }
+  return {
+    stage: "secondSelf-cross",
+    pass: pass.cooperate,
+    step: "2 / 2",
+    title: korean ? "문을 지나 빛으로 가세요" : "Cross the door into the light",
+    body: korean ? "메아리가 발판에서 내려오면 문은 닫힙니다." : "The door shuts the moment the echo steps off.",
+    ...tutorialInput("move"),
+    checklist,
+  };
+}
+
+function handNotBodyTutorial(state: Readonly<SimulationState>, korean: boolean): TutorialMessage {
+  const pass = passLabels(korean);
+  if (state.phase === "recording") {
+    const pilot = recordingActor(state);
+    const holding = pilot?.actionHeld === true;
+    // The recorded walk cannot be watched — the door pins the past within a
+    // second — so the fold is offered off the projection, never off elapsed
+    // ticks. The card never asks for a fold that would strand the echo.
+    const ready = handFoldWouldFinish(handProgress);
+    const outOfTime = handRecordingRanOutOfTime(handProgress, state.tapeTick);
+    const checklist: TutorialMessage["checklist"] = [
+      { text: korean ? "오른쪽 + 행동 키 누르기" : "Hold right + action", state: holding ? "done" : "active" },
+      { text: korean ? "메아리가 스위치까지 걷기" : "Walk the echo to the switch", state: ready ? "done" : holding ? "active" : "next" },
+      { text: korean ? "⏎ 기록 끝내기" : "End the recording with ⏎", state: ready && canFoldNow(state) ? "active" : "next" },
+    ];
+    if (outOfTime) {
+      return {
+        stage: "hand-out-of-time",
+        pass: pass.record,
+        step: korean ? "복구" : "RECOVER",
+        title: korean ? "이 기록에는 걸을 시간이 남지 않았습니다" : "This recording has no walking time left",
+        body: korean ? "R로 다시 기록하고, 처음부터 오른쪽과 행동 키를 함께 누르세요." : "Press R and record again, holding right and action from the first tick.",
+        ...tutorialInput("reset"),
+        checklist,
+      };
+    }
+    if (!holding) {
+      return {
+        stage: "hand-record-walk",
+        pass: pass.record,
+        step: "1 / 3",
+        title: korean ? "오른쪽으로 걸으면서 행동 키도 함께 누르세요" : "Walk right and hold the action key too",
+        body: korean ? "곧 닫힌 문에 막힙니다. 그래도 괜찮습니다 — 기록되는 것은 위치가 아니라 입력입니다." : "You will be stopped by a shut door. That is fine — what is recorded is the input, not the position.",
+        ...tutorialInput("act"),
+        checklist,
+      };
+    }
+    if (!ready) {
+      const percent = Math.round(handProgress.echoTravelRatio * 100);
+      return {
+        stage: "hand-record-wait",
+        pass: pass.record,
+        step: "2 / 3",
+        title: korean ? "그대로 누르고 계세요" : "Keep both keys down",
+        body: korean
+          ? `2회차의 메아리는 열린 문을 지나 스위치까지 ${percent}% 걸었습니다.`
+          : `In pass 2 your echo walks through the opened door — ${percent}% of the way to the switch.`,
+        ...tutorialInput("act"),
+        checklist,
+      };
+    }
+    return {
+      stage: "hand-fold",
+      pass: pass.record,
+      step: "3 / 3",
+      title: korean ? "⏎ 기록 끝내기" : "End the recording with ⏎",
+      body: korean ? "메아리는 스위치를 잡은 채로 남습니다." : "Your echo stays with the switch in hand.",
+      ...tutorialInput("fold"),
+      checklist,
+    };
+  }
+  const onPlate = standsOnPlate(state);
+  const exitOpen = state.exit.open;
+  const checklist: TutorialMessage["checklist"] = [
+    { text: korean ? "발판 위에 서기" : "Stand on the plate", state: onPlate || exitOpen ? "done" : "active" },
+    { text: korean ? "메아리가 스위치를 잡을 때까지" : "Wait for the echo to grip the switch", state: exitOpen ? "done" : onPlate ? "active" : "next" },
+    { text: korean ? "빛으로 들어가기" : "Enter the light", state: state.success ? "done" : exitOpen ? "active" : "next" },
+  ];
+  if (state.success) {
+    return {
+      stage: "hand-complete",
+      pass: korean ? "기억 완성" : "MEMORY COMPLETE",
+      step: korean ? "완료" : "DONE",
+      title: korean ? "막혀 있던 걸음이 길이 되었습니다" : "The blocked walk became a way",
+      body: korean ? "몸은 문 앞에 멈췄지만, 손은 계속 가고 있었습니다." : "The body stopped at the door. The hand kept going.",
+      key: "✓",
+      action: korean ? "다음 기억으로" : "Continue",
+      checklist,
+    };
+  }
+  if (exitOpen) {
+    return {
+      stage: "hand-exit",
+      pass: pass.cooperate,
+      step: "3 / 3",
+      title: korean ? "빛이 열렸습니다 — 아래쪽 출구로 가세요" : "The light is open — go to the exit below",
+      body: korean ? "메아리가 스위치를 놓지 않는 한 빛은 열려 있습니다." : "The light stays open as long as the echo keeps its grip.",
+      ...tutorialInput("move"),
+      checklist,
+    };
+  }
+  if (!onPlate) {
+    return {
+      stage: "hand-step-plate",
+      pass: pass.cooperate,
+      step: "1 / 3",
+      title: korean ? "발판 위에 서세요 — 메아리의 문이 열립니다" : "Stand on the plate — it opens the echo's door",
+      body: korean ? "이 발판은 지금의 나만 누를 수 있습니다." : "Only your living self can press this plate.",
+      ...tutorialInput("move"),
+      checklist,
+    };
+  }
+  return {
+    stage: "hand-hold-plate",
+    pass: pass.cooperate,
+    step: "2 / 3",
+    title: korean ? "발판 위에서 기다리세요" : "Wait here on the plate",
+    body: korean ? "메아리가 문을 지나 스위치를 잡으면 빛이 열립니다." : "The light opens once the echo passes the door and grips the switch.",
+    ...tutorialInput("move"),
+    checklist,
   };
 }
 
@@ -663,47 +1075,26 @@ function handoffTutorial(state: Readonly<SimulationState>, korean: boolean): Tut
   }
   if (state.phase === "recording") {
     const pilot = recordingActor(state);
-    const carrying = handoff.holder === "past";
     const gripping = hold?.active === true;
-    const foldReady = canFoldNow(state);
+    // The grip is visible while it is recorded, so the fold gate is the live
+    // state: hold the switch, fold, and the gate is open for the whole replay.
+    const foldReady = gripping && canFoldNow(state);
     const checklist: TutorialMessage["checklist"] = [
-      { text: korean ? "상자를 교차점에 내려놓기" : "Stage the carrier at the junction", state: handoff.stagedByPast ? "done" : "active" },
-      { text: korean ? "개폐기를 붙들기" : "Grip the gate switch", state: gripping ? "done" : handoff.stagedByPast ? "active" : "next" },
-      { text: korean ? "⏎ 시간 접기" : "Fold time with ⏎", state: handoff.stagedByPast && gripping && foldReady ? "active" : "next" },
+      { text: korean ? "위쪽 개폐기 붙들기" : "Grip the gate switch above", state: gripping ? "done" : "active" },
+      { text: korean ? "붙든 채로 ⏎ 기록 끝내기" : "Fold with ⏎ while gripping", state: foldReady ? "active" : "next" },
+      { text: korean ? "2회차에 상자 옮기기" : "Carry the box in pass 2", state: "next" },
     ];
-    if (!handoff.stagedByPast) {
-      if (!carrying) {
-        const nearCarrier = Boolean(pilot && distanceToPoint(pilot, handoff.x, handoff.y) <= handoff.radius);
-        return {
-          stage: nearCarrier ? "handoff-lift" : "handoff-find-carrier",
-          pass: pass.record,
-          step: "1 / 4",
-          title: korean ? "기억 상자를 들어 올리세요" : "Pick up the memory carrier",
-          body: nearCarrier
-            ? (korean ? "행동 키를 누르고 있으면 상자를 듭니다." : "Hold the action key to lift the carrier.")
-            : (korean ? "청록색으로 빛나는 상자로 가세요." : "Walk to the glowing cyan carrier."),
-          ...(nearCarrier ? tutorialInput("act") : tutorialInput("move")),
-          checklist,
-        };
-      }
-      return {
-        stage: "handoff-stage",
-        pass: pass.record,
-        step: "2 / 4",
-        title: korean ? "황금 교차점에 내려놓으세요" : "Set it down at the gold junction",
-        body: korean ? "행동 키를 누른 채 교차점까지 옮기면 상자가 내려놓입니다." : "Carry it to the junction while holding action — it stages itself there.",
-        ...tutorialInput("act"),
-        checklist,
-      };
-    }
     if (!gripping) {
+      const nearSwitch = Boolean(hold && pilot && distanceToPoint(pilot, hold.x, hold.y) <= hold.radius);
       return {
-        stage: "handoff-switch",
+        stage: nearSwitch ? "handoff-grab-switch" : "handoff-move-switch",
         pass: pass.record,
-        step: "3 / 4",
-        title: korean ? "개폐기로 가서 붙드세요 — 전달구가 열립니다" : "Grip the switch — it opens the delivery gate",
-        body: korean ? "위쪽의 황금 표식이 개폐기입니다. 행동 키를 누르고 계세요." : "The gold marker above is the switch. Keep holding the action key.",
-        ...tutorialInput("act"),
+        step: "1 / 2",
+        title: korean ? "개폐기를 붙드세요 — 전달구가 열립니다" : "Grip the switch — it opens the delivery gate",
+        body: nearSwitch
+          ? (korean ? "행동 키를 누르고 계세요." : "Keep holding the action key.")
+          : (korean ? "왼쪽 위 황금 표식이 개폐기입니다." : "The gold marker at the upper left is the switch."),
+        ...(nearSwitch ? tutorialInput("act") : tutorialInput("move")),
         checklist,
       };
     }
@@ -711,9 +1102,9 @@ function handoffTutorial(state: Readonly<SimulationState>, korean: boolean): Tut
       return {
         stage: "handoff-hold-switch",
         pass: pass.record,
-        step: "3 / 4",
+        step: "1 / 2",
         title: korean ? "그대로 붙들고 있으세요" : "Keep holding",
-        body: korean ? "곧 시간을 접을 수 있습니다." : "You will be able to fold time in a moment.",
+        body: korean ? "곧 기록을 끝낼 수 있습니다." : "You will be able to end the recording in a moment.",
         ...tutorialInput("act"),
         checklist,
       };
@@ -721,51 +1112,43 @@ function handoffTutorial(state: Readonly<SimulationState>, korean: boolean): Tut
     return {
       stage: "handoff-fold",
       pass: pass.record,
-      step: "4 / 4",
-      title: korean ? "⏎ 시간 접기 — 개폐기는 계속 붙들려 있습니다" : "Fold time with ⏎ — the switch stays held",
-      body: korean ? "과거가 전달구를 열어 두는 동안 현재가 상자를 옮깁니다." : "While your past keeps the gate open, your present moves the carrier.",
+      step: "2 / 2",
+      title: korean ? "⏎ — 개폐기는 계속 붙들려 있습니다" : "⏎ — the switch stays held",
+      body: korean ? "메아리가 전달구를 열어 두는 동안 상자를 옮기게 됩니다." : "While your echo holds the gate open, you move the box.",
       ...tutorialInput("fold"),
       checklist,
     };
   }
+  const carrying = handoff.holder === "present";
   const checklist: TutorialMessage["checklist"] = [
-    { text: korean ? "접점에서 상자 받기" : "Receive the carrier", state: handoff.receivedByPresent ? "done" : "active" },
-    { text: korean ? "위쪽 길로 옮기기" : "Carry it onto the upper route", state: handoff.redirectedByPresent ? "done" : handoff.receivedByPresent ? "active" : "next" },
-    { text: korean ? "전달구에 넣기" : "Deliver it through the gate", state: handoff.delivered ? "done" : handoff.redirectedByPresent ? "active" : "next" },
+    { text: korean ? "받침대의 상자 들기" : "Lift the box from its pedestal", state: handoff.carriedByPresent ? "done" : "active" },
+    { text: korean ? "열린 전달구로 옮기기" : "Carry it through the open gate", state: handoff.delivered ? "done" : handoff.carriedByPresent ? "active" : "next" },
+    { text: korean ? "빛으로 들어가기" : "Enter the light", state: state.success ? "done" : handoff.delivered ? "active" : "next" },
   ];
   if (state.success) {
     return {
       stage: "handoff-complete",
       pass: korean ? "기억 완성" : "MEMORY COMPLETE",
       step: korean ? "완료" : "DONE",
-      title: korean ? "기억이 손에서 손으로 이어졌습니다" : "The memory passed from hand to hand",
-      body: korean ? "내가 내려놓은 것을, 내가 이어받았습니다." : "What I set down, I received.",
+      title: korean ? "내가 열어둔 길로, 내가 지나왔습니다" : "I went through the way I held open",
+      body: korean ? "손 하나는 저기 남고, 손 하나는 여기까지 왔습니다." : "One hand stayed back there. One hand came this far.",
       key: "✓",
       action: korean ? "다음 기억으로" : "Continue",
       checklist,
     };
   }
-  if (!handoff.receivedByPresent) {
+  if (!carrying && !handoff.delivered) {
+    const present = presentActor(state);
+    const nearCarrier = Boolean(present && distanceToPoint(present, handoff.x, handoff.y) <= handoff.radius);
     return {
-      stage: "handoff-receive",
+      stage: nearCarrier ? "handoff-lift" : "handoff-find-carrier",
       pass: pass.cooperate,
-      step: "1 / 4",
-      title: korean ? "접점으로 가서 상자를 받으세요" : "Go to the junction and receive the carrier",
-      body: handoff.stagedByPast
-        ? (korean ? "상자가 접점에 있습니다 — 곁에서 행동 키를 누르고 있으세요." : "The carrier waits at the junction — hold the action key beside it.")
-        : (korean ? "청록색 과거가 상자를 옮기는 중입니다 — 접점에서 기다리세요." : "Your cyan past is still carrying it — wait at the junction."),
-      ...tutorialInput("act"),
-      checklist,
-    };
-  }
-  if (!handoff.redirectedByPresent) {
-    return {
-      stage: "handoff-redirect",
-      pass: pass.cooperate,
-      step: "2 / 4",
-      title: korean ? "상자를 위쪽 길로 옮기세요" : "Carry the carrier onto the upper route",
-      body: korean ? "행동 키를 누른 채 위로 이동하세요." : "Keep holding action and move upward.",
-      ...tutorialInput("act"),
+      step: "1 / 3",
+      title: korean ? "아래쪽 받침대의 상자를 드세요" : "Lift the box from the pedestal below",
+      body: nearCarrier
+        ? (korean ? "행동 키를 누르고 있으면 상자를 듭니다." : "Hold the action key to lift it.")
+        : (korean ? "청록색으로 빛나는 상자로 가세요." : "Walk to the glowing cyan box."),
+      ...(nearCarrier ? tutorialInput("act") : tutorialInput("move")),
       checklist,
     };
   }
@@ -773,11 +1156,11 @@ function handoffTutorial(state: Readonly<SimulationState>, korean: boolean): Tut
     return {
       stage: "handoff-deliver",
       pass: pass.cooperate,
-      step: "3 / 4",
-      title: korean ? "과거가 열어둔 전달구에 넣으세요" : "Deliver it through the gate your past opened",
+      step: "2 / 3",
+      title: korean ? "메아리가 열어둔 전달구로 옮기세요" : "Carry it through the gate your echo holds open",
       body: state.door?.open
-        ? (korean ? "전달구가 열려 있습니다 — 오른쪽 위 받침대까지 옮기세요." : "The gate is open — carry it to the cradle on the upper right.")
-        : (korean ? "전달구가 아직 닫혀 있습니다 — 과거가 개폐기를 잡으면 열립니다." : "The gate is still closed — it opens once your past grips the switch."),
+        ? (korean ? "행동 키를 누른 채 오른쪽 받침대까지 가세요." : "Keep holding action and walk to the cradle on the right.")
+        : (korean ? "전달구가 닫혀 있습니다 — 메아리가 개폐기를 잡으면 열립니다." : "The gate is shut — it opens once your echo grips the switch."),
       ...tutorialInput("act"),
       checklist,
     };
@@ -785,7 +1168,7 @@ function handoffTutorial(state: Readonly<SimulationState>, korean: boolean): Tut
   return {
     stage: "handoff-exit",
     pass: pass.cooperate,
-    step: "4 / 4",
+    step: "3 / 3",
     title: korean ? "빛으로 들어가세요" : "Enter the light",
     body: korean ? "전달이 끝났습니다 — 출구가 열려 있습니다." : "The delivery is done — the exit is open.",
     ...tutorialInput("move"),
@@ -921,7 +1304,10 @@ function tutorialMessage(state: Readonly<SimulationState>): TutorialMessage {
   const korean = locale === "ko";
   if (state.phase === "rerecord") return rerecordMessage(state, korean);
   switch (state.chamberId) {
+    case "awakening": return awakeningTutorial(state, korean);
+    case "secondSelf": return secondSelfTutorial(state, korean);
     case "crossing": return crossingTutorial(state, korean);
+    case "handNotBody": return handNotBodyTutorial(state, korean);
     case "traceWeight": return traceWeightTutorial(state, korean);
     case "handoff": return handoffTutorial(state, korean);
     case "lastHold": return lastHoldTutorial(state, korean);
@@ -993,6 +1379,7 @@ function localize(): void {
   setText("#next", copy[locale].continue);
   setText("#ending-title", copy[locale].ending);
   setText("#ending-copy", copy[locale].endingBody);
+  updateChamberSelect();
   const state = window.__I_WAS_SO_I_AM__?.state;
   if (state) {
     setText("#phase-label", phaseCopy(state.phase));
@@ -1053,7 +1440,6 @@ const audioCues = {
   door: false,
   exit: false,
   carried: false,
-  staged: false,
   delivered: false,
   success: false,
 };
@@ -1087,8 +1473,6 @@ function updateAudio(state: Readonly<SimulationState>): void {
   if (exit && !previous.exit) audio.trigger("gate-open");
   const carried = (state.handoff?.holder ?? null) !== null;
   if (carried && !previous.carried) audio.trigger("carrier-pickup");
-  const staged = state.handoff?.stagedByPast === true;
-  if (staged && !previous.staged) audio.trigger("carrier-stage");
   const delivered = state.handoff?.delivered === true;
   if (delivered && !previous.delivered) audio.trigger("carrier-deliver");
 
@@ -1100,7 +1484,6 @@ function updateAudio(state: Readonly<SimulationState>): void {
   previous.door = door;
   previous.exit = exit;
   previous.carried = carried;
-  previous.staged = staged;
   previous.delivered = delivered;
   previous.success = state.success;
 }
@@ -1148,6 +1531,7 @@ function updateUi(state: Readonly<SimulationState>, checksum: string): void {
   window.__I_WAS_SO_I_AM__.checksum = checksum;
   if (state.success && successShownFor !== state.chamberId) {
     successShownFor = state.chamberId;
+    markCleared(state.chamberId);
     setText("#success-ordinal", `MEMORY ${String(index + 1).padStart(2, "0")} COMPLETE`);
     setText("#success-title", chamber.name);
     setText("#success-copy", locale === "ko" ? "과거의 역할이 현재의 길이 되었습니다." : "The role you left behind became a way forward.");
@@ -1235,14 +1619,17 @@ scene.setEventsAdapter({
 });
 scene.setPaused(true);
 scene.setCinematicIdle(true);
+buildChamberSelect();
 const savedProgress = readProgress();
 if (savedProgress) {
   locale = savedProgress.locale;
   currentId = savedProgress.nextRoom;
+  clearedRooms = savedProgress.cleared ?? [];
   scene.switchChamber(currentId);
 } else {
   scene.switchChamber(FIRST_ROOM);
 }
+updateChamberSelect();
 // The engine was constructed with the saved mute state; make the button agree
 // with it, so a returning player does not see SOUND ON over silence.
 if (audio.isMuted) {
