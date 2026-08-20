@@ -55,6 +55,16 @@ export function assertValidInputFrame(frame: InputFrame): void {
   }
 }
 
+/**
+ * The posture a frame leaves behind: which keys are down, without the press and
+ * release edges. Folding repeats this to the end of the tape, so an edge bit
+ * must not survive — a repeated ActionReleased would drop the echo's grip on
+ * every tick of the tail.
+ */
+export function postureOf(frame: InputFrame): InputFrame {
+  return frame & ~(InputBit.ActionPressed | InputBit.ActionReleased);
+}
+
 export function movementIntent(frame: InputFrame): { x: -1 | 0 | 1; y: -1 | 0 | 1 } {
   const horizontal = Number(hasInput(frame, InputBit.Right)) - Number(hasInput(frame, InputBit.Left));
   const vertical = Number(hasInput(frame, InputBit.Down)) - Number(hasInput(frame, InputBit.Up));

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { InputBit, NEUTRAL_INPUT, type InputFrame } from "../src/core/input";
-import { createInitialState, Simulation } from "../src/core/simulation";
+import { createInitialState, Simulation, simulationConstants } from "../src/core/simulation";
 import type { ChamberDefinition, ChamberId, Tape } from "../src/core/types";
 import { CHAMBERS } from "../src/content/chambers";
 import { goldenFor } from "../src/content/golden";
@@ -99,12 +99,17 @@ describe("cooperation contract", () => {
     expect(simulation.state.success).toBe(true);
   });
 
-  it.each(EXPECTED_ROUTE)("authors the %s past tape through a fold, leaving a tail that cannot walk", (chamberId) => {
+  it.each(EXPECTED_ROUTE)("authors the %s past tape through a fold that repeats one steady posture", (chamberId) => {
+    const chamber = CHAMBERS[chamberId];
     const tape = goldenFor(chamberId).past;
-    expect(tape.frames).toHaveLength(CHAMBERS[chamberId].tapeDurationTicks);
-    // The fold keeps the hand and drops the feet, so the fill can hold an
-    // affordance but can never carry the echo into a wall.
-    expect((tape.frames.at(-1) ?? 0) & ~InputBit.ActionHeld).toBe(0);
+    expect(tape.frames).toHaveLength(chamber.tapeDurationTicks);
+    const tail = tape.frames.at(-1) ?? 0;
+    // A posture is which keys are down. Edges are events and must not repeat.
+    expect(tail & (InputBit.ActionPressed | InputBit.ActionReleased)).toBe(0);
+    // Whatever the tail is, every filled tick is the same one — the echo holds
+    // a single pose rather than replaying anything.
+    const filled = tape.frames.slice(-simulationConstants.minTapeTicks);
+    expect(filled.every((frame) => frame === tail)).toBe(true);
   });
 });
 

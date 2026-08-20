@@ -9,7 +9,7 @@ import {
   TARGET_RADIUS,
 } from "./constants";
 import { distanceBetween, distanceToRect, moveActorBy, pointInsideRect } from "./geometry";
-import { hasInput, InputBit, movementIntent, NEUTRAL_INPUT, type InputFrame } from "./input";
+import { hasInput, InputBit, movementIntent, NEUTRAL_INPUT, postureOf, type InputFrame } from "./input";
 import { applyDoor } from "./mechanisms/door";
 import { exitGateOf } from "./mechanisms/exit";
 import { applyForce } from "./mechanisms/force";
@@ -250,17 +250,33 @@ export class Simulation {
   }
 
   /**
-   * Fold time: end the recording at the current tick. The remaining tape is
-   * filled with the last sampled frame stripped down to ActionHeld, so a past
-   * self folded mid-hold keeps holding without walking into walls forever.
+   * The frame the fold would repeat to the end of the tape: the posture being
+   * held right now. Read-only, for a UI that has to tell the player what folding
+   * on this tick would leave their echo doing.
+   */
+  get foldTail(): InputFrame {
+    return postureOf(this.frames[this.frames.length - 1] ?? NEUTRAL_INPUT);
+  }
+
+  /**
+   * Fold time: end the recording at the current tick. The remaining tape repeats
+   * the posture being held — movement included — so "the recording ends in this
+   * pose" is literally what happens: an echo folded mid-stride keeps walking,
+   * and one folded standing still stays put.
+   *
+   * This is deliberately not the old ActionHeld-only fill. That rule existed to
+   * stop an echo walking into a wall forever, but walking into a wall is now a
+   * taught mechanic — chamber 03 records a walk against a shut door precisely so
+   * the echo can finish it in pass 2 — and pinning the feet made the echo's
+   * remaining travel a fixed budget that a slow second pass could eat.
+   *
    * Returns false (and does nothing) unless at least MIN_TAPE_TICKS were recorded.
    */
   foldRecording(): boolean {
     if (!this.canFold) return false;
-    const lastFrame = this.frames[this.frames.length - 1] ?? NEUTRAL_INPUT;
-    const heldOnly = lastFrame & InputBit.ActionHeld;
+    const tail = this.foldTail;
     const foldedAtTick = this.frames.length;
-    while (this.frames.length < this.chamber.tapeDurationTicks) this.frames.push(heldOnly);
+    while (this.frames.length < this.chamber.tapeDurationTicks) this.frames.push(tail);
     this.activeTape = createTape(this.chamber, this.frames);
     this.current = createInitialState(this.chamber, "replay");
     this.current.foldedAtTick = foldedAtTick;

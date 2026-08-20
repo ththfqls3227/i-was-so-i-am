@@ -66,18 +66,31 @@ describe("fold recording", () => {
     expect(simulation.tape).toBeNull();
   });
 
-  it("folds mid-recording into a full-length tape keeping only ActionHeld", () => {
+  it("folds mid-recording into a full-length tape repeating the posture being held", () => {
     const simulation = new Simulation(CROSSING_CHAMBER);
     for (let tick = 0; tick < 24; tick += 1) simulation.step(encodeInput({ right: true }));
     for (let tick = 0; tick < 30; tick += 1) simulation.step(encodeInput({ right: true, actionHeld: true }));
+    expect(simulation.foldTail).toBe(encodeInput({ right: true, actionHeld: true }));
     expect(simulation.foldRecording()).toBe(true);
     expect(simulation.state.phase).toBe("replay");
     expect(simulation.state.foldedAtTick).toBe(54);
     const tape = simulation.tape;
     expect(tape?.frames).toHaveLength(CROSSING_CHAMBER.tapeDurationTicks);
     for (let tick = 54; tick < CROSSING_CHAMBER.tapeDurationTicks; tick += 1) {
-      expect(tape?.frames[tick]).toBe(InputBit.ActionHeld);
+      expect(tape?.frames[tick]).toBe(encodeInput({ right: true, actionHeld: true }));
     }
+  });
+
+  it("drops the press and release edges from the tail it repeats", () => {
+    // A repeated ActionReleased would clear the echo's target on every tick of
+    // the tail; an edge is an event, not a posture.
+    const simulation = new Simulation(CROSSING_CHAMBER);
+    for (let tick = 0; tick < 24; tick += 1) simulation.step(encodeInput({ right: true }));
+    simulation.step(encodeInput({ actionHeld: true, actionPressed: true }));
+    for (let tick = 0; tick < 8; tick += 1) simulation.step(encodeInput({ actionHeld: true }));
+    simulation.step(encodeInput({ left: true, actionHeld: true, actionPressed: true }));
+    expect(simulation.foldTail).toBe(encodeInput({ left: true, actionHeld: true }));
+    expect(simulation.foldTail & InputBit.ActionPressed).toBe(0);
   });
 
   it("does not fold outside the recording phase", () => {
