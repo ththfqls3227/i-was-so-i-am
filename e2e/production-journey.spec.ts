@@ -271,6 +271,10 @@ test("records and replays every authored room through public controls into the a
     await settle(page);
     await expect(page.locator("#success-card"), `${chamberId} ended ${JSON.stringify(outcome)}`).toBeVisible();
     await expect(page.locator("#success-title")).toHaveText(CHAMBERS[chamberId].name);
+    // The clear is banked on the success card, not on the button after it.
+    await expect
+      .poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("i-was-so-i-am:progress:v1") ?? "null")?.cleared))
+      .toContain(chamberId);
     await page.locator("#next").click();
     await settle(page);
     const next = CHAMBER_ROUTE[index + 1];

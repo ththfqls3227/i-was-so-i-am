@@ -285,6 +285,10 @@ function writeProgress(nextRoom: ChamberId): void {
 function markCleared(id: ChamberId): void {
   if (clearedRooms.includes(id)) return;
   clearedRooms = ROUTE.filter((room) => room === id || clearedRooms.includes(room));
+  // Saved the moment it is earned rather than when "next" is pressed: a player
+  // who closes the tab on the success card keeps the room, and so does one who
+  // just finished the last room, where there is no next to press.
+  writeProgress(currentId);
   updateChamberSelect();
 }
 
