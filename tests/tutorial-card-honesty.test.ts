@@ -12,7 +12,7 @@ import {
   TRACE_WEIGHT_CHAMBER,
 } from "../src/content/chambers";
 import { awakeningGolden, crossingGolden, handNotBodyGolden, handoffGolden, lastHoldGolden, recordFoldedTape, secondSelfGolden } from "../src/content/golden";
-import { HandRecordingProjection, handFoldWouldFinish, traceRequiredHoldTicks } from "../src/content/tutorial-timing";
+import { traceRequiredHoldTicks } from "../src/content/tutorial-timing";
 import { recordTraceWeightByCard, replayTraceWeightWithWillingPresent, traceCardFoldOffers, type TraceCardPlay } from "./support/trace-card";
 
 /**
@@ -76,7 +76,7 @@ describe("Trace Weight card keeps its promise under generous timing", () => {
     }
   });
 
-  it("offers the fold only once the recorded walk actually reaches the weight", () => {
+  it("offers the fold no later than the tick the recorded walk reaches the weight", () => {
     // The schedule that used to break: the player lets go, hesitates half a
     // second, then walks. Elapsed-tick gating called this ready while the echo
     // was still 6 walk ticks short of the weight.
@@ -91,13 +91,15 @@ describe("Trace Weight card keeps its promise under generous timing", () => {
     const onTime = replayTraceWeightWithWillingPresent(tape);
     expect(onTime.state.success).toBe(true);
 
-    // One tick earlier the echo is not yet in contact, and the card says so:
-    // folding there strands it, and the weight never takes a second force.
+    // Folding a tick earlier used to strand the echo short of the weight, which
+    // is what the projection was built to prevent. The posture tail removed that
+    // cliff: the recorded stride carries on, so the echo arrives late instead of
+    // never. The card is now conservative rather than exact, and this pins the
+    // cliff as gone — restoring the pinned-feet fill fails here.
     const tooEarly = recordFoldedTape(TRACE_WEIGHT_CHAMBER, [...tape.frames.slice(0, offered - 1)]);
-    const stranded = replayTraceWeightWithWillingPresent(tooEarly);
-    expect(stranded.state.success).toBe(false);
-    expect(stranded.state.forceObject?.x).toBe(TRACE_WEIGHT_CHAMBER.forceObject?.minX);
-    expect(stranded.state.lastError).toBe("block-not-bridged");
+    const later = replayTraceWeightWithWillingPresent(tooEarly);
+    expect(later.state.forceObject?.x).toBe(TRACE_WEIGHT_CHAMBER.forceObject?.maxX);
+    expect(later.state.success).toBe(true);
   });
 
   it("keeps the echo pushing when the fold lands late, and when ⏎ is never pressed", () => {
@@ -219,31 +221,30 @@ describe("the other rooms' cards offer the fold only on a workable recording", (
 });
 
 /**
- * Hand, Not Body records its whole solution against a shut door, so its card
- * has Trace Weight's blind spot for the same reason and answers it the same
- * way: by replaying the frames through the corridor pass 2 will open. These
- * hold that projection to its word.
+ * Hand, Not Body's card used to predict, because the old fold pinned the echo's
+ * feet and so fixed its remaining travel at record time. The fold now repeats
+ * the posture, so a recording made of "right + action" walks the echo to the
+ * switch whenever pass 2 opens the door. There is nothing left to predict: the
+ * posture the card can see is the whole requirement. These tests hold that
+ * claim — every fold the card would offer finishes, from the earliest tick the
+ * core allows to the latest, and against a deliberately slow second pass.
  */
-describe("Hand, Not Body's card offers the fold only on a recording that reaches the switch", () => {
+describe("Hand, Not Body finishes from any fold the card can offer", () => {
   const pushRight = encodeInput({ right: true, actionHeld: true });
   const up = encodeInput({ up: true });
   const down = encodeInput({ down: true });
 
-  /** Ticks at which the card offers "⏎ 기록 끝내기" for these recorded frames. */
-  function foldOffers(frames: readonly InputFrame[]): number[] {
-    const projection = new HandRecordingProjection();
-    const offers: number[] = [];
-    for (let tick = 1; tick <= frames.length; tick += 1) {
-      if (handFoldWouldFinish(projection.advance(frames.slice(0, tick)))) offers.push(tick);
-    }
-    return offers;
+  /** The recording the card asks for: right + action, folded after `ticks`. */
+  function recordedPosture(ticks: number): Tape {
+    return recordFoldedTape(HAND_NOT_BODY_CHAMBER, Array<InputFrame>(ticks).fill(pushRight));
   }
 
   /**
-   * A present self that does its half: stand on the plate holding the echo's
-   * door open, then walk down into the light once the switch is gripped.
+   * A present self that does its half, `dawdleTicks` late. It stands on the
+   * plate holding the echo's door open, then walks down into the light once the
+   * switch is gripped.
    */
-  function replayWithWillingPresent(tape: Tape): Simulation {
+  function replayWithWillingPresent(tape: Tape, dawdleTicks = 0): Simulation {
     const chamber = HAND_NOT_BODY_CHAMBER;
     const plate = chamber.plate;
     if (!plate) throw new Error("Hand, Not Body has no plate");
@@ -251,43 +252,50 @@ describe("Hand, Not Body's card offers the fold only on a recording that reaches
     const error = simulation.loadTape(tape);
     if (error) throw new Error(error);
     const plateY = plate.y + plate.height / 2;
+    let waited = 0;
     while (simulation.state.phase === "replay") {
       const state = simulation.state;
       const present = state.actors.find((actor) => actor.id === "present");
       let frame: InputFrame = NEUTRAL_INPUT;
-      if (!present) {
+      if (waited < dawdleTicks) {
+        waited += 1;
+      } else if (!present) {
         frame = NEUTRAL_INPUT;
       } else if (!state.exit.open) {
-        frame = present.y > plateY ? up : NEUTRAL_INPUT; // hold the plate down
+        frame = present.y > plateY ? up : NEUTRAL_INPUT;
       } else if (present.y < state.exit.y + state.exit.height / 2) {
-        frame = down; // the switch is gripped — drop into the light
+        frame = down;
       }
       simulation.step(frame);
     }
     return simulation;
   }
 
-  it("finishes the room from every tick the card offers the fold", () => {
-    const frames = handNotBodyGolden().past.frames;
-    const offers = foldOffers(frames);
-    expect(offers.length).toBeGreaterThan(0);
-    const failures = offers.filter((tick) => {
-      const folded = recordFoldedTape(HAND_NOT_BODY_CHAMBER, [...frames.slice(0, tick)]);
-      return !replayWithWillingPresent(folded).state.success;
-    });
+  it("finishes from the earliest fold the core allows and from every later one", () => {
+    const failures: number[] = [];
+    for (let ticks = simulationConstants.minTapeTicks; ticks < HAND_NOT_BODY_CHAMBER.tapeDurationTicks; ticks += 7) {
+      if (!replayWithWillingPresent(recordedPosture(ticks)).state.success) failures.push(ticks);
+    }
     expect(failures).toEqual([]);
   });
 
-  it("strands the echo one tick before the first offer — which is why the card counts nothing", () => {
-    const frames = handNotBodyGolden().past.frames;
-    const first = foldOffers(frames)[0];
-    expect(first).toBeDefined();
-    if (first === undefined) return;
-    const tooEarly = recordFoldedTape(HAND_NOT_BODY_CHAMBER, [...frames.slice(0, first - 1)]);
-    const stranded = replayWithWillingPresent(tooEarly);
-    expect(stranded.state.success).toBe(false);
-    expect(stranded.state.exit.open).toBe(false);
-    expect(stranded.state.lastError).toBe("hold-released-early");
+  it("survives a second pass that takes its time getting to the plate", () => {
+    // The reported defect: under the old pinned-feet fold, every tick spent
+    // before the plate came straight out of the echo's walking budget. Three
+    // seconds of dawdling on top of the walk must still finish.
+    const tape = recordedPosture(simulationConstants.minTapeTicks);
+    const dawdles = [0, 15, 30, 60, 90];
+    const failures = dawdles.filter((dawdle) => !replayWithWillingPresent(tape, dawdle).state.success);
+    expect(failures).toEqual([]);
+  });
+
+  it("keeps the promise for a player who holds both keys far longer than needed", () => {
+    // Every extra recorded tick is slack, not overshoot: the echo ends up
+    // pressed into the switch by the far wall rather than walking past it.
+    const late = recordedPosture(HAND_NOT_BODY_CHAMBER.tapeDurationTicks - 1);
+    const simulation = replayWithWillingPresent(late);
+    expect(simulation.state.hold?.creditedActors).toContain("past");
+    expect(simulation.state.success).toBe(true);
   });
 
   it("cannot strand the present off the plate however long the fold's keys stay down", () => {
@@ -309,13 +317,50 @@ describe("Hand, Not Body's card offers the fold only on a recording that reaches
     }
     expect(stranded).toEqual([]);
   });
+});
 
-  it("keeps the promise for a player who holds both keys far longer than needed", () => {
-    // Every extra recorded tick is slack, not overshoot: the echo ends up
-    // pressed into the switch by the far wall rather than walking past it.
-    const late = recordFoldedTape(HAND_NOT_BODY_CHAMBER, Array<InputFrame>(HAND_NOT_BODY_CHAMBER.tapeDurationTicks - 1).fill(pushRight));
-    const simulation = replayWithWillingPresent(late);
-    expect(simulation.state.hold?.creditedActors).toContain("past");
-    expect(simulation.state.success).toBe(true);
+/**
+ * The posture tail is correct for a room that wants a walking echo and fatal
+ * for one whose echo has to keep hold of something. Those rooms' cards refuse
+ * the fold until the feet stop; these pin down why that guard has to exist.
+ */
+describe("folding mid-stride is what the grip rooms' cards guard against", () => {
+  const right = encodeInput({ right: true });
+  const pushRight = encodeInput({ right: true, actionHeld: true });
+  const holdStill = encodeInput({ actionHeld: true });
+  const upRight = encodeInput({ up: true, right: true });
+
+  function replayWith(chamber: ChamberDefinition, tape: Tape, presentFrames: readonly InputFrame[]): Simulation {
+    const simulation = new Simulation(chamber);
+    const error = simulation.loadTape(tape);
+    if (error) throw new Error(error);
+    let index = 0;
+    while (simulation.state.phase === "replay") {
+      simulation.step(presentFrames[index] ?? NEUTRAL_INPUT);
+      index += 1;
+    }
+    return simulation;
+  }
+
+  it("walks the Crossing echo off its winch, and standing still does not", () => {
+    const approach = Array<InputFrame>(24).fill(right);
+    const present = crossingGolden().present;
+    const walking = replayWith(CROSSING_CHAMBER, recordFoldedTape(CROSSING_CHAMBER, [...approach, ...Array<InputFrame>(6).fill(pushRight)]), present);
+    const standing = replayWith(CROSSING_CHAMBER, recordFoldedTape(CROSSING_CHAMBER, [...approach, ...Array<InputFrame>(6).fill(holdStill)]), present);
+    expect(walking.state.success).toBe(false);
+    expect(walking.state.lastError).toBe("door-closed");
+    expect(standing.state.success).toBe(true);
+  });
+
+  it("walks the Second Self echo off its plate, and standing still does not", () => {
+    const present = secondSelfGolden().present;
+    const walking = replayWith(SECOND_SELF_CHAMBER, recordFoldedTape(SECOND_SELF_CHAMBER, Array<InputFrame>(32).fill(upRight)), present);
+    const standing = replayWith(SECOND_SELF_CHAMBER, recordFoldedTape(SECOND_SELF_CHAMBER, [
+      ...Array<InputFrame>(22).fill(upRight),
+      ...Array<InputFrame>(10).fill(NEUTRAL_INPUT),
+    ]), present);
+    expect(walking.state.success).toBe(false);
+    expect(walking.state.lastError).toBe("plate-unpressed");
+    expect(standing.state.success).toBe(true);
   });
 });

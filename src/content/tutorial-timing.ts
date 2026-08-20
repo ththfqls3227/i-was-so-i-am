@@ -1,45 +1,14 @@
 import type { InputFrame } from "../core/input";
 import { isAlignedPusher } from "../core/mechanisms/force";
 import { Simulation, simulationConstants } from "../core/simulation";
-import type { ChamberDefinition, SimulationState } from "../core/types";
+import type { ChamberDefinition } from "../core/types";
 import { CHAMBERS } from "./chambers";
 
 /**
- * What the tutorial cards advance on. It lives here rather than inside the UI
- * so the regression tests can drive a recording exactly the way the card tells
- * a player to, instead of hand-tuned frame counts.
- *
- * Two rooms — Trace Weight and Hand, Not Body — record a beat that cannot be
- * watched while it is recorded, because a shut door pins the past where it
- * stands. Counting elapsed ticks as a stand-in for that walk lies. Both instead
- * replay the frames so far through a copy of the chamber whose door is already
- * open — the corridor pass 2 will hand the echo — and ask the core itself what
- * that echo would be doing. What the card promises is what the simulation says,
- * on the frames actually recorded.
+ * What the Trace Weight tutorial card advances on. It lives here rather than
+ * inside the UI so the regression tests can drive a recording exactly the way
+ * the card tells a player to, instead of hand-tuned frame counts.
  */
-
-/**
- * Steps a projection simulation until it has consumed `frames`, calling
- * `observe` after each tick. Frames are replayed whole, so a UI that samples
- * the tick stream unevenly still reads the same answer as one that sees every
- * tick. Returns the number of frames now projected.
- */
-function projectFrames(
-  simulation: Simulation,
-  projectedTicks: number,
-  frames: readonly InputFrame[],
-  observe: (state: Readonly<SimulationState>) => void,
-): number {
-  let ticks = projectedTicks;
-  while (ticks < frames.length && simulation.state.phase === "recording") {
-    const frame = frames[ticks];
-    if (frame === undefined) break;
-    simulation.step(frame);
-    ticks += 1;
-    observe(simulation.state);
-  }
-  return ticks;
-}
 
 /** Stage facts the Trace Weight recording card reads, all measured off the tape so far. */
 export interface TraceRecordingProgress {
@@ -167,7 +136,13 @@ export class TraceRecordingProjection {
    */
   advance(frames: readonly InputFrame[]): TraceRecordingProgress {
     if (frames.length < this.projectedTicks) this.reset();
-    this.projectedTicks = projectFrames(this.simulation, this.projectedTicks, frames, () => { this.observe(); });
+    while (this.projectedTicks < frames.length && this.simulation.state.phase === "recording") {
+      const frame = frames[this.projectedTicks];
+      if (frame === undefined) break;
+      this.simulation.step(frame);
+      this.projectedTicks += 1;
+      this.observe();
+    }
     return this.progress;
   }
 
@@ -195,117 +170,6 @@ export class TraceRecordingProjection {
       ...this.progress,
       echoWouldPush,
       echoJoinedAtTick: this.progress.echoJoinedAtTick ?? (echoWouldPush ? state.tapeTick : null),
-    };
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Hand, Not Body (chamber 03)
-// ---------------------------------------------------------------------------
-
-/** Stage facts the Hand, Not Body recording card reads, all measured off the tape so far. */
-export interface HandRecordingProgress {
-  /** Folding on this tick leaves the echo gripping the far switch. */
-  echoWouldGrip: boolean;
-  /**
-   * Tick the projected echo first closes on the switch. The replay walks it
-   * there off the same frames, so this — not the fold — is when the light opens.
-   */
-  echoGrippedAtTick: number | null;
-  /** How far along its corridor the projected echo has walked, 0 to 1. */
-  echoTravelRatio: number;
-}
-
-const IDLE_HAND_PROGRESS: HandRecordingProgress = {
-  echoWouldGrip: false,
-  echoGrippedAtTick: null,
-  echoTravelRatio: 0,
-};
-
-export function idleHandProgress(): HandRecordingProgress {
-  return IDLE_HAND_PROGRESS;
-}
-
-/**
- * Ticks pass 2 still owes once the light opens: step off the plate and walk to
- * the exit. Measured along the axes rather than the diagonal, so it over-states
- * the walk — the safe direction, since it only makes the card give up sooner.
- */
-export function handFinishTicks(): number {
-  const chamber = CHAMBERS.handNotBody;
-  const plate = chamber.plate;
-  if (!plate) return simulationConstants.graceTicks;
-  const exit = chamber.exit;
-  const legX = Math.abs(exit.x + exit.width / 2 - (plate.x + plate.width / 2));
-  const legY = Math.abs(exit.y + exit.height / 2 - (plate.y + plate.height / 2));
-  return Math.ceil((legX + legY) / simulationConstants.movePerTick) + simulationConstants.graceTicks;
-}
-
-/** Replay ticks a grip at `tick` would have left for the walk out, against what it needs. */
-function gripFitsTheWindow(tick: number): boolean {
-  const chamber = CHAMBERS.handNotBody;
-  return tick + handFinishTicks() <= chamber.tapeDurationTicks + simulationConstants.graceTicks;
-}
-
-/**
- * True when folding on this tick finishes the room: the echo has the switch,
- * and it closed on it early enough for the present to reach the light.
- */
-export function handFoldWouldFinish(progress: HandRecordingProgress): boolean {
-  return progress.echoWouldGrip && progress.echoGrippedAtTick !== null && gripFitsTheWindow(progress.echoGrippedAtTick);
-}
-
-/**
- * True once no fold from here on could finish — the echo has not reached the
- * switch and the replay window has no room left for the walk out. The card asks
- * for a rerecord instead of offering a fold that would strand the echo.
- */
-export function handRecordingRanOutOfTime(progress: HandRecordingProgress, tapeTick: number): boolean {
-  return !handFoldWouldFinish(progress) && !gripFitsTheWindow(tapeTick);
-}
-
-/** Hand, Not Body with its corridor already open: what pass 2's plate hands the echo. */
-function openedHandNotBody(): ChamberDefinition {
-  const chamber = CHAMBERS.handNotBody;
-  if (!chamber.door) return chamber;
-  return { ...chamber, door: { ...chamber.door, open: true, latched: true } };
-}
-
-/**
- * Hand, Not Body records its whole solution against a shut door: the past is
- * pinned within a second and never moves again, however much further right the
- * player walks. So the card does not watch the recording — it replays it
- * through the corridor the present's plate will open, and asks the core whether
- * that echo would have the switch in hand.
- */
-export class HandRecordingProjection {
-  private simulation = new Simulation(openedHandNotBody());
-  private projectedTicks = 0;
-  private progress: HandRecordingProgress = IDLE_HAND_PROGRESS;
-
-  reset(): void {
-    this.simulation = new Simulation(openedHandNotBody());
-    this.projectedTicks = 0;
-    this.progress = IDLE_HAND_PROGRESS;
-  }
-
-  advance(frames: readonly InputFrame[]): HandRecordingProgress {
-    if (frames.length < this.projectedTicks) this.reset();
-    this.projectedTicks = projectFrames(this.simulation, this.projectedTicks, frames, (state) => { this.observe(state); });
-    return this.progress;
-  }
-
-  private observe(state: Readonly<SimulationState>): void {
-    const chamber = CHAMBERS.handNotBody;
-    const switchPost = chamber.hold;
-    const echo = state.actors[0];
-    const echoWouldGrip = state.hold?.active === true;
-    const reach = switchPost ? switchPost.x - switchPost.radius : chamber.exit.x;
-    const walked = echo ? (echo.x - chamber.spawn.x) / Math.max(1, reach - chamber.spawn.x) : 0;
-    this.progress = {
-      echoWouldGrip,
-      echoGrippedAtTick: this.progress.echoGrippedAtTick ?? (echoWouldGrip ? state.tapeTick : null),
-      echoTravelRatio: Math.max(0, Math.min(1, walked)),
     };
   }
 }

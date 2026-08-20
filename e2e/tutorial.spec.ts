@@ -296,8 +296,8 @@ test("teaches the prologue plate from the state of the room, not a timer", async
   await expect(card).toHaveAttribute("data-stage", /awakening-(watch-door|fold)/);
 });
 
-test("Hand, Not Body offers the fold only once the projected echo has the switch", async ({ page, browserName }) => {
-  test.skip(browserName !== "chromium", "One live blocked-input rehearsal is enough; the projection matrix runs in unit tests.");
+test("Hand, Not Body ends the recording in the pose it asked for, and finishes", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "One live blocked-input rehearsal is enough; the fold matrix runs in unit tests.");
   test.setTimeout(45_000);
   await page.goto("/");
   await page.evaluate(() => { window.__I_WAS_SO_I_AM__.switchChamber("handNotBody"); });
@@ -310,13 +310,11 @@ test("Hand, Not Body offers the fold only once the projected echo has the switch
   // second and the card must keep faith with the input it asked for.
   await page.keyboard.down("ArrowRight");
   await page.keyboard.down("Space");
-  await expect(card).toHaveAttribute("data-stage", "hand-record-wait", { timeout: 6_000 });
   const doorX = CHAMBERS.handNotBody.door?.rect.x ?? 0;
   await expect
     .poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.actors[0]?.x ?? 0), { timeout: 6_000 })
     .toBeGreaterThan(doorX - 40);
   await expect(nudge).toBeHidden();
-  // The fold is still refused while the projected echo is short of the switch.
   await expect(card).toHaveAttribute("data-stage", "hand-fold", { timeout: 9_000 });
   await page.keyboard.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.phase), { timeout: 2_000 }).toBe("replay");
@@ -337,4 +335,36 @@ test("Hand, Not Body offers the fold only once the projected echo has the switch
   await expect.poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.success), { timeout: 9_000 }).toBe(true);
   await page.keyboard.up("ArrowDown");
   await expect(page.locator("#success-card")).toBeVisible();
+});
+
+test("refuses the fold while the feet are still moving in a room that must keep hold", async ({ page }) => {
+  // The recording ends in the pose being held, so folding mid-stride walks the
+  // echo off the winch it is gripping. The card asks for the feet to stop
+  // instead of offering a fold that would shut the bridge.
+  await page.goto("/");
+  await openCrossing(page);
+  await page.getByRole("button", { name: "기억 속으로 들어가기" }).click();
+  const card = page.locator("#tutorial-card");
+
+  await page.keyboard.down("ArrowRight");
+  await page.waitForFunction(
+    (x) => (window.__I_WAS_SO_I_AM__.state?.actors[0]?.x ?? 0) >= x,
+    nearWinchX,
+    { polling: 10, timeout: 4_000 },
+  );
+  // Grip without letting go of the direction key.
+  await page.keyboard.down("Space");
+  await expect.poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.hold?.active)).toBe(true);
+  await expect(card).toHaveAttribute("data-stage", "crossing-stop-then-fold", { timeout: 4_000 });
+  await expect(page.locator("#tutorial-title")).toContainText("방향키에서 손을 떼세요");
+
+  // Feet stopped, hand still on the winch: now it may be offered.
+  await page.keyboard.up("ArrowRight");
+  await expect(card).toHaveAttribute("data-stage", "crossing-fold", { timeout: 4_000 });
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.phase), { timeout: 2_000 }).toBe("replay");
+  await page.keyboard.up("Space");
+  await page.keyboard.down("ArrowRight");
+  await expect.poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.success), { timeout: 11_000 }).toBe(true);
+  await page.keyboard.up("ArrowRight");
 });

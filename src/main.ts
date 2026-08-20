@@ -1,15 +1,11 @@
 import "./style.css";
-import type { InputFrame } from "./core/input";
+import { movementIntent, NEUTRAL_INPUT, postureOf, type InputFrame } from "./core/input";
 import { Simulation, simulationConstants } from "./core/simulation";
 import { SIMULATION_VERSION, TICK_RATE, type ActorId, type ChamberId, type FailureCode, type SimulationState, type Tape } from "./core/types";
 import { CHAMBERS } from "./content/chambers";
 import { goldenFor } from "./content/golden";
 import { CHAMBER_ROUTE, CHAMBER_SECTORS } from "./content/manifests";
 import {
-  HandRecordingProjection,
-  handFoldWouldFinish,
-  handRecordingRanOutOfTime,
-  idleHandProgress,
   idleTraceProgress,
   TraceRecordingProjection,
   traceFoldWouldFinish,
@@ -90,7 +86,9 @@ const roomFailureCopyMap: Partial<Record<ChamberId, Partial<Record<FailureCode, 
   },
   handNotBody: {
     "plate-unpressed": { ko: "발판이 비어 있습니다 — 2회차에서 발판 위에 서 있어야 메아리의 문이 열립니다.", en: "The plate was empty. Stand on it in pass 2 so the echo's door opens." },
-    "hold-released-early": { ko: "메아리가 스위치에 닿지 못했습니다 — 더 오래 걸은 뒤 기록을 끝내거나, 발판을 더 빨리 밟으세요.", en: "The echo never reached the switch. Record a longer walk before folding, or step onto the plate sooner." },
+    // Never the recording's fault: the tail keeps walking, so the echo only ever
+    // runs out of time when this pass was slow to open its door.
+    "hold-released-early": { ko: "메아리가 스위치까지 걸어갈 시간이 부족했습니다 — 이번엔 발판 위로 더 빨리 올라서세요.", en: "The echo ran out of time on its way to the switch — get onto the plate sooner this time." },
   },
 };
 
@@ -118,7 +116,7 @@ const copy = {
     endingBody: "그 흔적이 사라진 것은 아니다. 나는 그것을 지나왔기에, 지금 여기에 있다.",
     title: "I WAS, SO I AM",
     controls: "방향키 / WASD 이동 · Space / E 행동 · ⏎ 시간 접기 · R 다시 기록 · Esc 일시정지",
-    foldPrompt: "시간 접기 — 지금 행동을 유지한 채 남은 시간을 접습니다",
+    foldPrompt: "기록 끝내기 — 지금 자세 그대로 기록을 마칩니다",
     foldFlash: "시간이 접힙니다",
     passBanner: "청록색 과거가 당신의 기록을 재생합니다 — 이제 현재를 움직이세요",
     passRecordBadge: "1회차 · 기록",
@@ -144,7 +142,7 @@ const copy = {
     endingBody: "It did not disappear. I am here because I moved through it.",
     title: "I WAS, SO I AM",
     controls: "Arrows / WASD move · Space / E act · ⏎ fold time · R rerecord · Esc pause",
-    foldPrompt: "Fold time — keep this action and fold the rest of the recording",
+    foldPrompt: "End the recording — it finishes in the pose you are holding",
     foldFlash: "Time folds",
     passBanner: "Your cyan past replays the recording — now move your present self",
     passRecordBadge: "PASS 1 · RECORD",
@@ -407,10 +405,20 @@ function presentActor(state: Readonly<SimulationState>): SimulationState["actors
 const traceProjection = new TraceRecordingProjection();
 let traceProgress = idleTraceProgress();
 
-// Hand, Not Body has the same blind spot for the same reason — the past is
-// pinned against a door it cannot open — so its card reads a projection too.
-const handProjection = new HandRecordingProjection();
-let handProgress = idleHandProgress();
+// What folding on this tick would leave the echo doing. The tail repeats the
+// posture being held, so a card that offers ⏎ has to know whether that posture
+// walks: a walking tail is the whole point in Hand, Not Body and fatal in every
+// room whose echo has to keep hold of something.
+let foldTail: InputFrame = NEUTRAL_INPUT;
+
+function foldTailStandsStill(): boolean {
+  const intent = movementIntent(foldTail);
+  return intent.x === 0 && intent.y === 0;
+}
+
+function foldTailWalksRight(): boolean {
+  return movementIntent(foldTail).x === 1;
+}
 
 // A held action key that never lands on anything is the one dead end the
 // stage copy cannot describe: the actor looks busy while gripping nothing, and
@@ -431,14 +439,12 @@ const STAGES_THAT_ASK_TO_HOLD_NOTHING = new Set([
   "hand-record-walk",
   "hand-record-wait",
   "hand-fold",
-  "hand-out-of-time",
 ]);
 
 function resetTutorialSignals(): void {
   traceProjection.reset();
   traceProgress = idleTraceProgress();
-  handProjection.reset();
-  handProgress = idleHandProgress();
+  foldTail = NEUTRAL_INPUT;
   gripsNothingSinceTick = null;
 }
 
@@ -465,8 +471,8 @@ function gripsNothing(state: Readonly<SimulationState>): boolean {
 
 function trackTutorialSignals(state: Readonly<SimulationState>, recordedFrames: readonly InputFrame[]): void {
   if (state.phase !== "recording") return;
+  foldTail = postureOf(recordedFrames[recordedFrames.length - 1] ?? NEUTRAL_INPUT);
   if (state.chamberId === "traceWeight") traceProgress = traceProjection.advance(recordedFrames);
-  if (state.chamberId === "handNotBody") handProgress = handProjection.advance(recordedFrames);
 }
 
 /** True while the controlled actor is standing on the chamber's plate. */
@@ -495,6 +501,32 @@ function passLabels(korean: boolean): { record: string; cooperate: string } {
   return {
     record: korean ? "1회차 · 과거 행동 기록" : "PASS 1 · RECORD",
     cooperate: korean ? "2회차 · 과거와 협동" : "PASS 2 · COOPERATE",
+  };
+}
+
+/**
+ * Shown when a room is ready to fold but the player is still walking. The tail
+ * repeats the posture, so an echo folded mid-stride walks away from whatever it
+ * was holding — every room that needs the echo to stay put asks for the feet to
+ * stop first rather than offering a fold that would strand it.
+ */
+function stopBeforeFolding(
+  stage: string,
+  pass: string,
+  step: string,
+  korean: boolean,
+  checklist: TutorialMessage["checklist"],
+): TutorialMessage {
+  return {
+    stage,
+    pass,
+    step,
+    title: korean ? "방향키에서 손을 떼세요" : "Let go of the direction keys",
+    body: korean
+      ? "기록은 지금 자세 그대로 끝납니다 — 걸어가는 중에 끝내면 메아리도 계속 걸어갑니다."
+      : "The recording ends in the pose you are holding — end it mid-stride and your echo keeps walking.",
+    ...tutorialInput("move"),
+    checklist,
   };
 }
 
@@ -630,6 +662,9 @@ function secondSelfTutorial(state: Readonly<SimulationState>, korean: boolean): 
         checklist,
       };
     }
+    if (!foldTailStandsStill()) {
+      return stopBeforeFolding("secondSelf-stop-then-fold", pass.record, "2 / 2", korean, checklist);
+    }
     return {
       stage: "secondSelf-fold",
       pass: pass.record,
@@ -687,48 +722,38 @@ function handNotBodyTutorial(state: Readonly<SimulationState>, korean: boolean):
   if (state.phase === "recording") {
     const pilot = recordingActor(state);
     const holding = pilot?.actionHeld === true;
-    // The recorded walk cannot be watched — the door pins the past within a
-    // second — so the fold is offered off the projection, never off elapsed
-    // ticks. The card never asks for a fold that would strand the echo.
-    const ready = handFoldWouldFinish(handProgress);
-    const outOfTime = handRecordingRanOutOfTime(handProgress, state.tapeTick);
+    // The fold repeats the posture, so a recording made of "right + action" walks
+    // the echo to the switch whenever pass 2 opens the door — however short the
+    // recording was, and however late the door opens. The card therefore has
+    // nothing left to predict: the posture it can see is the whole requirement,
+    // and folding on it cannot strand the echo. Being slow in pass 2 can still
+    // run the window out, but that is this pass's doing and is reported as such.
+    const posture = holding && foldTailWalksRight();
     const checklist: TutorialMessage["checklist"] = [
-      { text: korean ? "오른쪽 + 행동 키 누르기" : "Hold right + action", state: holding ? "done" : "active" },
-      { text: korean ? "메아리가 스위치까지 걷기" : "Walk the echo to the switch", state: ready ? "done" : holding ? "active" : "next" },
-      { text: korean ? "⏎ 기록 끝내기" : "End the recording with ⏎", state: ready && canFoldNow(state) ? "active" : "next" },
+      { text: korean ? "오른쪽 + 행동 키 누르기" : "Hold right + action", state: posture ? "done" : "active" },
+      { text: korean ? "그 자세 그대로 ⏎" : "End the recording in that pose", state: posture && canFoldNow(state) ? "active" : "next" },
+      { text: korean ? "2회차에 발판 밟기" : "Press the plate in pass 2", state: "next" },
     ];
-    if (outOfTime) {
-      return {
-        stage: "hand-out-of-time",
-        pass: pass.record,
-        step: korean ? "복구" : "RECOVER",
-        title: korean ? "이 기록에는 걸을 시간이 남지 않았습니다" : "This recording has no walking time left",
-        body: korean ? "R로 다시 기록하고, 처음부터 오른쪽과 행동 키를 함께 누르세요." : "Press R and record again, holding right and action from the first tick.",
-        ...tutorialInput("reset"),
-        checklist,
-      };
-    }
-    if (!holding) {
+    if (!posture) {
       return {
         stage: "hand-record-walk",
         pass: pass.record,
-        step: "1 / 3",
+        step: "1 / 2",
         title: korean ? "오른쪽으로 걸으면서 행동 키도 함께 누르세요" : "Walk right and hold the action key too",
-        body: korean ? "곧 닫힌 문에 막힙니다. 그래도 괜찮습니다 — 기록되는 것은 위치가 아니라 입력입니다." : "You will be stopped by a shut door. That is fine — what is recorded is the input, not the position.",
+        body: korean
+          ? "곧 닫힌 문에 막힙니다. 그래도 괜찮습니다 — 기록되는 것은 위치가 아니라 입력입니다."
+          : "You will be stopped by a shut door. That is fine — what is recorded is the input, not the position.",
         ...tutorialInput("act"),
         checklist,
       };
     }
-    if (!ready) {
-      const percent = Math.round(handProgress.echoTravelRatio * 100);
+    if (!canFoldNow(state)) {
       return {
         stage: "hand-record-wait",
         pass: pass.record,
-        step: "2 / 3",
+        step: "1 / 2",
         title: korean ? "그대로 누르고 계세요" : "Keep both keys down",
-        body: korean
-          ? `2회차의 메아리는 열린 문을 지나 스위치까지 ${percent}% 걸었습니다.`
-          : `In pass 2 your echo walks through the opened door — ${percent}% of the way to the switch.`,
+        body: korean ? "곧 기록을 끝낼 수 있습니다." : "You will be able to end the recording in a moment.",
         ...tutorialInput("act"),
         checklist,
       };
@@ -736,9 +761,11 @@ function handNotBodyTutorial(state: Readonly<SimulationState>, korean: boolean):
     return {
       stage: "hand-fold",
       pass: pass.record,
-      step: "3 / 3",
-      title: korean ? "⏎ 기록 끝내기" : "End the recording with ⏎",
-      body: korean ? "메아리는 스위치를 잡은 채로 남습니다." : "Your echo stays with the switch in hand.",
+      step: "2 / 2",
+      title: korean ? "⏎ — 누른 자세 그대로 기록을 끝내세요" : "⏎ — end the recording still pressing",
+      body: korean
+        ? "메아리는 이 걸음을 이어갑니다. 문이 열리는 순간 다시 걷기 시작합니다."
+        : "Your echo carries this stride on, and starts walking again the moment the door opens.",
       ...tutorialInput("fold"),
       checklist,
     };
@@ -778,8 +805,8 @@ function handNotBodyTutorial(state: Readonly<SimulationState>, korean: boolean):
       stage: "hand-step-plate",
       pass: pass.cooperate,
       step: "1 / 3",
-      title: korean ? "발판 위에 서세요 — 메아리의 문이 열립니다" : "Stand on the plate — it opens the echo's door",
-      body: korean ? "이 발판은 지금의 나만 누를 수 있습니다." : "Only your living self can press this plate.",
+      title: korean ? "서둘러 발판 위에 서세요 — 메아리의 문이 열립니다" : "Get onto the plate — it opens the echo's door",
+      body: korean ? "이 발판은 지금의 나만 누를 수 있습니다. 늦을수록 메아리가 걸을 시간이 줄어듭니다." : "Only your living self can press this plate, and every moment costs the echo walking time.",
       ...tutorialInput("move"),
       checklist,
     };
@@ -840,6 +867,9 @@ function crossingTutorial(state: Readonly<SimulationState>, korean: boolean): Tu
         ...tutorialInput("act"),
         checklist,
       };
+    }
+    if (!foldTailStandsStill()) {
+      return stopBeforeFolding("crossing-stop-then-fold", pass.record, "2 / 3", korean, checklist);
     }
     return {
       stage: "crossing-fold",
@@ -1113,6 +1143,9 @@ function handoffTutorial(state: Readonly<SimulationState>, korean: boolean): Tut
         checklist,
       };
     }
+    if (!foldTailStandsStill()) {
+      return stopBeforeFolding("handoff-stop-then-fold", pass.record, "2 / 2", korean, checklist);
+    }
     return {
       stage: "handoff-fold",
       pass: pass.record,
@@ -1240,6 +1273,9 @@ function lastHoldTutorial(state: Readonly<SimulationState>, korean: boolean): Tu
         ...tutorialInput("act"),
         checklist,
       };
+    }
+    if (!foldTailStandsStill()) {
+      return stopBeforeFolding("lasthold-stop-then-fold", pass.record, "3 / 3", korean, checklist);
     }
     return {
       stage: "lasthold-fold",
