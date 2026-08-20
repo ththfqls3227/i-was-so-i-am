@@ -2,9 +2,12 @@ import { encodeInput, NEUTRAL_INPUT, type InputFrame } from "../core/input";
 import { Simulation } from "../core/simulation";
 import type { ChamberDefinition, ChamberId, Tape } from "../core/types";
 import {
+  AWAKENING_CHAMBER,
   CROSSING_CHAMBER,
+  HAND_NOT_BODY_CHAMBER,
   HANDOFF_CHAMBER,
   LAST_HOLD_CHAMBER,
+  SECOND_SELF_CHAMBER,
   TRACE_WEIGHT_CHAMBER,
 } from "./chambers";
 
@@ -44,10 +47,41 @@ export function recordFoldedTape(chamber: ChamberDefinition, frames: InputFrame[
 const right = encodeInput({ right: true });
 const up = encodeInput({ up: true });
 const down = encodeInput({ down: true });
+const upRight = encodeInput({ up: true, right: true });
+const downRight = encodeInput({ down: true, right: true });
 const holdStill = encodeInput({ actionHeld: true });
 const pushRight = encodeInput({ right: true, actionHeld: true });
 const pushLeft = encodeInput({ left: true, actionHeld: true });
-const carryUp = encodeInput({ up: true, actionHeld: true });
+const carryUpRight = encodeInput({ up: true, right: true, actionHeld: true });
+
+export function awakeningGolden(chamber: ChamberDefinition = AWAKENING_CHAMBER): GoldenSolution {
+  // Chamber 00 asks for nothing from the past: whatever it records, the present
+  // presses the plate itself. The tape is here only so the loop is rehearsed.
+  const past = recordFoldedTape(chamber, repeat(right, 34));
+  const present = pad(repeat(right, 90), chamber.tapeDurationTicks);
+  return { past, present };
+}
+
+export function secondSelfGolden(chamber: ChamberDefinition = SECOND_SELF_CHAMBER): GoldenSolution {
+  const past = recordFoldedTape(chamber, [
+    ...repeat(upRight, 22), // walk onto the plate
+    ...repeat(NEUTRAL_INPUT, 10), // stand on it, then fold — the echo never steps off
+  ]);
+  const present = pad(repeat(right, 80), chamber.tapeDurationTicks);
+  return { past, present };
+}
+
+export function handNotBodyGolden(chamber: ChamberDefinition = HAND_NOT_BODY_CHAMBER): GoldenSolution {
+  // Pinned against a shut door the whole time: what is recorded is the input,
+  // not the standing still it produces here.
+  const past = recordFoldedTape(chamber, repeat(pushRight, 78));
+  const present = pad([
+    ...repeat(up, 14), // stand on the plate and open the echo's corridor
+    ...repeat(NEUTRAL_INPUT, 60), // hold it open while the echo walks to the switch
+    ...repeat(down, 32), // the switch is gripped and the light is open — go
+  ], chamber.tapeDurationTicks);
+  return { past, present };
+}
 
 export function crossingGolden(chamber: ChamberDefinition = CROSSING_CHAMBER): GoldenSolution {
   const past = recordFoldedTape(chamber, [
@@ -77,17 +111,16 @@ export function traceWeightGolden(chamber: ChamberDefinition = TRACE_WEIGHT_CHAM
 
 export function handoffGolden(chamber: ChamberDefinition = HANDOFF_CHAMBER): GoldenSolution {
   const past = recordFoldedTape(chamber, [
-    ...repeat(pushRight, 50), // lift the carrier and stage it at the junction (+margin)
-    ...repeat(up, 21), // release, climb toward the gate switch
-    ...repeat(holdStill, 20), // grip the switch, then fold — the gate stays open
+    ...repeat(upRight, 22), // climb toward the gate switch
+    ...repeat(up, 6), // step under it, still looking at it
+    ...repeat(holdStill, 20), // grip it, then fold — the delivery gate stays open
   ]);
   const present = pad([
-    ...repeat(right, 46), // walk to the junction while the past stages
-    ...repeat(NEUTRAL_INPUT, 6), // wait out the staging with margin
-    ...repeat(holdStill, 4), // receive the staged carrier
-    ...repeat(carryUp, 22), // redirect onto the upper route
-    ...repeat(pushRight, 45), // carry through the opened gate into the delivery cradle
-    ...repeat(right, 22), // release and step into the exit light
+    ...repeat(downRight, 24), // walk down to the carrier's pedestal
+    ...repeat(holdStill, 3), // lift it
+    ...repeat(carryUpRight, 22), // carry it up to the gate's corridor
+    ...repeat(pushRight, 55), // through the held-open gate into the cradle
+    ...repeat(right, 30), // release and step into the exit light
   ], chamber.tapeDurationTicks);
   return { past, present };
 }
@@ -108,8 +141,11 @@ export function lastHoldGolden(chamber: ChamberDefinition = LAST_HOLD_CHAMBER): 
 
 export function goldenFor(chamberId: ChamberId): GoldenSolution {
   switch (chamberId) {
-    case "traceWeight": return traceWeightGolden();
+    case "awakening": return awakeningGolden();
+    case "secondSelf": return secondSelfGolden();
     case "crossing": return crossingGolden();
+    case "handNotBody": return handNotBodyGolden();
+    case "traceWeight": return traceWeightGolden();
     case "handoff": return handoffGolden();
     case "lastHold": return lastHoldGolden();
   }

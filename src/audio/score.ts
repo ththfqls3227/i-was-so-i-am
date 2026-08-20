@@ -10,9 +10,12 @@ import type { ChamberId } from "../core/types";
  * read; audio is atmosphere and confirmation, never the loudest thing present.
  */
 
-/** Ambient root per room, rising through the route so the four chambers read as one progression. */
+/** Ambient root per room, rising through the route so the chambers read as one progression. */
 export const AMBIENT_ROOT_HZ: Record<ChamberId, number> = {
+  awakening: 65.406, // C2
+  secondSelf: 69.296, // C#2
   crossing: 73.416, // D2
+  handNotBody: 73.416, // D2 — sector 1 opens on the prologue's last root
   traceWeight: 77.782, // E♭2
   handoff: 87.307, // F2
   lastHold: 97.999, // G2

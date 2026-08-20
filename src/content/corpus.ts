@@ -2,12 +2,8 @@ import { encodeInput, NEUTRAL_INPUT, type InputFrame } from "../core/input";
 import { createTape } from "../core/replay";
 import { Simulation, simulationConstants } from "../core/simulation";
 import type { ChamberDefinition, ChamberId, Tape } from "../core/types";
-import {
-  CROSSING_CHAMBER,
-  HANDOFF_CHAMBER,
-  LAST_HOLD_CHAMBER,
-  TRACE_WEIGHT_CHAMBER,
-} from "./chambers";
+import { CHAMBERS } from "./chambers";
+import { CHAMBER_ROUTE } from "./manifests";
 
 export interface ReplayCorpusCase {
   id: number;
@@ -16,12 +12,8 @@ export interface ReplayCorpusCase {
   presentFrames: InputFrame[];
 }
 
-const CHAMBER_CYCLE = [
-  CROSSING_CHAMBER,
-  TRACE_WEIGHT_CHAMBER,
-  HANDOFF_CHAMBER,
-  LAST_HOLD_CHAMBER,
-] as const;
+/** Every authored room takes its turn, so no chamber ships without cross-cadence proof. */
+const CHAMBER_CYCLE = CHAMBER_ROUTE.map((id) => CHAMBERS[id]);
 
 function seeded(seed: number): () => number {
   let state = seed >>> 0;
@@ -70,7 +62,7 @@ function foldedTape(chamber: ChamberDefinition, frames: InputFrame[], seed: numb
 
 export function buildReplayCorpus(count = 100): ReplayCorpusCase[] {
   return Array.from({ length: count }, (_, caseIndex) => {
-    const chamber = CHAMBER_CYCLE[caseIndex % CHAMBER_CYCLE.length] ?? CROSSING_CHAMBER;
+    const chamber = CHAMBER_CYCLE[caseIndex % CHAMBER_CYCLE.length] ?? CHAMBERS.crossing;
     const pastFrames = generatedFrames(chamber, caseIndex * 2 + 1);
     // Every third case ends its recording with a fold so the corpus also
     // certifies determinism of ActionHeld-filled folded tapes in all rooms.
