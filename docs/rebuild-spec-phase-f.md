@@ -89,3 +89,4 @@
 3. **grip 방 4개(Crossing/Second Self/Handoff/Last Hold) 카드에 정지 조건 추가**: 발이 멈추기 전에는 ⏎를 제안하지 않고 `*-stop-then-fold` 스테이지로 「방향키에서 손을 떼세요」를 띄운다. Trace Weight는 미는 자세가 정답이라 그대로 둔다.
 4. 골든 7개 전부 재검증(꼬리: awakening=right, secondSelf=still, crossing=act, handNotBody=right+act, traceWeight=right+act, handoff=act, lastHold=act). **행동이 바뀐 방은 awakening 하나** — 메아리가 계속 오른쪽으로 걸어가지만 협동이 필요 없는 방이라 무해. traceWeight는 안착 후에도 추에 눌러붙어 밀기만 하고(변위 0) 체크섬 안정, lastHold/handoff/crossing 그립 유지.
 5. B5 Trace 매트릭스는 한 어서션이 뒤집혔다: 제안 1틱 전 fold가 「좌초」에서 「늦게 도착」으로 바뀌어 성공한다. 그 테스트를 뒤집어 고정했으므로 **핀 발 꼬리를 되살리면 실패**한다.
+6. **부수 수정(게이트 신뢰성)**: traceWeight `tapeDurationTicks` 10s→12s. 2회차 동선(건너기+합류 밀기+안착+추 우회)이 308틱 창에서 여유 2초뿐이라 dist 게이트에서 한 번 창이 터졌다. 방이 요구하는 것은 그대로 두고 창만 넓혔다(구역 상한 20s 이내). 같은 런에서 터진 nudge e2e는 윈치 접근이 "근접 경계 통과 후 키 떼기"라 스로틀 상황에서 반대편으로 지나쳐 잡지 못하던 것 — 짧은 버스트로 수렴하게 교체.
