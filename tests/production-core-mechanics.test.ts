@@ -8,7 +8,6 @@ import { handoffGolden, lastHoldGolden, recordFoldedTape, traceWeightGolden } fr
 const right = encodeInput({ right: true });
 const down = encodeInput({ down: true });
 const holdStill = encodeInput({ actionHeld: true });
-const pushRight = encodeInput({ right: true, actionHeld: true });
 const pushLeft = encodeInput({ left: true, actionHeld: true });
 
 function repeat(frame: InputFrame, count: number): InputFrame[] {
@@ -140,67 +139,73 @@ describe("LastHold two-stage past", () => {
 });
 
 describe("Handoff delivery gate", () => {
-  it("stages, opens the gate from the switch, and relays the carrier onto the upper route", () => {
-    const golden = handoffGolden();
+  const golden = handoffGolden();
+
+  it("opens the gate from the past's switch and lets the present carry the box through it", () => {
     const simulation = new Simulation(HANDOFF_CHAMBER);
     expect(simulation.loadTape(golden.past)).toBeNull();
-    let sawStaged = false;
-    let sawReceived = false;
-    let sawRedirected = false;
     let sawGateOpenByPast = false;
+    let sawPresentCarrying = false;
     for (const frame of golden.present) {
       if (simulation.state.phase !== "replay") break;
       simulation.step(frame);
-      sawStaged ||= simulation.state.handoff?.stagedByPast === true;
-      sawReceived ||= simulation.state.handoff?.receivedByPresent === true;
-      sawRedirected ||= simulation.state.handoff?.redirectedByPresent === true;
       sawGateOpenByPast ||= simulation.state.door?.open === true && simulation.state.hold?.creditedActors.includes("past") === true;
+      sawPresentCarrying ||= simulation.state.handoff?.holder === "present";
     }
-    expect({ sawStaged, sawReceived, sawRedirected, sawGateOpenByPast }).toEqual({
-      sawStaged: true,
-      sawReceived: true,
-      sawRedirected: true,
-      sawGateOpenByPast: true,
-    });
+    expect({ sawGateOpenByPast, sawPresentCarrying }).toEqual({ sawGateOpenByPast: true, sawPresentCarrying: true });
     expect(simulation.state.handoff?.delivered).toBe(true);
     expect(simulation.state.success).toBe(true);
   });
 
-  it("fails with delivery-gate-closed when the past stages but never holds the switch", () => {
-    const stageOnly = recordFoldedTape(HANDOFF_CHAMBER, [...repeat(pushRight, 50), NEUTRAL_INPUT]);
-    const simulation = runToTimeout(HANDOFF_CHAMBER, stageOnly, handoffGolden().present);
-    expect(simulation.state.handoff?.stagedByPast).toBe(true);
+  it("keeps the carrier out of the past's hands — only the living self lifts it", () => {
+    // The past walks onto the pedestal holding the action key the whole way.
+    const grabbyPast = recordFoldedTape(HANDOFF_CHAMBER, [
+      ...repeat(encodeInput({ down: true, right: true, actionHeld: true }), 26),
+      ...repeat(holdStill, 20),
+    ]);
+    const simulation = new Simulation(HANDOFF_CHAMBER);
+    expect(simulation.loadTape(grabbyPast)).toBeNull();
+    const carrierId = HANDOFF_CHAMBER.handoff?.id;
+    const held: Array<string | null> = [];
+    while (simulation.state.phase === "replay") {
+      simulation.step(NEUTRAL_INPUT);
+      if (simulation.state.handoff?.holder !== null) held.push(simulation.state.handoff?.holder ?? null);
+      const past = simulation.state.actors.find((actor) => actor.id === "past");
+      expect(past?.targetId).not.toBe(carrierId);
+    }
+    expect(held).toEqual([]);
+  });
+
+  it("fails with delivery-gate-closed when the past never grips the switch", () => {
+    const simulation = runToTimeout(HANDOFF_CHAMBER, idleTape(HANDOFF_CHAMBER), golden.present);
+    expect(simulation.state.door?.open).toBe(false);
     expect(simulation.state.handoff?.delivered).toBe(false);
-    expect(simulation.state.success).toBe(false);
     expect(simulation.state.lastError).toBe("delivery-gate-closed");
+  });
+
+  it("fails with carrier-not-carried when the gate is open but the box stays on its pedestal", () => {
+    const simulation = runToTimeout(HANDOFF_CHAMBER, golden.past, []);
+    expect(simulation.state.door?.open).toBe(true);
+    expect(simulation.state.handoff?.carriedByPresent).toBe(false);
+    expect(simulation.state.lastError).toBe("carrier-not-carried");
   });
 
   // A working tape plus a slow second pass is not a broken recording, and must
   // not be reported as one: the replay window is fixed by the chamber, so "press
   // R and record again" would send the player to fix what already works.
-  it("fails with delivery-too-slow when the present receives the carrier but dawdles", () => {
-    const golden = handoffGolden();
+  it("fails with delivery-too-slow when the present lifts the box but dawdles", () => {
     const simulation = new Simulation(HANDOFF_CHAMBER);
     expect(simulation.loadTape(golden.past)).toBeNull();
-    // Follow the golden hand only until the carrier changes hands, then stop.
+    // Follow the golden hand only until the box is lifted, then stop.
     for (const frame of golden.present) {
-      if (simulation.state.phase !== "replay" || simulation.state.handoff?.receivedByPresent === true) break;
+      if (simulation.state.phase !== "replay" || simulation.state.handoff?.carriedByPresent === true) break;
       simulation.step(frame);
     }
-    expect(simulation.state.handoff?.receivedByPresent).toBe(true);
+    expect(simulation.state.handoff?.carriedByPresent).toBe(true);
     while (simulation.state.phase === "replay") simulation.step(NEUTRAL_INPUT);
-    expect(simulation.state.handoff?.stagedByPast).toBe(true);
     expect(simulation.state.door?.open).toBe(true);
     expect(simulation.state.handoff?.delivered).toBe(false);
     expect(simulation.state.success).toBe(false);
     expect(simulation.state.lastError).toBe("delivery-too-slow");
-  });
-
-  // The idle-handoff timeout still belongs to carrier-not-staged: the new code
-  // is narrower and must not take failures that describe a real recording fault.
-  it("leaves an unstaged handoff timeout reporting carrier-not-staged", () => {
-    const simulation = runToTimeout(HANDOFF_CHAMBER, idleTape(HANDOFF_CHAMBER), []);
-    expect(simulation.state.handoff?.receivedByPresent).toBe(false);
-    expect(simulation.state.lastError).toBe("carrier-not-staged");
   });
 });

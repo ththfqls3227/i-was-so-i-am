@@ -1,10 +1,16 @@
 import { expect, test, type Page } from "@playwright/test";
 import { TICK_RATE, type ChamberId, type SimulationState } from "../src/core/types";
 import { CHAMBERS } from "../src/content/chambers";
-import { FOUR_ROOM_ROUTE } from "../src/content/manifests";
+import { CHAMBER_ROUTE } from "../src/content/manifests";
 
 const heldBits = { up: 1, down: 2, left: 4, right: 8, action: 16 } as const;
 const TICK_MS = 1000 / TICK_RATE;
+const ROUTE_LENGTH = String(CHAMBER_ROUTE.length).padStart(2, "0");
+
+/** The HUD counter for a route position, e.g. "03 / 07". */
+function roomOrdinal(index: number): string {
+  return `${String(index + 1).padStart(2, "0")} / ${ROUTE_LENGTH}`;
+}
 
 function keysForFrame(frame: number): Set<string> {
   const keys = new Set<string>();
@@ -210,33 +216,33 @@ test("keeps gameplay HUD hidden on the title and resumes failure-safe local prog
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("lang", "ko");
   await page.getByRole("button", { name: "기억 속으로 들어가기" }).click();
-  await expect(page.locator("#chamber-title")).toHaveText("건너는 기억");
+  await expect(page.locator("#chamber-title")).toHaveText("깨어남");
 
   await page.evaluate(() => localStorage.setItem("i-was-so-i-am:progress:v1", JSON.stringify({ nextRoom: "handoff", locale: "en" })));
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await page.getByRole("button", { name: "Enter the memory" }).click();
   await expect(page.locator("#chamber-title")).toHaveText("Handoff");
-  await expect(page.locator("#room-ordinal")).toHaveText("03 / 04");
+  await expect(page.locator("#room-ordinal")).toHaveText(roomOrdinal(CHAMBER_ROUTE.indexOf("handoff")));
 });
 
 test("presents every authored room in manifest order with a passing golden path", async ({ page, browserName }) => {
   await page.goto("/");
   await expect.poll(() => page.evaluate(() => Boolean(window.__I_WAS_SO_I_AM__.state))).toBe(true);
-  for (const [index, chamberId] of FOUR_ROOM_ROUTE.entries()) {
+  for (const [index, chamberId] of CHAMBER_ROUTE.entries()) {
     const result = await page.evaluate(({ id }) => {
       window.__I_WAS_SO_I_AM__.switchChamber(id);
       return window.__I_WAS_SO_I_AM__.runGolden(id, 60).success;
     }, { id: chamberId });
     expect(result, `${browserName} ${chamberId} golden`).toBe(true);
     await expect(page.locator("#chamber-title")).toHaveAttribute("data-chamber-id", chamberId);
-    await expect(page.locator("#room-ordinal")).toHaveText(`${String(index + 1).padStart(2, "0")} / 04`);
+    await expect(page.locator("#room-ordinal")).toHaveText(roomOrdinal(index));
   }
 });
 
-test("records and replays all four rooms through public controls into the authored ending", async ({ page, browserName }) => {
+test("records and replays every authored room through public controls into the authored ending", async ({ page, browserName }) => {
   test.skip(browserName !== "chromium", "A full physical keyboard journey runs once; cross-engine core/UI routes are covered separately.");
-  test.setTimeout(150_000);
+  test.setTimeout(240_000);
   // The keys are real and so is everything they drive; only time is this test's
   // to give, so a slow frame can no longer hand a beat more ticks than it was
   // written for. Whether the game keeps up in real time is the performance
@@ -250,9 +256,9 @@ test("records and replays all four rooms through public controls into the author
   await page.getByRole("button", { name: "기억 속으로 들어가기" }).click();
   await settle(page);
   const golden = await import("../src/content/golden");
-  for (const [index, chamberId] of FOUR_ROOM_ROUTE.entries()) {
+  for (const [index, chamberId] of CHAMBER_ROUTE.entries()) {
     await expect(page.locator("#chamber-title")).toHaveAttribute("data-chamber-id", chamberId);
-    await expect(page.locator("#room-ordinal")).toHaveText(`${String(index + 1).padStart(2, "0")} / 04`);
+    await expect(page.locator("#room-ordinal")).toHaveText(roomOrdinal(index));
     const solution = golden.goldenFor(chamberId);
     expect(await readTape(page), `${chamberId} did not open in recording`).toMatchObject({ phase: "recording" });
     await playAuthoredFrames(page, solution.past.frames);
@@ -267,7 +273,7 @@ test("records and replays all four rooms through public controls into the author
     await expect(page.locator("#success-title")).toHaveText(CHAMBERS[chamberId].name);
     await page.locator("#next").click();
     await settle(page);
-    const next = FOUR_ROOM_ROUTE[index + 1];
+    const next = CHAMBER_ROUTE[index + 1];
     if (next) {
       await expect(page.locator("#chamber-title")).toHaveAttribute("data-chamber-id", next);
       await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("i-was-so-i-am:progress:v1") ?? "null")?.nextRoom)).toBe(next);
@@ -287,7 +293,7 @@ test("keeps the primary journey free of console and page errors", async ({ page 
   page.on("requestfailed", (request) => errors.push(`${request.method()} ${request.url()}: ${request.failure()?.errorText ?? "failed"}`));
   await page.goto("/");
   await page.locator("#play-button").click();
-  for (const chamberId of FOUR_ROOM_ROUTE) {
+  for (const chamberId of CHAMBER_ROUTE) {
     await page.evaluate((id: ChamberId) => window.__I_WAS_SO_I_AM__.switchChamber(id), chamberId);
     await expect(page.locator("#chamber-title")).toHaveAttribute("data-chamber-id", chamberId);
     const success = await page.evaluate((id: ChamberId) => window.__I_WAS_SO_I_AM__.runGolden(id, 144).success, chamberId);
@@ -296,4 +302,43 @@ test("keeps the primary journey free of console and page errors", async ({ page 
   await page.locator("#pause-button").click();
   await page.locator("#resume-button").click();
   expect(errors).toEqual([]);
+});
+
+test("unlocks the chamber select up to the next room and enters the one that is clicked", async ({ page }) => {
+  const cleared = [CHAMBER_ROUTE[0], CHAMBER_ROUTE[1]];
+  const next = CHAMBER_ROUTE[2];
+  const locked = CHAMBER_ROUTE[3];
+  await page.goto("/");
+  await page.evaluate((progress) => localStorage.setItem("i-was-so-i-am:progress:v1", JSON.stringify(progress)), {
+    nextRoom: next,
+    locale: "ko",
+    cleared,
+  });
+  await page.reload();
+
+  const select = page.locator("#chamber-select");
+  await expect(select).toBeVisible();
+  for (const id of cleared) {
+    await expect(select.locator(`button[data-chamber="${id}"]`)).toBeEnabled();
+  }
+  await expect(select.locator(`button[data-chamber="${next}"]`)).toHaveAttribute("data-state", "next");
+  await expect(select.locator(`button[data-chamber="${locked}"]`)).toBeDisabled();
+
+  await select.locator(`button[data-chamber="${next}"]`).click();
+  await expect(page.locator("#intro-screen")).toBeHidden();
+  await expect(page.locator("#chamber-title")).toHaveAttribute("data-chamber-id", next);
+  await expect(page.locator("#room-ordinal")).toHaveText(roomOrdinal(2));
+});
+
+test("keeps an older progress record loadable and re-derives what it cleared", async ({ page }) => {
+  // Records written before the cleared list existed carry only the next room.
+  const next = CHAMBER_ROUTE[3];
+  await page.goto("/");
+  await page.evaluate((nextRoom) => localStorage.setItem("i-was-so-i-am:progress:v1", JSON.stringify({ nextRoom, locale: "ko" })), next);
+  await page.reload();
+  const select = page.locator("#chamber-select");
+  await expect(select.locator(`button[data-chamber="${CHAMBER_ROUTE[0]}"]`)).toHaveAttribute("data-state", "cleared");
+  await expect(select.locator(`button[data-chamber="${next}"]`)).toHaveAttribute("data-state", "next");
+  await expect(select.locator(`button[data-chamber="${CHAMBER_ROUTE[4]}"]`)).toBeDisabled();
+  await expect(page.locator("#chamber-title")).toHaveAttribute("data-chamber-id", next);
 });

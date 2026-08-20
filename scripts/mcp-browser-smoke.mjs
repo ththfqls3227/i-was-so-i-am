@@ -106,7 +106,7 @@ try {
   await writeFile(new URL("../.playwright-mcp/crossing-success.png", import.meta.url), Buffer.from(imageBlock.data, "base64"));
 
   const chamberSnapshots = [];
-  for (const [id, title] of [["crossing", "건너는 기억"], ["traceWeight", "무게의 흔적"], ["handoff", "이어받은 마음"], ["lastHold", "마지막 붙듦"]]) {
+  for (const [id, title] of [["awakening", "깨어남"], ["secondSelf", "두 번째 나"], ["crossing", "건너는 기억"], ["handNotBody", "몸이 아니라 손"], ["traceWeight", "무게의 흔적"], ["handoff", "이어받은 마음"], ["lastHold", "마지막 붙듦"]]) {
     await callTool("browser_evaluate", { function: `() => window.__I_WAS_SO_I_AM__.switchChamber('${id}')` });
     const snapshot = await callTool("browser_snapshot", { depth: 6 });
     assertIncludes(snapshot.text, title, `${title} accessibility snapshot`);
@@ -114,16 +114,16 @@ try {
   }
 
   const goldenResults = await callTool("browser_evaluate", {
-    function: "() => Object.fromEntries(['crossing','traceWeight','handoff','lastHold'].flatMap(id => [[`${id}30`, window.__I_WAS_SO_I_AM__.runGolden(id, 30).success], [`${id}144`, window.__I_WAS_SO_I_AM__.runGolden(id, 144).success]]))",
+    function: "() => Object.fromEntries(['awakening','secondSelf','crossing','handNotBody','traceWeight','handoff','lastHold'].flatMap(id => [[`${id}30`, window.__I_WAS_SO_I_AM__.runGolden(id, 30).success], [`${id}144`, window.__I_WAS_SO_I_AM__.runGolden(id, 144).success]]))",
   });
-  for (const marker of ["traceWeight30", "crossing144", "handoff30", "lastHold144", "true"]) {
+  for (const marker of ["awakening30", "handNotBody30", "traceWeight30", "crossing144", "handoff30", "lastHold144", "true"]) {
     assertIncludes(goldenResults.text, marker, "MCP browser golden results");
   }
   if (goldenResults.text.includes("false")) throw new Error("An MCP browser golden path failed");
 
   const liveJourney = await callTool("browser_run_code_unsafe", {
     code: `async (page) => {
-      const route = ['crossing', 'traceWeight', 'handoff', 'lastHold'];
+      const route = ['awakening', 'secondSelf', 'crossing', 'handNotBody', 'traceWeight', 'handoff', 'lastHold'];
       const solutions = await page.evaluate(async (ids) => {
         const { goldenFor } = await import('/src/content/golden.ts');
         return Object.fromEntries(ids.map(id => {

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { CHAMBERS } from "../src/content/chambers";
 
 // Derived from chamber data, not hand-tuned coordinates: spawn and winch share
@@ -7,12 +7,22 @@ const crossingWinch = CHAMBERS.crossing.hold;
 if (!crossingWinch) throw new Error("Crossing chamber must define a winch hold");
 const nearWinchX = crossingWinch.x - crossingWinch.radius;
 
+/**
+ * Crossing is the third chamber now, so a test about its cards has to ask for
+ * it. Selecting before the title's play button keeps the room loaded and the
+ * scene paused, exactly as arriving there through the route would.
+ */
+async function openCrossing(page: Page): Promise<void> {
+  await page.evaluate(() => { window.__I_WAS_SO_I_AM__.switchChamber("crossing"); });
+}
+
 test("teaches the two-pass rule before play and advances only after real achievements", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator("#intro-copy")).toContainText("같은 방을 두 번 플레이");
   await expect(page.locator("#first-pass-title")).toHaveText("1회차 · 행동 기록");
   await expect(page.locator("#second-pass-title")).toHaveText("2회차 · 과거와 협동");
 
+  await openCrossing(page);
   await page.getByRole("button", { name: "기억 속으로 들어가기" }).click();
   const card = page.locator("#tutorial-card");
   await expect(card).toHaveAttribute("data-stage", "crossing-move-winch");
@@ -47,6 +57,7 @@ test("a novice finishes Crossing with the fold key by following the on-screen in
   test.skip(browserName !== "chromium", "The physical fold journey runs once; semantic stages run in every engine.");
   test.setTimeout(30_000);
   await page.goto("/");
+  await openCrossing(page);
   await page.getByRole("button", { name: "기억 속으로 들어가기" }).click();
 
   await page.keyboard.down("ArrowRight");
@@ -151,6 +162,7 @@ test("Trace Weight finishes for a slow hand that follows the card", async ({ pag
 
 test("says so when the action key is being held against nothing", async ({ page }) => {
   await page.goto("/");
+  await openCrossing(page);
   await page.getByRole("button", { name: "기억 속으로 들어가기" }).click();
   const nudge = page.locator("#tutorial-nudge");
   await expect(nudge).toBeHidden();
@@ -240,6 +252,7 @@ test("keeps the fold key discoverable in a narrow desktop window", async ({ page
 test("keeps the complete tutorial instruction readable beside mobile controls", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
+  await openCrossing(page);
   await page.getByRole("button", { name: "기억 속으로 들어가기" }).click();
 
   const tutorial = page.locator("#tutorial-card");
@@ -258,4 +271,67 @@ test("keeps the complete tutorial instruction readable beside mobile controls", 
   const controlsBox = await controls.boundingBox();
   if (!tutorialBox || !controlsBox) throw new Error("Tutorial or mobile controls have no layout box");
   expect(tutorialBox.y + tutorialBox.height).toBeLessThanOrEqual(controlsBox.y + 1);
+});
+
+test("teaches the prologue plate from the state of the room, not a timer", async ({ page }) => {
+  const plate = CHAMBERS.awakening.plate;
+  if (!plate) throw new Error("Awakening must define a plate");
+  await page.goto("/");
+  await page.getByRole("button", { name: "기억 속으로 들어가기" }).click();
+  const card = page.locator("#tutorial-card");
+  await expect(card).toHaveAttribute("data-stage", "awakening-move-plate");
+  await expect(page.locator("#fold-prompt")).toBeDisabled();
+
+  await page.keyboard.down("ArrowRight");
+  await page.waitForFunction(
+    (x) => (window.__I_WAS_SO_I_AM__.state?.actors[0]?.x ?? 0) >= x,
+    plate.x,
+    { polling: 10, timeout: 4_000 },
+  );
+  await page.keyboard.up("ArrowRight");
+  // Standing on it is the whole input: no action key, and the door answers.
+  expect(await page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.plate?.active)).toBe(true);
+  expect(await page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.actors[0]?.actionHeld)).toBe(false);
+  await expect.poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.door?.open)).toBe(true);
+  await expect(card).toHaveAttribute("data-stage", /awakening-(watch-door|fold)/);
+});
+
+test("Hand, Not Body offers the fold only once the projected echo has the switch", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "One live blocked-input rehearsal is enough; the projection matrix runs in unit tests.");
+  test.setTimeout(45_000);
+  await page.goto("/");
+  await page.evaluate(() => { window.__I_WAS_SO_I_AM__.switchChamber("handNotBody"); });
+  await page.getByRole("button", { name: "기억 속으로 들어가기" }).click();
+  const card = page.locator("#tutorial-card");
+  const nudge = page.locator("#tutorial-nudge");
+  await expect(card).toHaveAttribute("data-stage", "hand-record-walk");
+
+  // Right plus action into a door the past cannot open: the body stops within a
+  // second and the card must keep faith with the input it asked for.
+  await page.keyboard.down("ArrowRight");
+  await page.keyboard.down("Space");
+  await expect(card).toHaveAttribute("data-stage", "hand-record-wait", { timeout: 6_000 });
+  const doorX = CHAMBERS.handNotBody.door?.rect.x ?? 0;
+  await expect
+    .poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.actors[0]?.x ?? 0), { timeout: 6_000 })
+    .toBeGreaterThan(doorX - 40);
+  await expect(nudge).toBeHidden();
+  // The fold is still refused while the projected echo is short of the switch.
+  await expect(card).toHaveAttribute("data-stage", "hand-fold", { timeout: 9_000 });
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.phase), { timeout: 2_000 }).toBe("replay");
+  await page.keyboard.up("ArrowRight");
+  await page.keyboard.up("Space");
+
+  // Pass 2: stand on the plate until the echo's grip opens the light.
+  await expect(card).toHaveAttribute("data-stage", "hand-step-plate");
+  await page.keyboard.down("ArrowUp");
+  await expect(card).toHaveAttribute("data-stage", "hand-hold-plate", { timeout: 6_000 });
+  await page.keyboard.up("ArrowUp");
+  await expect.poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.door?.open), { timeout: 4_000 }).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.exit.open), { timeout: 9_000 }).toBe(true);
+  await page.keyboard.down("ArrowDown");
+  await expect.poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.success), { timeout: 9_000 }).toBe(true);
+  await page.keyboard.up("ArrowDown");
+  await expect(page.locator("#success-card")).toBeVisible();
 });

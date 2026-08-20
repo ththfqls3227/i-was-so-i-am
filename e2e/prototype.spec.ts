@@ -3,7 +3,7 @@ import { Simulation } from "../src/core/simulation";
 import type { ChamberId } from "../src/core/types";
 import { CHAMBERS } from "../src/content/chambers";
 import { buildReplayCorpus } from "../src/content/corpus";
-import { FOUR_ROOM_ROUTE } from "../src/content/manifests";
+import { CHAMBER_ROUTE } from "../src/content/manifests";
 
 function nodeChecksums(chamberId: ChamberId, tape: ReturnType<typeof buildReplayCorpus>[number]["tape"], presentFrames: number[]): string[] {
   const simulation = new Simulation(CHAMBERS[chamberId]);
@@ -46,8 +46,8 @@ test("pure core golden checksums are cadence-invariant in the browser adapter", 
         finalChecksum: runs[0]?.checksums.at(-1),
       };
     });
-  }, FOUR_ROOM_ROUTE);
-  expect(result, `${browserName} browser core parity`).toEqual(FOUR_ROOM_ROUTE.map((id) =>
+  }, [...CHAMBER_ROUTE]);
+  expect(result, `${browserName} browser core parity`).toEqual(CHAMBER_ROUTE.map((id) =>
     expect.objectContaining({ id, successes: [true, true, true], parity: true }),
   ));
 });

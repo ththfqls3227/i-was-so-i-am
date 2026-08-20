@@ -26,10 +26,14 @@ const keysForFrame = (frame) => {
   return keys;
 };
 
+const beyondDoor = (state) => (state.actors.find((a) => a.id === "present")?.x ?? 0) > (state.door?.rect.x ?? 0) + 40;
 const beats = {
-  crossing: (state) => state.exit.open === true && (state.actors.find((a) => a.id === "present")?.x ?? 0) > (state.door?.rect.x ?? 0) + 40,
+  awakening: (state) => state.door?.open === true && beyondDoor(state),
+  secondSelf: (state) => state.door?.open === true && beyondDoor(state),
+  crossing: (state) => state.exit.open === true && beyondDoor(state),
+  handNotBody: (state) => state.exit.open === true,
   traceWeight: (state) => state.forceObject?.force === state.forceObject?.threshold && state.exit.open === true,
-  handoff: (state) => state.handoff?.receivedByPresent === true,
+  handoff: (state) => state.handoff?.holder === "present",
   lastHold: (state) => state.exit.open === true && (state.actors.find((a) => a.id === "present")?.x ?? 0) >= state.exit.x - 220,
 };
 
@@ -56,7 +60,7 @@ try {
 
   await page.locator("#play-button").click();
 
-  for (const room of ["crossing", "traceWeight", "handoff", "lastHold"]) {
+  for (const room of Object.keys(beats)) {
     const frames = await page.evaluate(async (id) => {
       const module = await import("/src/content/golden.ts");
       globalThis.__I_WAS_SO_I_AM__.switchChamber(id);
