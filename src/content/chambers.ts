@@ -104,7 +104,11 @@ export const TRACE_WEIGHT_CHAMBER: ChamberDefinition = {
   name: "TRACE WEIGHT",
   subtitle: "과거가 길을 열고, 다시 합류한 두 자아가 기억의 무게를 밉니다.",
   hint: "과거로 윈치를 붙잡아 현재를 건넌 뒤, 추 앞에서 두 힘을 합치세요.",
-  tapeDurationTicks: 10 * TICK_RATE,
+  // Pass 2 here is the longest cooperative route in the game — cross, join the
+  // push, seat the weight, then climb around it into the light. At ten seconds
+  // that finished with barely two seconds to spare, which a slow machine could
+  // eat; twelve gives the route room without changing anything it asks for.
+  tapeDurationTicks: 12 * TICK_RATE,
   world: { width: scalePosition(80), height: scalePosition(45) },
   spawn: { x: scalePosition(10), y: scalePosition(22) },
   walls: [

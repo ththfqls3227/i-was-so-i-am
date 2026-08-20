@@ -16,6 +16,31 @@ async function openCrossing(page: Page): Promise<void> {
   await page.evaluate(() => { window.__I_WAS_SO_I_AM__.switchChamber("crossing"); });
 }
 
+/**
+ * Walks the recording self into the winch's radius and stops there.
+ *
+ * A single "hold right until x passes the near edge, then let go" overshoots on
+ * a loaded machine: the render throttle steps the fixed loop several ticks per
+ * frame, and the far edge is only about ten ticks past the near one, so the key
+ * release can land after the actor has already walked out the other side —
+ * facing away, unable to grip. Approaching in short bursts and re-checking
+ * converges instead of depending on how fast the round trip was.
+ */
+async function walkToWinch(page: Page, winchX: number, radius: number): Promise<void> {
+  const inRadius = (): Promise<boolean> => page.evaluate(
+    ([x, r]) => Math.abs((window.__I_WAS_SO_I_AM__.state?.actors[0]?.x ?? 0) - x) <= r * 0.7,
+    [winchX, radius] as const,
+  );
+  for (let burst = 0; burst < 40 && !(await inRadius()); burst += 1) {
+    const behind = await page.evaluate((x) => (window.__I_WAS_SO_I_AM__.state?.actors[0]?.x ?? 0) < x, winchX);
+    const key = behind ? "ArrowRight" : "ArrowLeft";
+    await page.keyboard.down(key);
+    await page.waitForTimeout(60);
+    await page.keyboard.up(key);
+  }
+  expect(await inRadius(), "the recording self never settled inside the winch radius").toBe(true);
+}
+
 test("teaches the two-pass rule before play and advances only after real achievements", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator("#intro-copy")).toContainText("같은 방을 두 번 플레이");
@@ -155,7 +180,13 @@ test("Trace Weight finishes for a slow hand that follows the card", async ({ pag
   );
   await page.keyboard.up("ArrowRight");
   await page.keyboard.down("ArrowDown");
-  await expect.poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.success), { timeout: 6_000 }).toBe(true);
+  await expect
+    .poll(async () => JSON.stringify(await page.evaluate(() => ({
+      success: window.__I_WAS_SO_I_AM__.state?.success,
+      phase: window.__I_WAS_SO_I_AM__.state?.phase,
+      lastError: window.__I_WAS_SO_I_AM__.state?.lastError,
+    }))), { timeout: 8_000 })
+    .toContain('"success":true');
   await page.keyboard.up("ArrowDown");
   await expect(page.locator("#success-card")).toBeVisible();
 });
@@ -175,15 +206,9 @@ test("says so when the action key is being held against nothing", async ({ page 
   await expect(nudge).toBeHidden();
 
   // Reaching a real affordance is the other way out of it.
-  await page.keyboard.down("ArrowRight");
-  await page.waitForFunction(
-    (x) => (window.__I_WAS_SO_I_AM__.state?.actors[0]?.x ?? 0) >= x,
-    nearWinchX,
-    { polling: 10, timeout: 4_000 },
-  );
-  await page.keyboard.up("ArrowRight");
+  await walkToWinch(page, crossingWinch.x, crossingWinch.radius);
   await page.keyboard.down("Space");
-  await expect.poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.hold?.active)).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.__I_WAS_SO_I_AM__.state?.hold?.active), { timeout: 6_000 }).toBe(true);
   await expect(nudge).toBeHidden();
   await page.keyboard.up("Space");
 });
