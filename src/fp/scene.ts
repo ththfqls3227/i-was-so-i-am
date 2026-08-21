@@ -25,7 +25,7 @@ import type { ActorId, ActorState, SimState } from "../sim/types";
 import type { Chamber } from "../world/chamber";
 import { goldenTape } from "../world/goldens";
 import { ROSTER } from "../world/roster";
-import { archivalEchoMaterial, echoMaterial, matteMaterial, signalMaterial } from "./materials";
+import { archivalEchoMaterial, echoMaterial, matteMaterial, seededRandom, signalMaterial } from "./materials";
 import {
   brassMaterial,
   brickFloorMaterial,
@@ -1500,8 +1500,21 @@ export class FirstPersonScene {
     const stileWidth = 0.09;
     const cellWidth = (leafWidth - stileWidth * (columns + 1)) / columns;
     const cellHeight = (leafHeight - stileWidth * (rows + 1)) / rows;
+    // Which cells have lost their paper. Seeded so the same door is torn the
+    // same way every time you enter, and never the corners: a door missing its
+    // edges reads as unbuilt, while one missing its middle reads as damaged.
+    const torn = new Set<string>();
+    if (this.chamber.dressing.tornPaper) {
+      const pick = seededRandom(7707);
+      for (let row = 0; row < rows; row += 1) {
+        for (let column = 0; column < columns; column += 1) {
+          if (pick() < 0.3) torn.add(`${row}-${column}`);
+        }
+      }
+    }
     for (let row = 0; row < rows; row += 1) {
       for (let column = 0; column < columns; column += 1) {
+        if (torn.has(`${row}-${column}`)) continue;
         const panel = MeshBuilder.CreatePlane(`door-paper-${row}-${column}`, {
           width: cellWidth,
           height: cellHeight,

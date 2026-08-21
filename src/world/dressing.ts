@@ -44,6 +44,8 @@ export interface StandardDressingOptions {
   dioramas?: boolean;
   /** Windows looking into another room. 04's gallery looks at 01. */
   views?: ChamberDressing["views"];
+  /** Paper with holes in it. Only 07. */
+  tornPaper?: boolean;
   /**
    * The pair of full-length runs down the long walls. On by default, because
    * every room is a stack room — except the ending corridor, which is a gallery:
@@ -154,6 +156,7 @@ export function standardDressing(shell: RoomShell, options: StandardDressingOpti
     warmBand: options.warmBand ?? null,
     dioramas: options.dioramas ?? false,
     views: options.views ?? [],
+    tornPaper: options.tornPaper ?? false,
     routes: options.routes ?? [],
   };
 }

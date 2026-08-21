@@ -85,6 +85,7 @@ const SHOTS = [
 
   { chamber: "unkept", name: "07-entry", to: { x: 0, z: 2.4 }, yaw: 0, pitch: 0 },
   { chamber: "unkept", name: "07-lean", to: { x: -3.2, z: 5.6 }, yaw: -1.3, pitch: -0.08 },
+  { chamber: "unkept", name: "07-torn-door", to: { x: 0, z: 7.2 }, yaw: 0, pitch: 0.03 },
   { chamber: "unkept", name: "07-slot", to: { x: 0, z: 7.4 }, yaw: 0, pitch: 0.02 },
   { chamber: "ending-corridor", name: "e1-first-windows", to: { x: 0.8, z: 2.4 }, yaw: -0.5, pitch: 0.02 },
   { chamber: "ending-corridor", name: "e2-down-the-corridor", to: { x: 1.1, z: 11 }, yaw: 0.02, pitch: 0.0 },

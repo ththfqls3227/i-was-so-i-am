@@ -149,6 +149,12 @@ export interface ChamberDressing {
    */
   views: { chamberId: string; windowId: string }[];
   /**
+   * Paper with holes in it. Only 07, where the door you are shut out by is one
+   * nobody has repaired — and where the room wants you to see through the gap
+   * while it closes.
+   */
+  tornPaper: boolean;
+  /**
    * Brass inlay worn into the floor. Empty in the early rooms, which are one
    * space with one thing in it and need no help being read.
    */

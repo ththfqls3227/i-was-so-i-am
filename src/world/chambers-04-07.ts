@@ -550,6 +550,9 @@ export const UNKEPT_CHAMBER: Chamber = {
     tiltRadians: 0.06,
     // Nearly a fifth of the shelf is gone, and some of it is on the floor.
     decay: 0.18,
+    // And the paper in the door has gone with it. You watch him through the
+    // holes while it shuts.
+    tornPaper: true,
     blocks: blocksOf(sevenSolids).filter((block) => !block.id.startsWith("floor") && !block.id.startsWith("ceiling")),
     // Barely there. This is the wing that was taken off the maintenance roster,
     // and the brass went unpolished with everything else — you can follow it,
