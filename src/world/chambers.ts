@@ -242,7 +242,7 @@ export const HAND_NOT_BODY_CHAMBER: Chamber = {
     // From the door, neither is where the room looks like it goes.
     routes: [
       route("to-plate", [{ x: 0, z: 2.2 }, { x: 3.6, z: 4.4 }, { x: 3.6, z: 6.5 }]),
-      route("through-partition", [{ x: 0, z: 2.2 }, { x: 0, z: ALCOVE_PLATE_Z }], 0.55),
+      route("through-partition", [{ x: 0, z: 2.2 }, { x: 0, z: ALCOVE_PLATE_Z }], 0.55, "past"),
     ],
     // This room leaves through a doorway in its own east wall. It has no
     // corridor, and drawing one puts a passage behind a solid wall.

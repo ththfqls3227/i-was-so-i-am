@@ -362,6 +362,53 @@ export interface ShelfWall {
  * the wall, built once at construction, because a per-transition allocation of
  * this size is exactly the stall this project has paid for six times.
  */
+/**
+ * The small board under a corridor window. Number, then the room's name.
+ *
+ * Not a hyeonpan: those hang in the rooms and are read at eye level. This is a
+ * museum label — the archive's own hand, small and level with the sill, saying
+ * which record you are looking at.
+ */
+export function buildDioramaBoard(
+  scene: Scene,
+  name: string,
+  title: string,
+  number: string,
+): StandardMaterial {
+  const width = 512;
+  const height = 180;
+  const context = scratchContext(width, height);
+  context.fillStyle = "#1a1512";
+  context.fillRect(0, 0, width, height);
+  context.fillStyle = "#d8cbb0";
+  context.fillRect(10, 10, width - 20, height - 20);
+  context.fillStyle = "#241c14";
+  context.textBaseline = "middle";
+  context.textAlign = "left";
+  context.font = '600 76px "Helvetica Neue", Helvetica, Arial, sans-serif';
+  context.fillText(number, 34, height / 2);
+  context.font = '500 60px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
+  context.fillText(title, 150, height / 2 + 4);
+
+  const texture = new DynamicTexture(name, { width, height }, scene, false);
+  const target = texture.getContext();
+  // Flipped, because DynamicTexture reads bottom-up and a mirrored label is
+  // worse than no label.
+  target.translate(0, height);
+  target.scale(1, -1);
+  target.drawImage(context.canvas, 0, 0);
+  texture.update(false);
+
+  const surface = new StandardMaterial(name, scene);
+  surface.diffuseColor = Color3.Black();
+  surface.emissiveColor = new Color3(0.72, 0.68, 0.6);
+  surface.emissiveTexture = texture;
+  surface.specularColor = Color3.Black();
+  surface.disableLighting = true;
+  surface.needDepthPrePass = false;
+  return surface;
+}
+
 export function buildShelfWall(
   scene: Scene,
   parent: TransformNode,
@@ -486,11 +533,20 @@ export function buildSalchang(
   parent: TransformNode,
   timber: StandardMaterial,
   glass: StandardMaterial,
-  options: { x: number; facing: 1 | -1; centreZ: number; width: number; sillY: number; height: number; seed: number },
+  options: {
+    x: number; facing: 1 | -1; centreZ: number; width: number; sillY: number; height: number; seed: number;
+    /**
+     * No pane. The luminous plane behind the lattice is daylight, and a window
+     * with a room behind it must not have daylight in it — the corridor's ten
+     * windows are lattices you look through, not windows you look at.
+     */
+    open?: boolean;
+  },
 ): Mesh[] {
   const { x, facing, centreZ, width, sillY, height } = options;
   const parts: Mesh[] = [];
 
+  if (!options.open) {
   const opening = MeshBuilder.CreatePlane(`salchang-glow-${centreZ}`, { width, height, sideOrientation: Mesh.DOUBLESIDE }, scene);
   opening.position = new Vector3(x + facing * 0.04, sillY + height / 2, centreZ);
   opening.rotation = new Vector3(0, facing > 0 ? -Math.PI / 2 : Math.PI / 2, 0);
@@ -498,6 +554,7 @@ export function buildSalchang(
   opening.isPickable = false;
   opening.parent = parent;
   parts.push(opening);
+  }
 
   // Vertical slats. The gap has to be wider than the slat, or the window is
   // mostly wall: at 0.1 wide on a 0.135 pitch it was 74% solid and the room got

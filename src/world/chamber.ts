@@ -69,6 +69,8 @@ export interface SalchangSpec {
   seed: number;
   /** Only the sun side throws bands onto the floor. */
   castsBands: boolean;
+  /** Lattice with no pane, for a window that has a room behind it. */
+  open?: boolean;
 }
 
 /**
@@ -173,6 +175,12 @@ export interface RouteSpec {
    * because it is the leg you walk once you already know the room.
    */
   wear: number;
+  /**
+   * Whose leg this is. The echo's routes are the straight ones he is recorded
+   * walking; everything else is yours. Defaults to yours, because most of the
+   * wear in a room is.
+   */
+  actor?: "past" | "present";
 }
 
 /** One chamber: what the simulation runs, what the renderer builds, what the sign says. */

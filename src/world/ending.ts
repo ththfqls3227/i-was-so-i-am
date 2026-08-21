@@ -1,5 +1,5 @@
 import type { RoomDefinition } from "../sim/types";
-import type { Chamber, DressBlockSpec, RoomShell } from "./chamber";
+import type { Chamber, DressBlockSpec, RoomShell, SalchangSpec } from "./chamber";
 import { standardDressing } from "./dressing";
 import { box } from "./shell";
 
@@ -137,10 +137,59 @@ export const ENDING_CHAMBER: Chamber = {
     seedBase: 10000,
     corridor: false,
     dioramas: true,
-    // One bay per room walked. The west lattice of each pair has a room behind it.
-    windows: DIORAMAS.map((diorama) => diorama.centreZ),
+    // A gallery, not a stack room. The west wall is the ten windows and nothing
+    // else; the standard pair of full-length runs would board them over, and the
+    // standard window slot — everything left between the shelving and a 3.4 m
+    // ceiling — is sixteen centimetres, which is a vent rather than a view.
+    longShelves: false,
+    windows: [],
+    extraShelves: [
+      {
+        id: "east-run",
+        x: HALF,
+        facing: -1,
+        fromZ: 1,
+        toZ: CORRIDOR_END - 1,
+        height: 1.9,
+        seed: 10000 + 8123,
+        depth: 0.34,
+      },
+    ],
+    extraSalchang: [
+      // The ten. Sill low and opening tall, because you are meant to look
+      // through these at something standing on the other side, not up at them.
+      ...DIORAMAS.map((diorama): SalchangSpec => ({
+        id: diorama.windowId,
+        x: -HALF,
+        facing: 1,
+        centreZ: diorama.centreZ,
+        width: 2.9,
+        sillY: 0.75,
+        height: 2.2,
+        seed: 10000 + Math.round(diorama.centreZ),
+        castsBands: false,
+        open: true,
+      })),
+      // The ordinary ones opposite, so the corridor still reads as a corridor
+      // rather than as a row of vitrines.
+      ...DIORAMAS.map((diorama): SalchangSpec => ({
+        id: `east-${diorama.centreZ}`,
+        x: HALF,
+        facing: -1,
+        centreZ: diorama.centreZ,
+        width: 1.8,
+        sillY: 2.16,
+        height: 0.92,
+        seed: 10000 + 500 + Math.round(diorama.centreZ),
+        castsBands: false,
+      })),
+    ],
+    // The long walls are left to the shell builder, which cuts them into bands
+    // around the openings. Drawn as solid blocks as well, they board over the
+    // ten windows from the inside — which is exactly what they did.
     blocks: shellSolids
-      .filter((brush) => !brush.id.startsWith("floor") && !brush.id.startsWith("ceiling"))
+      .filter((brush) => !brush.id.startsWith("floor") && !brush.id.startsWith("ceiling")
+        && brush.id !== "wall-west" && brush.id !== "wall-east")
       .map((brush): DressBlockSpec => ({ id: brush.id, min: brush.min, max: brush.max, finish: "plaster" })),
   }),
 };

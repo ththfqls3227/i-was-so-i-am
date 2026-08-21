@@ -76,6 +76,13 @@ const SHOTS = [
   { chamber: "unkept", name: "07-entry", to: { x: 0, z: 2.4 }, yaw: 0, pitch: 0 },
   { chamber: "unkept", name: "07-lean", to: { x: -3.2, z: 5.6 }, yaw: -1.3, pitch: -0.08 },
   { chamber: "unkept", name: "07-slot", to: { x: 0, z: 7.4 }, yaw: 0, pitch: 0.02 },
+  { chamber: "ending-corridor", name: "e1-first-windows", to: { x: 0.8, z: 2.4 }, yaw: -0.5, pitch: 0.02 },
+  { chamber: "ending-corridor", name: "e2-down-the-corridor", to: { x: 1.1, z: 11 }, yaw: 0.02, pitch: 0.0 },
+  { chamber: "ending-corridor", name: "e3-window-close", to: { x: -1.3, z: 22.5 }, yaw: -1.5, pitch: 0.04 },
+  // 08's window is empty on purpose and the test pins it that way. Photograph
+  // it so the emptiness is reviewable rather than assumed.
+  { chamber: "ending-corridor", name: "e4-empty-window", to: { x: -1.3, z: 9 }, yaw: -1.5, pitch: 0.04 },
+  { chamber: "ending-corridor", name: "e5-last-window-00", to: { x: -1.3, z: 45 }, yaw: -1.5, pitch: 0.04 },
   { chamber: "unkept", name: "07-plate", to: { x: 3.6, z: 3.4 }, yaw: 0.06, pitch: 0.34 },
 ];
 

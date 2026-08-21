@@ -1,8 +1,13 @@
 import type { BalustradeSpec, ChamberDressing, RoomShell, SalchangSpec, ShelfRunSpec } from "./chamber";
 
 /** Two points and a wear level, which is what most routes are. */
-export function route(id: string, points: { x: number; z: number }[], wear = 1): ChamberDressing["routes"][number] {
-  return { id, points, wear };
+export function route(
+  id: string,
+  points: { x: number; z: number }[],
+  wear = 1,
+  actor: "past" | "present" = "present",
+): ChamberDressing["routes"][number] {
+  return { id, points, wear, actor };
 }
 
 /** Shelving stops here; salchang and plaster carry the wall above it. */
@@ -37,6 +42,13 @@ export interface StandardDressingOptions {
   warmBand?: ChamberDressing["warmBand"];
   /** Sets behind the west windows. Only the ending corridor has them. */
   dioramas?: boolean;
+  /**
+   * The pair of full-length runs down the long walls. On by default, because
+   * every room is a stack room — except the ending corridor, which is a gallery:
+   * its west wall is windows all the way down and shelving there would board up
+   * the only thing in it worth looking at.
+   */
+  longShelves?: boolean;
   /** Worn floor inlay, for rooms whose route is not a straight line to the far wall. */
   routes?: ChamberDressing["routes"];
   /** Lean applied to both long runs. Only 07 uses it. */
@@ -58,8 +70,9 @@ export function standardDressing(shell: RoomShell, options: StandardDressingOpti
   const seed = options.seedBase;
 
   const corridor = options.corridor ?? true;
+  const longShelves = options.longShelves ?? true;
   const shelves: ShelfRunSpec[] = [
-    {
+    ...(longShelves ? [{
       id: "west",
       x: -shell.halfWidth,
       facing: 1,
@@ -80,7 +93,7 @@ export function standardDressing(shell: RoomShell, options: StandardDressingOpti
       seed: seed + 8123,
       ...(options.tiltRadians === undefined ? {} : { tiltRadians: -options.tiltRadians }),
       ...(options.decay === undefined ? {} : { decay: options.decay }),
-    },
+    }] satisfies ShelfRunSpec[] : []),
     ...(corridor
       ? [{
         id: "corridor",

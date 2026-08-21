@@ -351,8 +351,8 @@ export const LONG_STANDING_CHAMBER: Chamber = {
     // Both plates are worn the same amount, because the room is the same walk
     // twice and neither leg is the clever one.
     routes: [
-      route("to-west-plate", [{ x: 0, z: 2.4 }, { x: -4, z: 6 }], 0.7),
-      route("to-east-plate", [{ x: 0, z: 2.4 }, { x: 4, z: 6 }], 0.7),
+      route("to-west-plate", [{ x: 0, z: 2.4 }, { x: -4, z: 6 }], 0.7, "past"),
+      route("to-east-plate", [{ x: 0, z: 2.4 }, { x: 4, z: 6 }], 0.7, "past"),
       route("through", [{ x: 0, z: 2.4 }, { x: 0, z: PASSAGE_TO + 1.6 }]),
     ],
   }),
@@ -443,7 +443,7 @@ export const GIVING_BACK_CHAMBER: Chamber = {
     // far end is not a destination, it is just where the room stops being
     // visible — and the whole room is the walk to it and back.
     routes: [
-      route("the-long-walk", [{ x: 0, z: 2.4 }, { x: 0, z: SIX_PARTITION_Z - 1.4 }]),
+      route("the-long-walk", [{ x: 0, z: 2.4 }, { x: 0, z: SIX_PARTITION_Z - 1.4 }], 1, "past"),
       route("to-plate", [{ x: 0, z: 2.4 }, { x: 3, z: 4 }], 0.55),
       // Around the east wing, not through the doorway. The partition only spans
       // the middle of the hall, and the way out is past the end of it — which
@@ -541,7 +541,7 @@ export const UNKEPT_CHAMBER: Chamber = {
     // but you have to want to.
     routes: [
       route("to-plate", [{ x: 0, z: 2.4 }, { x: 3.6, z: 5 }], 0.3),
-      route("to-slot", [{ x: 0, z: 2.4 }, { x: 0, z: SEVEN_SLOT_TO - 1.2 }], 0.24),
+      route("to-slot", [{ x: 0, z: 2.4 }, { x: 0, z: SEVEN_SLOT_TO - 1.2 }], 0.24, "past"),
     ],
   }),
 };

@@ -31,6 +31,7 @@ import {
   brickFloorMaterial,
   buildSalchang,
   buildShelfWall,
+  buildDioramaBoard,
   buildSignBoard,
   hanjiMaterial,
   PALETTE,
@@ -38,6 +39,7 @@ import {
   timberMaterial,
 } from "./janggyeonggak";
 import { createHumanoid, poseHumanoid, type Humanoid } from "./rig";
+import { resolveDioramas } from "../world/dioramas";
 
 // One texture tile per 2.4 m of surface, so a 12 m wall and a 0.6 m jamb keep
 // the same texel density.
@@ -203,6 +205,11 @@ export class FirstPersonScene {
   private shadows: ShadowGenerator | null = null;
   /** One band material per salchang, so a single window can be lit on its own. */
   private bandMaterials = new Map<string, StandardMaterial>();
+  /**
+   * The one corridor window still moving: 00's tape, on a loop, and the closure
+   * that puts the rig where the set is rather than where the room was.
+   */
+  private dioramaLoop: { rig: Humanoid; path: readonly ActorState[]; place: (at: ActorState) => void } | null = null;
   /** Sync-beat state: how much of the swell is left, and whether it has fired. */
   private warmBandLeft = 0;
   private warmBandSpent = false;
@@ -433,9 +440,21 @@ export class FirstPersonScene {
     // Side walls are built as bands around the window openings rather than one
     // plane. The sun only enters where the lattice is, and that is the whole
     // reason the slats read as stripes instead of decoration.
-    const sillY = SHELF_HEIGHT + 0.24;
-    const windowHeight = shell.height - SHELF_HEIGHT - 0.52;
-    const headY = sillY + windowHeight;
+    // Derived from the room's own windows, the same way the piers are. Pinning
+    // these to the shelf height is right for a stack room and wrong for the
+    // ending corridor, whose windows start at knee height because there is a
+    // set behind each one — the bands would have walled them off top and
+    // bottom while the piers politely left the gaps.
+    const sideWindows = this.chamber.dressing.salchang.filter(
+      (window) => Math.abs(window.x) === shell.halfWidth,
+    );
+    const sillY = sideWindows.length > 0
+      ? Math.min(...sideWindows.map((window) => window.sillY))
+      : SHELF_HEIGHT + 0.24;
+    const headY = sideWindows.length > 0
+      ? Math.max(...sideWindows.map((window) => window.sillY + window.height))
+      : sillY + shell.height - SHELF_HEIGHT - 0.52;
+    const windowHeight = headY - sillY;
     for (const side of [-1, 1] as const) {
       const rotation = new Vector3(0, side < 0 ? HALF_PI : -HALF_PI, 0);
       const x = side * shell.halfWidth;
@@ -708,6 +727,8 @@ export class FirstPersonScene {
     this.buildLightBands(root);
     this.buildRouteLines(root);
     this.buildSign(root, timber);
+    this.buildDioramas(root, timber);
+    this.buildRoutes(root);
     this.buildReadingAlcove(root, timber, plaster);
 
     const plates = this.buildPlates(root, brass, timber);
@@ -815,6 +836,7 @@ export class FirstPersonScene {
     this.echoes = built.echoes;
 
     this.doorOffset = 0;
+    this.dioramaLoop = null;
     this.stride.clear();
     this.pressed.clear();
     this.setLook(radiansFromYawUnits(chamber.sim.spawn.yawUnits), 0);
@@ -871,7 +893,15 @@ export class FirstPersonScene {
     this.shadows.darkness = 0.28;
 
     // Warm fill from the sunlit side so the shelf faces do not go to pitch.
-    for (const z of [2.6, 6, 9.4]) {
+    //
+    // Spaced along the room rather than listed. The three positions were picked
+    // in the 12 m hall and stayed there while rooms grew to 20 and 34 m, so the
+    // far half of a long room had no fill at all — 09 measured 21.6% of its
+    // pixels crushed below 0.02 against 00's 12.5%. The spacing below
+    // reproduces the original three exactly at 12 m and keeps going after that.
+    const bounces: number[] = [];
+    for (let z = 2.6; z < shell.depth; z += 3.4) bounces.push(z);
+    for (const z of bounces) {
       const bounce = new PointLight(`salchang-bounce-${z}`, new Vector3(-shell.halfWidth + 1.1, SHELF_HEIGHT + 0.4, z), this.scene);
       bounce.diffuse = new Color3(1, 0.84, 0.62);
       bounce.specular = new Color3(0.2, 0.17, 0.12);
@@ -879,7 +909,9 @@ export class FirstPersonScene {
       bounce.range = 9;
     }
     // A cooler, weaker answer from the east wall keeps the far shelves readable.
-    for (const z of [3.4, 8.6]) {
+    const fills: number[] = [];
+    for (let z = 3.4; z < shell.depth; z += 5.2) fills.push(z);
+    for (const z of fills) {
       const fill = new PointLight(`east-fill-${z}`, new Vector3(shell.halfWidth - 1.2, SHELF_HEIGHT + 0.3, z), this.scene);
       fill.diffuse = new Color3(0.74, 0.76, 0.86);
       fill.intensity = 0.3;
@@ -1904,6 +1936,19 @@ export class FirstPersonScene {
 
     this.driveWarmBand(state, deltaSeconds);
 
+    // The one window that has not stopped. It runs on the wall clock rather
+    // than on the tick, because the corridor's simulation is not replaying
+    // anything — this is a picture of a replay, and it loops forever.
+    if (this.dioramaLoop) {
+      const { rig, path, place } = this.dioramaLoop;
+      const at = path[Math.floor(this.clock * 30) % path.length];
+      if (at) {
+        place(at);
+        // Walking, always: this tape is of someone crossing a room.
+        poseHumanoid(rig, { speed: 1.9, phase: this.clock * 6.2, grounded: true, clock: this.clock });
+      }
+    }
+
     for (const visual of this.plates) {
       const active = state.plates.find((plate) => plate.id === visual.id)?.active ?? false;
       const pulse = active ? 1.35 + Math.sin(this.clock * 5.2) * 0.18 : 0.62 + Math.sin(this.clock * 1.5) * 0.06;
@@ -1915,6 +1960,167 @@ export class FirstPersonScene {
       visual.light.intensity = active ? 1.5 : 0.55;
       visual.ring.scaling.y = active ? 0.7 : 1;
     }
+  }
+
+  /**
+   * Worn tracks on the floor, where feet have gone.
+   *
+   * Amber and continuous for the legs you walk; cyan and broken for the ones he
+   * does — a line that stops and starts reads as a recording rather than as a
+   * path, which is what his is. Both sit a centimetre off the brick and are
+   * faint by design: this is wear, not signage, and a room where you notice the
+   * lines before the room has been dressed wrong.
+   */
+  private buildRoutes(root: TransformNode): void {
+    for (const path of this.chamber.dressing.routes) {
+      const past = path.actor === "past";
+      const material = signalMaterial(
+        this.scene,
+        `route-${path.id}`,
+        (past ? PALETTE.cyan : PALETTE.amber).scale(0.34 * path.wear),
+        0.5 + 0.3 * path.wear,
+      );
+      for (let leg = 0; leg + 1 < path.points.length; leg += 1) {
+        const from = path.points[leg];
+        const to = path.points[leg + 1];
+        if (!from || !to) continue;
+        const dx = to.x - from.x;
+        const dz = to.z - from.z;
+        const span = Math.hypot(dx, dz);
+        if (span < 0.01) continue;
+        // His line is dashes; yours is one strip. Same width, so the difference
+        // is the rhythm rather than the weight.
+        const dashes = past ? Math.max(1, Math.round(span / 0.62)) : 1;
+        for (let index = 0; index < dashes; index += 1) {
+          const length = past ? (span / dashes) * 0.52 : span;
+          const centre = (index + 0.5) / dashes;
+          const strip = MeshBuilder.CreateBox(`route-${path.id}-${leg}-${index}`, {
+            width: 0.19, height: 0.012, depth: length,
+          }, this.scene);
+          strip.position = new Vector3(
+            from.x + dx * (past ? centre : 0.5),
+            0.011,
+            from.z + dz * (past ? centre : 0.5),
+          );
+          strip.rotation.y = Math.atan2(dx, dz);
+          strip.material = material;
+          strip.isPickable = false;
+          strip.parent = root;
+        }
+      }
+    }
+  }
+
+  /**
+   * The sets behind the corridor windows.
+   *
+   * Each one is a shallow box lit from inside, with the posture the player's own
+   * tape ended in standing in it. They are deliberately not rooms: a metre and a
+   * half deep, one prop, one figure, a board with the number. What sells them is
+   * that the figure is not a decoration — it is that room's last frame, read out
+   * of the archive, so the walk back down the corridor is a walk past the things
+   * you actually did.
+   *
+   * 08's window is lit and empty, and stays that way. Nothing here should ever
+   * be tempted to fill it.
+   */
+  private buildDioramas(root: TransformNode, timber: StandardMaterial): void {
+    if (!this.chamber.dressing.dioramas) return;
+    const shell = this.chamber.shell;
+    const wallX = -shell.halfWidth;
+    const depth = 1.5;
+    const width = 2.9;
+    const height = 2.2;
+    const sillY = 0.75;
+
+    for (const diorama of resolveDioramas(this.tapes)) {
+      const z = diorama.spec.centreZ;
+      const id = diorama.spec.chamberId;
+      const backX = wallX - depth;
+
+      // The box. Plaster on the back so the figure has something to be a
+      // silhouette against, timber on the returns so it reads as joinery.
+      const back = MeshBuilder.CreatePlane(`diorama-back-${id}`, {
+        width, height, sideOrientation: Mesh.DOUBLESIDE,
+      }, this.scene);
+      back.position = new Vector3(backX, sillY + height / 2, z);
+      back.rotation.y = -Math.PI / 2;
+      // Self-lit rather than lamp-lit. Ten point lights is more than a
+      // StandardMaterial will take — the default budget is four — so the lamps
+      // were silently dropped from the shader and every set stayed black. An
+      // emissive backing costs nothing, and a bright panel with a grey figure
+      // in front of it is what a diorama looks like anyway.
+      const panel = matteMaterial(this.scene, `diorama-back-${id}-material`, Color3.Black());
+      panel.emissiveColor = new Color3(0.66, 0.58, 0.46);
+      panel.disableLighting = true;
+      back.material = panel;
+      back.isPickable = false;
+      back.parent = root;
+
+      for (const [part, offset] of [["floor", 0], ["head", height]] as const) {
+        const slab = MeshBuilder.CreateBox(`diorama-${part}-${id}`, {
+          width: depth, height: 0.08, depth: width,
+        }, this.scene);
+        slab.position = new Vector3(wallX - depth / 2, sillY + offset, z);
+        slab.material = timber;
+        slab.isPickable = false;
+        slab.parent = root;
+      }
+      for (const side of [-1, 1] as const) {
+        const cheek = MeshBuilder.CreateBox(`diorama-cheek-${id}-${side}`, {
+          width: depth, height, depth: 0.09,
+        }, this.scene);
+        cheek.position = new Vector3(wallX - depth / 2, sillY + height / 2, z + side * (width / 2));
+        cheek.material = timber;
+        cheek.isPickable = false;
+        cheek.parent = root;
+      }
+
+      // The board under it, so a window you cannot place still names itself.
+      const plate = MeshBuilder.CreatePlane(`diorama-board-${id}`, {
+        width: 0.86, height: 0.3, sideOrientation: Mesh.DOUBLESIDE,
+      }, this.scene);
+      plate.position = new Vector3(wallX - 0.02, sillY - 0.22, z);
+      plate.rotation.y = -Math.PI / 2;
+      plate.material = buildDioramaBoard(
+        this.scene,
+        `diorama-board-${id}`,
+        diorama.room?.name ?? "",
+        this.numberOf(id),
+      );
+      plate.isPickable = false;
+      plate.parent = root;
+
+      if (!diorama.pose) continue;
+
+      // Him, in the posture that tape ended in. Archival rather than live: this
+      // is a record being kept, not a replay running.
+      const skin = archivalEchoMaterial(this.scene, `diorama-skin-${id}`);
+      const rig = createHumanoid(this.scene, `diorama-figure-${id}`, skin);
+      rig.root.parent = root;
+      for (const limb of rig.parts) {
+        limb.receiveShadows = false;
+        limb.applyFog = false;
+      }
+      // No glow layer. A live echo is lit from inside and this one is not —
+      // adding it put a white hotspot at his waist and undid the whole point of
+      // the archival skin.
+      const place = (at: ActorState): void => {
+        // Into the set, facing the window. The recorded position is that room's
+        // and means nothing here; the posture is the whole point.
+        rig.root.position = new Vector3(wallX - depth * 0.58, sillY + 0.02, z);
+        rig.root.rotation.y = Math.PI / 2 + (at.yawUnits / 4096) * Math.PI * 2 * 0.08;
+      };
+      place(diorama.pose);
+      poseHumanoid(rig, { speed: 0, phase: 0, grounded: true, clock: 0 });
+
+      if (diorama.loop.length > 0) this.dioramaLoop = { rig, path: diorama.loop, place };
+    }
+  }
+
+  /** The two-digit number a chamber wears, for a board that is not its own. */
+  private numberOf(chamberId: string): string {
+    return ROSTER.byIdOrNull(chamberId)?.number ?? "";
   }
 
   /**
