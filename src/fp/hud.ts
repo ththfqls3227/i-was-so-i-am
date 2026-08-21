@@ -56,6 +56,9 @@ export class Hud {
   private readonly prompts = element("div", "prompts");
   private readonly subtitle = element("p", "subtitle");
   private readonly flash = element("div", "flash");
+  /** The last door has been closed; the result panel is frozen on the ending. */
+  private ended = false;
+
   /** 봉인 낙관 — the seal that comes down when a recording is closed. */
   private readonly seal = element("div", "seal");
   private readonly title = element("div", "overlay title");
@@ -266,6 +269,10 @@ export class Hud {
   }
 
   private renderResult(view: ViewModel): void {
+    // The ending is the last thing this panel ever shows. Without the latch the
+    // per-frame render puts the between-rooms card straight back over it, because
+    // the room is still, technically, a success.
+    if (this.ended) return;
     const finished = view.phase === "success" || (view.phase === "rerecord" && view.recordingEnabled);
     if (this.result.hidden !== !finished) this.result.hidden = !finished;
     if (!finished) return;
@@ -277,6 +284,15 @@ export class Hud {
       this.again.textContent = "R · 다시 해보기";
       this.onward.hidden = !view.hasNextChamber;
       this.resultHint.textContent = view.hasNextChamber ? "" : "여기까지가 지금 열려 있는 구역입니다";
+      if (view.finalBeat) {
+        // Not a room you have run out of. The last door, with the key you have
+        // been pressing since the first minute, and nothing else on offer.
+        this.resultHeading.textContent = "회랑 끝";
+        this.resultBody.textContent = "";
+        this.again.hidden = true;
+        this.onward.hidden = true;
+        this.resultHint.textContent = view.finalBeat;
+      }
     } else {
       this.result.dataset.kind = "fail";
       this.resultHeading.textContent = "다시 기록";
@@ -291,6 +307,27 @@ export class Hud {
       // from the player here — that is the whole point of the line.
       this.resultHint.textContent = view.rerecordNotice;
     }
+  }
+
+  /**
+   * The last door is closed. Everything else goes; the line stays.
+   *
+   * No buttons, because there is nothing after this and offering one would turn
+   * an ending into a menu.
+   */
+  showEnding(line: string): void {
+    this.ended = true;
+    this.result.hidden = false;
+    this.result.dataset.kind = "ending";
+    this.resultHeading.textContent = "";
+    this.resultBody.textContent = line;
+    this.again.hidden = true;
+    this.onward.hidden = true;
+    this.resultHint.textContent = "";
+    this.seal.dataset.on = "false";
+    void this.seal.offsetWidth;
+    this.seal.textContent = "封";
+    this.seal.dataset.on = "true";
   }
 
   /** Fade the crosshair out ahead of the freeze, then let the flash land. */

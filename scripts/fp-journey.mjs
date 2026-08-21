@@ -40,6 +40,10 @@ const read = () => page.evaluate(() => {
     rerecordNotice: fp.view.rerecordNotice ?? "",
     crosshairSealing: globalThis.document.querySelector(".crosshair")?.dataset.sealing ?? "",
     canFold: fp.view.canFold === true,
+    finalBeat: fp.view.finalBeat ?? null,
+    resultKind: globalThis.document.querySelector(".result")?.dataset.kind ?? "",
+    resultBody: globalThis.document.querySelector(".result p")?.textContent ?? "",
+    resultHint: globalThis.document.querySelector(".result .hint")?.textContent ?? "",
     seal: (() => {
       const stamp = globalThis.document.querySelector(".seal");
       return stamp ? globalThis.getComputedStyle(stamp).backgroundColor : "none";
@@ -310,6 +314,20 @@ try {
   await walkUntil(["KeyW"], (s) => s.phase === "success", 60000);
   check("the corridor can be walked to the end", true);
   check("and there is nothing after it", (await act("advanceChamber")) === false);
+
+  // The last door: the same key, one more time, and it closes the whole thing.
+  const atDoor = await read();
+  check("the last door offers the fold key", atDoor.finalBeat !== null, String(atDoor.finalBeat));
+  check("and does not offer a next room that is not there", atDoor.resultHint === atDoor.finalBeat, atDoor.resultHint);
+  await act("fold");
+  await page.waitForTimeout(500);
+  const ended = await read();
+  check("pressing it ends the game", ended.resultKind === "ending", ended.resultKind);
+  check("and the last line is the title", ended.resultBody.includes("그래서 지금의 나"), ended.resultBody);
+  // Pressing again must not restart anything.
+  await act("fold");
+  await page.waitForTimeout(300);
+  check("pressing it again does nothing", (await read()).resultKind === "ending");
 } finally {
   await browser.close();
 }

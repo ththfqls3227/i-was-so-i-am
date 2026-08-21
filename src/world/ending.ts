@@ -98,8 +98,10 @@ const shellSolids = [
 
 /**
  * The corridor takes no recording and cannot be failed. There is nothing here
- * to solve: it is forty seconds of walking and looking, and the only input that
- * does anything is the one that has been ending recordings all game.
+ * to solve: it is a walk past ten windows, and the only key that does anything
+ * is the one that has been ending recordings all game — at the last door, where
+ * it ends the game instead. See finalBeat on the chamber; the simulation has no
+ * part in it, which is why canFold stays false the whole way down.
  */
 export const ENDING_CORRIDOR: RoomDefinition = {
   id: "ending-corridor",
@@ -126,6 +128,11 @@ export const ENDING_CHAMBER: Chamber = {
   shell: ENDING_SHELL,
   number: "—",
   subtitleOnEntry: "모든 기록의 서명이 동일합니다. — 기록자: 나",
+  // The same key, one last time.
+  finalBeat: {
+    prompt: "⏎ · 기록을 닫습니다",
+    line: "나는 그랬고, 그래서 지금의 나다.",
+  },
   dressing: standardDressing(ENDING_SHELL, {
     seedBase: 10000,
     corridor: false,

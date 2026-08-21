@@ -64,6 +64,7 @@ scene.attach({
   },
   onFold: () => hud.playFoldFlash(),
   onSealing: (seconds) => hud.beginSeal(seconds),
+  onEnding: (beat) => hud.showEnding(beat.line),
 });
 
 scene.start();

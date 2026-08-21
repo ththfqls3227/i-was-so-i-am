@@ -78,6 +78,18 @@ describe("the ending corridor", () => {
     expect(ROSTER.after(ENDING_CORRIDOR.id)).toBeNull();
   });
 
+  it("ends on the fold key, and it is the only room that does", () => {
+    // The last door. Every recording ended with this key and so does the game,
+    // which only works because nothing else in the corridor answers to it.
+    const withBeats = ROSTER.all.filter((chamber) => chamber.finalBeat).map((chamber) => chamber.sim.id);
+    expect(withBeats).toEqual(["ending-corridor"]);
+    const beat = ROSTER.byIdOrNull(ENDING_CORRIDOR.id)?.finalBeat;
+    expect(beat?.prompt.length).toBeGreaterThan(0);
+    expect(beat?.line.length).toBeGreaterThan(0);
+    // And the simulation never hears about it: this is flow, not a recording.
+    expect(new Simulation(ENDING_CORRIDOR).canFold).toBe(false);
+  });
+
   it("gives every room you walked a window, in the order you leave them behind", () => {
     const played = ROSTER.all
       .filter((chamber: Chamber) => chamber.sim.id !== ENDING_CORRIDOR.id)

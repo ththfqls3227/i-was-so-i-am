@@ -211,6 +211,15 @@ export interface Chamber {
    * record will be taken back; in the finale it says the opposite, and means it.
    */
   rerecordNotice?: string;
+  /**
+   * The last door, and what the fold key does at it.
+   *
+   * Only the corridor has one. Every recording you have ever made ended with
+   * this key, and the game ends with it too — not with a menu, and not with the
+   * room simply stopping. The corridor takes no recording, so nothing in the
+   * simulation changes: this is a flow hook, and the sim never hears about it.
+   */
+  finalBeat?: { prompt: string; line: string };
   dressing: ChamberDressing;
 }
 

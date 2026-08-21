@@ -76,6 +76,8 @@ export interface ViewModel {
   chamberNumber: string;
   chamberName: string;
   hasNextChamber: boolean;
+  /** What the fold key offers at the last door, or null anywhere else. */
+  finalBeat: string | null;
   /** What the facility says on the way into this chamber. */
   entryLine: string;
   /** The browser refused pointer lock, so looking around means dragging. */
@@ -88,6 +90,8 @@ export interface SceneEvents {
   onFold: () => void;
   /** The finale's fold has begun and will land in this many seconds. */
   onSealing: (seconds: number) => void;
+  /** The last door was closed. The game is over; nothing follows this. */
+  onEnding: (beat: { prompt: string; line: string }) => void;
 }
 
 /**
@@ -159,6 +163,8 @@ export class FirstPersonScene {
   readonly tapes = new TapeArchive();
   /** Ticks left of the finale's sealing hold, or 0 when nothing is being sealed. */
   private sealingTicks = 0;
+  /** The last door has been closed. Pressing again does nothing. */
+  private ended = false;
   /** The last frame handed to the tick, repeated while the seal lands. */
   private lastFrame = 0;
   private events: SceneEvents | null = null;
@@ -797,6 +803,7 @@ export class FirstPersonScene {
     // simulation that is about to be thrown away.
     this.tapes.keep(this.simulation.currentTape);
     this.sealingTicks = 0;
+    this.ended = false;
     this.clearRoom();
     this.chamber = chamber;
     this.simulation = new Simulation(chamber.sim);
@@ -1691,6 +1698,16 @@ export class FirstPersonScene {
    */
   beginFold(): boolean {
     if (this.sealingTicks > 0) return false;
+    // The last door. The same key that has closed every record you ever made,
+    // closing the whole thing — routed through here rather than added beside
+    // it, so there is still exactly one way to press it.
+    const beat = this.chamber.finalBeat;
+    if (beat && this.simulation.state.success) {
+      if (this.ended) return false;
+      this.ended = true;
+      this.events?.onEnding(beat);
+      return true;
+    }
     if (!this.simulation.canFold) return false;
     const hold = this.chamber.sealHoldSeconds ?? 0;
     if (hold <= 0) return this.completeFold();
@@ -1975,6 +1992,10 @@ export class FirstPersonScene {
       chamberName: this.chamber.sim.name,
       entryLine: this.chamber.subtitleOnEntry,
       hasNextChamber: ROSTER.after(this.chamber.sim.id) !== null,
+      // Offered only once you are actually standing at the last door.
+      finalBeat: this.chamber.finalBeat && state.success && !this.ended
+        ? this.chamber.finalBeat.prompt
+        : null,
       pointerLockDenied: this.pointerLockDenied && !this.pointerLocked,
     };
   }
