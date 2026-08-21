@@ -64,6 +64,8 @@ export interface ViewModel {
   started: boolean;
   /** False in a room that takes no recording; the HUD drops the whole apparatus. */
   recordingEnabled: boolean;
+  /** The colour this room's fold stamps its seal in. Cyan only in the finale. */
+  sealColour: "red" | "cyan";
   /** The browser refused pointer lock, so looking around means dragging. */
   pointerLockDenied: boolean;
 }
@@ -72,6 +74,20 @@ export interface SceneEvents {
   onFrame: (view: ViewModel) => void;
   onPhaseChange: (phase: SimState["phase"], previous: SimState["phase"]) => void;
   onFold: () => void;
+}
+
+/**
+ * The echo skins a room owns.
+ *
+ * `live` is the recording this run made. `archival` is a second, desaturated
+ * skin for a record the archive is replaying on its own — 08 puts an older self
+ * on a plate and never explains it. They are named rather than indexed because
+ * the two are faded on different schedules: the live echo arrives over the first
+ * second of the second pass, and in the finale it is never taken away at all.
+ */
+export interface RoomEchoes {
+  live: StandardMaterial | null;
+  archival: StandardMaterial | null;
 }
 
 interface Snapshot {
@@ -140,13 +156,15 @@ export class FirstPersonScene {
   private started = false;
 
   private echo: Humanoid;
-  private echoMaterials: StandardMaterial[] = [];
+  private echoes: RoomEchoes = { live: null, archival: null };
   private doorSlab: Mesh;
   private doorOffset = 0;
   private plateRing: Mesh;
   private plateGlow: PointLight;
   private plateRingMaterial: StandardMaterial;
   private shadows: ShadowGenerator | null = null;
+  /** One band material per salchang, so a single window can be lit on its own. */
+  private bandMaterials = new Map<string, StandardMaterial>();
   /** Everything the current chamber built. Dropped whole when the room changes. */
   private worldRoot: TransformNode | null = null;
   private roomLights: Light[] = [];
@@ -215,7 +233,7 @@ export class FirstPersonScene {
     this.plateGlow = built.plateGlow;
     this.plateRingMaterial = built.plateRingMaterial;
     this.echo = built.echo;
-    this.echoMaterials = built.echoMaterials;
+    this.echoes = built.echoes;
 
     this.captureSnapshots();
     this.previous = new Map(this.current);
@@ -304,10 +322,11 @@ export class FirstPersonScene {
     plateGlow: PointLight;
     plateRingMaterial: StandardMaterial;
     echo: Humanoid;
-    echoMaterials: StandardMaterial[];
+    echoes: RoomEchoes;
   } {
     const root = new TransformNode(`world-${this.chamber.sim.id}`, this.scene);
     const lightsBefore = new Set(this.scene.lights);
+    this.bandMaterials.clear();
     const shell = this.chamber.shell;
     const width = shell.halfWidth * 2;
 
@@ -384,36 +403,21 @@ export class FirstPersonScene {
       }
     }
 
-    // The image the whole identity rests on: both long walls packed with cases.
-    for (const side of [-1, 1] as const) {
-      buildShelfWall(this.scene, root, timber, boxCase, boxLit, {
-        x: side * shell.halfWidth,
-        facing: side < 0 ? 1 : -1,
-        fromZ: 0.55,
-        toZ: shell.depth - 0.55,
-        height: SHELF_HEIGHT,
-        seed: side < 0 ? 4211 : 8123,
-      });
+    // The image the whole identity rests on: walls packed with cases. Which walls
+    // and how they lean is the room's to say.
+    for (const run of this.chamber.dressing.shelves) {
+      const wall = buildShelfWall(this.scene, root, timber, boxCase, boxLit, run);
+      if (run.tiltRadians) wall.root.rotation.z = run.tiltRadians;
     }
 
     // Salchang above the shelving. Its slats are the only shadow casters that
     // matter: the stripe bands on the floor are cast, not painted, so they move
     // correctly as the player walks and fall over whatever is standing in them.
     const salchangGlass = signalMaterial(this.scene, "salchang-glass", new Color3(1, 0.93, 0.78));
-    for (const side of [-1, 1] as const) {
-      for (const centreZ of [2.6, 6, 9.4]) {
-        const slats = buildSalchang(this.scene, root, timber, salchangGlass, {
-          x: side * shell.halfWidth,
-          facing: side < 0 ? 1 : -1,
-          centreZ,
-          width: 2.6,
-          sillY: SHELF_HEIGHT + 0.24,
-          height: shell.height - SHELF_HEIGHT - 0.52,
-          seed: 100 + centreZ,
-        });
-        // West is the sun side; its slats cast the bands.
-        if (side < 0) for (const slat of slats) this.cast(slat);
-      }
+    for (const window of this.chamber.dressing.salchang) {
+      const slats = buildSalchang(this.scene, root, timber, salchangGlass, window);
+      // Only the sun side's slats cast the bands.
+      if (window.castsBands) for (const slat of slats) this.cast(slat);
     }
 
     // Post and beam: the frame the building is actually made of.
@@ -471,28 +475,8 @@ export class FirstPersonScene {
     corridorPurlin.isPickable = false;
     corridorPurlin.parent = root;
 
-    // The archive does not stop at the door: a shallow run of cases follows you
-    // out, so the corridor reads as more of the same building rather than as a
-    // exit tube. This is the grammar the later chambers will connect with.
-    buildShelfWall(this.scene, root, timber, boxCase, boxLit, {
-      x: -shell.corridorHalfWidth,
-      facing: 1,
-      fromZ: shell.depth + 0.6,
-      toZ: shell.corridorEnd - 1.4,
-      height: 1.94,
-      seed: 5309,
-      depth: 0.3,
-    });
-    // And one lattice opposite it, so the light has a source on this side too.
-    buildSalchang(this.scene, root, timber, salchangGlass, {
-      x: shell.corridorHalfWidth,
-      facing: -1,
-      centreZ: 14.4,
-      width: 2.2,
-      sillY: 1.62,
-      height: 0.86,
-      seed: 611,
-    });
+    // The archive does not stop at the door — the corridor's run of cases and the
+    // lattice opposite it are both in the room's dressing, built with the rest.
     const corridorSun = new PointLight("corridor-salchang", new Vector3(shell.corridorHalfWidth - 0.7, 2.05, 14.4), this.scene);
     corridorSun.diffuse = new Color3(1, 0.85, 0.62);
     corridorSun.intensity = 0.5;
@@ -569,7 +553,7 @@ export class FirstPersonScene {
       plateGlow: plate.light,
       plateRingMaterial: plate.ringMaterial,
       echo,
-      echoMaterials: [echoSkin],
+      echoes: { live: echoSkin, archival: null },
     };
   }
 
@@ -605,7 +589,7 @@ export class FirstPersonScene {
     this.plateGlow = built.plateGlow;
     this.plateRingMaterial = built.plateRingMaterial;
     this.echo = built.echo;
-    this.echoMaterials = built.echoMaterials;
+    this.echoes = built.echoes;
 
     this.doorOffset = 0;
     this.stride.clear();
@@ -696,14 +680,24 @@ export class FirstPersonScene {
     const bandLength = Math.abs(farX - nearX);
     const centreX = (nearX + farX) / 2;
 
-    const glow = signalMaterial(this.scene, "salchang-band", new Color3(1, 0.84, 0.58).scale(0.62), 0.92);
     const slatPitch = 0.17;
-    for (const windowZ of [2.6, 6, 9.4]) {
-      const landedZ = windowZ + (sillY * drift) / slope;
-      const stripes = Math.round(2.6 / slatPitch);
+    // One material per window, not one for the room. 04 warms the single band its
+    // echo is standing in, and a shared material would warm the whole chamber.
+    for (const window of this.chamber.dressing.salchang) {
+      if (!window.castsBands) continue;
+      const glow = signalMaterial(
+        this.scene,
+        `salchang-band-${window.id}`,
+        new Color3(1, 0.84, 0.58).scale(0.62),
+        0.92,
+      );
+      this.bandMaterials.set(window.id, glow);
+
+      const landedZ = window.centreZ + (sillY * drift) / slope;
+      const stripes = Math.round(window.width / slatPitch);
       for (let index = 0; index < stripes; index += 1) {
-        const z = landedZ - 1.3 + (index + 0.5) * (2.6 / stripes);
-        const band = MeshBuilder.CreateBox(`salchang-band-${windowZ}-${index}`, {
+        const z = landedZ - window.width / 2 + (index + 0.5) * (window.width / stripes);
+        const band = MeshBuilder.CreateBox(`salchang-band-${window.id}-${index}`, {
           width: bandLength,
           height: 0.008,
           depth: slatPitch * 0.46,
@@ -712,10 +706,8 @@ export class FirstPersonScene {
         band.material = glow;
         band.isPickable = false;
         band.parent = root;
-      }
-      for (let index = 0; index < stripes; index += 1) {
-        const z = landedZ - 1.3 + (index + 0.5) * (2.6 / stripes);
-        const wallBand = MeshBuilder.CreateBox(`salchang-band-wall-${windowZ}-${index}`, {
+
+        const wallBand = MeshBuilder.CreateBox(`salchang-band-wall-${window.id}-${index}`, {
           width: 0.01,
           height: 0.9,
           depth: slatPitch * 0.42,
@@ -726,6 +718,18 @@ export class FirstPersonScene {
         wallBand.parent = root;
       }
     }
+  }
+
+  /**
+   * Warm one window's floor band, for the beat in 04 where the player looks down
+   * from the gallery at the self holding the switch that got them up there.
+   * Nothing says so out loud; the light in the band he is standing in just
+   * changes for a moment.
+   */
+  warmBand(salchangId: string, warmth: number): void {
+    const material = this.bandMaterials.get(salchangId);
+    if (!material) return;
+    material.emissiveColor = new Color3(1, 0.84, 0.58).scale(0.62 + warmth * 0.5);
   }
 
   /** Cyan dashed for what the recording should walk, amber solid for the present. */
@@ -1313,7 +1317,7 @@ export class FirstPersonScene {
       // The echo arrives rather than appearing: a short fade-in on the first
       // second of the second pass.
       const arrival = Math.min(1, state.tapeTick / 18);
-      for (const material of this.echoMaterials) material.alpha = 0.34 * (0.35 + arrival * 0.65);
+      if (this.echoes.live) this.echoes.live.alpha = 0.34 * (0.35 + arrival * 0.65);
     }
 
     const door = state.doors[0];
@@ -1365,6 +1369,7 @@ export class FirstPersonScene {
       paused: this.paused,
       started: this.started,
       recordingEnabled: this.simulation.recordingEnabled,
+      sealColour: this.chamber.dressing.sealColour,
       pointerLockDenied: this.pointerLockDenied && !this.pointerLocked,
     };
   }

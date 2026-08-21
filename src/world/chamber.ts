@@ -25,12 +25,72 @@ export interface RoomShell {
   spawnZ: number;
 }
 
+/**
+ * A run of memory-box shelving along one wall.
+ *
+ * `tiltRadians` leans the whole run about its own centre. It exists because 07
+ * is the chamber where the archive stops being maintained, and a leaning shelf
+ * has to be one rotation on one node — which is only possible because the boxes
+ * are placed in coordinates local to the run rather than to the world.
+ */
+export interface ShelfRunSpec {
+  id: string;
+  /** The wall plane this run stands against. */
+  x: number;
+  /** Which way the boxes face: +1 for a wall on the left, -1 on the right. */
+  facing: 1 | -1;
+  fromZ: number;
+  toZ: number;
+  height: number;
+  /** Drives the per-box jitter. Same seed, same wall, every time. */
+  seed: number;
+  depth?: number;
+  tiltRadians?: number;
+}
+
+/**
+ * A slatted window. The sun side casts the floor bands, and each window owns its
+ * bands — 04 warms the one band its echo is standing in, which is impossible
+ * while every band on every wall shares one material.
+ */
+export interface SalchangSpec {
+  id: string;
+  x: number;
+  facing: 1 | -1;
+  centreZ: number;
+  width: number;
+  sillY: number;
+  height: number;
+  /** Shared by the lattice and the bands it throws, so both jitter together. */
+  seed: number;
+  /** Only the sun side throws bands onto the floor. */
+  castsBands: boolean;
+}
+
+/** Everything the renderer needs that the simulation has no opinion about. */
+export interface ChamberDressing {
+  shelves: ShelfRunSpec[];
+  salchang: SalchangSpec[];
+  /**
+   * The colour the fold stamps its seal in. Red everywhere; cyan in the finale,
+   * where what is being sealed is not the record.
+   */
+  sealColour: "red" | "cyan";
+  /**
+   * The one memory box left standing open. 02 authors it and 09 inherits the
+   * same coordinates, so the anchor lands in the same place without either room
+   * having to remember a number the other one chose.
+   */
+  openBox: { x: number; y: number; z: number } | null;
+}
+
 /** One chamber: what the simulation runs, what the renderer builds, what the sign says. */
 export interface Chamber {
   sim: RoomDefinition;
   shell: RoomShell;
   /** The number on the entrance board — "00" through "09". */
   number: string;
+  dressing: ChamberDressing;
 }
 
 /**

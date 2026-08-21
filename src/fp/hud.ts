@@ -137,6 +137,14 @@ export class Hud {
     this.prompts.hidden = !playing;
 
     this.crosshair.dataset.focus = String(view.focus !== null);
+    // The seal colour is the room's, and the HUD carries it as a custom property
+    // so anything that stamps one picks it up without being told which room it
+    // is in. Red for every chamber that seals a record; cyan for the one that
+    // seals someone.
+    if (this.root.dataset.seal !== view.sealColour) {
+      this.root.dataset.seal = view.sealColour;
+      this.root.style.setProperty("--seal", view.sealColour === "cyan" ? "var(--cyan)" : "var(--seal-red)");
+    }
     // Only say this when it is true. If the browser gave us pointer lock, the
     // player never needs to know there was another way.
     const showNotice = playing && view.pointerLockDenied;

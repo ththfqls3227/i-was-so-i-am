@@ -1,5 +1,5 @@
 import type { Brush, RoomDefinition, Vec3 } from "../sim/types";
-import type { Chamber, RoomShell } from "./chamber";
+import type { Chamber, ChamberDressing, RoomShell } from "./chamber";
 
 const WALL = 0.6;
 
@@ -102,8 +102,62 @@ export const ROOM_SHELL: RoomShell = {
   spawnZ: SPAWN_Z,
 };
 
+/** Shelving stops here; salchang and plaster carry the wall above it. */
+const SHELF_HEIGHT = 2.72;
+const SALCHANG_SILL = SHELF_HEIGHT + 0.24;
+const SALCHANG_HEIGHT = ROOM_SHELL.height - SHELF_HEIGHT - 0.52;
+/** Where the three windows sit along each long wall. */
+const WINDOW_ROW = [2.6, 6, 9.4];
+
+const AWAKENING_DRESSING: ChamberDressing = {
+  shelves: [
+    { id: "west", x: -ROOM_SHELL.halfWidth, facing: 1, fromZ: 0.55, toZ: ROOM_SHELL.depth - 0.55, height: SHELF_HEIGHT, seed: 4211 },
+    { id: "east", x: ROOM_SHELL.halfWidth, facing: -1, fromZ: 0.55, toZ: ROOM_SHELL.depth - 0.55, height: SHELF_HEIGHT, seed: 8123 },
+    {
+      id: "corridor",
+      x: -ROOM_SHELL.corridorHalfWidth,
+      facing: 1,
+      fromZ: ROOM_SHELL.depth + 0.6,
+      toZ: ROOM_SHELL.corridorEnd - 1.4,
+      height: 1.94,
+      seed: 5309,
+      depth: 0.3,
+    },
+  ],
+  salchang: [
+    ...WINDOW_ROW.flatMap((centreZ): ChamberDressing["salchang"] =>
+      ([-1, 1] as const).map((side) => ({
+        id: `${side < 0 ? "west" : "east"}-${centreZ}`,
+        x: side * ROOM_SHELL.halfWidth,
+        facing: (side < 0 ? 1 : -1) as 1 | -1,
+        centreZ,
+        width: 2.6,
+        sillY: SALCHANG_SILL,
+        height: SALCHANG_HEIGHT,
+        seed: 100 + centreZ,
+        // West is the sun side.
+        castsBands: side < 0,
+      })),
+    ),
+    {
+      id: "corridor",
+      x: ROOM_SHELL.corridorHalfWidth,
+      facing: -1,
+      centreZ: 14.4,
+      width: 2.2,
+      sillY: 1.62,
+      height: 0.86,
+      seed: 611,
+      castsBands: false,
+    },
+  ],
+  sealColour: "red",
+  openBox: null,
+};
+
 export const AWAKENING_CHAMBER: Chamber = {
   sim: AWAKENING,
   shell: ROOM_SHELL,
   number: "00",
+  dressing: AWAKENING_DRESSING,
 };

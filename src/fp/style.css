@@ -3,6 +3,9 @@
   --cyan: #6fd9f2;
   --amber: #f0a95c;
   --ink: #06080c;
+  /* The nakgwan seal. Red in every chamber but the last. */
+  --seal-red: #c8402f;
+  --seal: var(--seal-red);
   --paper: #eef1f4;
   font-family: Inter, "Pretendard", ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-synthesis: none;

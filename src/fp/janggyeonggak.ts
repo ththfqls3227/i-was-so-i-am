@@ -9,8 +9,12 @@ import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 // prototype methods are absent under tree-shaking, thinInstanceSetBuffer does
 // nothing at all, and every wall of boxes silently renders as one unit box at
 // the origin — which is exactly what the first two passes did.
+// Side-effect import: this is what installs thinInstanceSetBuffer onto Mesh.
+// Without it every shelf wall silently renders as a single box at the origin —
+// no error, no warning, just an archive with nothing in it. If a module shuffle
+// ever makes this look unused, it is not. Keep it.
 import "@babylonjs/core/Meshes/thinInstanceMesh";
-import type { TransformNode } from "@babylonjs/core/Meshes/transformNode";
+import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import type { Scene } from "@babylonjs/core/scene";
 
 import { normalFromHeight, scratchContext, seededRandom } from "./materials";
@@ -314,6 +318,7 @@ export function hanjiMaterial(scene: Scene, name: string, seed: number, glow = 1
 }
 
 export interface ShelfWallOptions {
+  id?: string;
   /** Wall plane in x, and which way the boxes face. */
   x: number;
   facing: 1 | -1;
@@ -326,6 +331,11 @@ export interface ShelfWallOptions {
 }
 
 export interface ShelfWall {
+  /**
+   * The run's own node, at the centre of the run. Rotate this to lean the whole
+   * wall — every part of it, boxes included, is placed relative to this point.
+   */
+  root: TransformNode;
   /** Every box on this wall, in one draw call. */
   boxes: Mesh;
   /** The ~5% that still hold a readable memory. */
@@ -354,6 +364,15 @@ export function buildShelfWall(
   const random = seededRandom(seed);
   const frame: Mesh[] = [];
 
+  // Everything below is placed relative to this node rather than to the world.
+  // Thin instance matrices are relative to their mesh, and the mesh inherits the
+  // parent — so absolute matrices under a rotated parent swing the whole wall
+  // around the world origin instead of leaning it where it stands.
+  const centreZ = (fromZ + toZ) / 2;
+  const run = new TransformNode(`shelf-run-${options.id ?? x}`, scene);
+  run.position = new Vector3(x, 0, centreZ);
+  run.parent = parent;
+
   const shelfLevels: number[] = [];
   const firstShelf = 0.34;
   const shelfPitch = 0.46;
@@ -364,10 +383,10 @@ export function buildShelfWall(
   // Shelf boards and the uprights that carry them.
   for (const [index, y] of shelfLevels.entries()) {
     const board = MeshBuilder.CreateBox(`shelf-board-${x}-${index}`, { width: depth, height: 0.05, depth: span }, scene);
-    board.position = new Vector3(x + facing * (depth / 2), y, (fromZ + toZ) / 2);
+    board.position = new Vector3(facing * (depth / 2), y, 0);
     board.material = timber;
     board.isPickable = false;
-    board.parent = parent;
+    board.parent = run;
     board.receiveShadows = true;
     frame.push(board);
   }
@@ -375,10 +394,10 @@ export function buildShelfWall(
   for (let index = 0; index <= uprightCount; index += 1) {
     const z = fromZ + (index / uprightCount) * span;
     const post = MeshBuilder.CreateBox(`shelf-post-${x}-${index}`, { width: depth + 0.04, height, depth: 0.11 }, scene);
-    post.position = new Vector3(x + facing * (depth / 2), height / 2, z);
+    post.position = new Vector3(facing * (depth / 2), height / 2, z - centreZ);
     post.material = timber;
     post.isPickable = false;
-    post.parent = parent;
+    post.parent = run;
     post.receiveShadows = true;
     frame.push(post);
   }
@@ -397,7 +416,11 @@ export function buildShelfWall(
       const jitterY = (random() - 0.5) * 0.012;
       const scaleY = 0.9 + random() * 0.2;
       const matrix = Matrix.Scaling(1, scaleY, 0.86 + random() * 0.18).multiply(
-        Matrix.Translation(x + facing * (depth / 2 + jitterX), y + boxHeight * scaleY * 0.5 + 0.03 + jitterY, z),
+        Matrix.Translation(
+          facing * (depth / 2 + jitterX),
+          y + boxHeight * scaleY * 0.5 + 0.03 + jitterY,
+          z - centreZ,
+        ),
       );
       // A memory that can still be replayed leaks light at its edge.
       (random() < 0.052 ? lit : plain).push(...matrix.asArray());
@@ -407,7 +430,7 @@ export function buildShelfWall(
   const boxes = MeshBuilder.CreateBox(`memory-box-${x}`, { width: depth - 0.06, height: boxHeight, depth: pitch - 0.016 }, scene);
   boxes.material = boxMaterial;
   boxes.isPickable = false;
-  boxes.parent = parent;
+  boxes.parent = run;
   boxes.receiveShadows = true;
   boxes.thinInstanceSetBuffer("matrix", new Float32Array(plain), 16);
   // Without this the mesh keeps the bounding box of a single unit box at the
@@ -417,11 +440,11 @@ export function buildShelfWall(
   const litBoxes = MeshBuilder.CreateBox(`memory-box-lit-${x}`, { width: depth - 0.055, height: boxHeight, depth: pitch - 0.014 }, scene);
   litBoxes.material = litMaterial;
   litBoxes.isPickable = false;
-  litBoxes.parent = parent;
+  litBoxes.parent = run;
   litBoxes.thinInstanceSetBuffer("matrix", new Float32Array(lit), 16);
   litBoxes.thinInstanceRefreshBoundingInfo(true);
 
-  return { boxes, lit: litBoxes, frame };
+  return { root: run, boxes, lit: litBoxes, frame };
 }
 
 /**
