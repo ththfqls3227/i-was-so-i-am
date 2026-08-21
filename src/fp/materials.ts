@@ -33,7 +33,7 @@ export function scratchContext(width: number, height: number): CanvasRenderingCo
  * what gives a seam a lit edge instead of a painted-on line, and at first-person
  * range that difference is the whole reason the wall reads as a surface.
  */
-function normalFromHeight(
+export function normalFromHeight(
   scene: Scene,
   name: string,
   height: Uint8ClampedArray,

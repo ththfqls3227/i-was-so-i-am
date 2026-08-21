@@ -55,6 +55,8 @@ export class Hud {
   private readonly prompts = element("div", "prompts");
   private readonly subtitle = element("p", "subtitle");
   private readonly flash = element("div", "flash");
+  /** 봉인 낙관 — the seal that comes down when a recording is closed. */
+  private readonly seal = element("div", "seal");
   private readonly title = element("div", "overlay title");
   private readonly result = element("div", "overlay result");
   private readonly resultHeading = element("h2");
@@ -114,6 +116,7 @@ export class Hud {
       this.notice,
       this.prompts,
       this.flash,
+      this.seal,
       this.diagnostic,
       this.title,
       this.result,
@@ -253,5 +256,11 @@ export class Hud {
     // Force a reflow so the animation restarts on a second fold.
     void this.flash.offsetWidth;
     this.flash.dataset.on = "true";
+    // The archive stamps the record closed. Under reduced motion the seal still
+    // appears and still says the same thing — it just does not travel to say it.
+    this.seal.dataset.on = "false";
+    void this.seal.offsetWidth;
+    this.seal.textContent = "封";
+    this.seal.dataset.on = "true";
   }
 }
