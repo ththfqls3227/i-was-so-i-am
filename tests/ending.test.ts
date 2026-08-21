@@ -4,7 +4,10 @@ import { PLAYER_RADIUS, STEP_HEIGHT } from "../src/sim/constants";
 import { solidsFor } from "../src/sim/mechanisms";
 import type { Brush, RoomDefinition } from "../src/sim/types";
 import type { Chamber } from "../src/world/chamber";
+import { TapeArchive } from "../src/sim/archive";
+import { resolveDioramas } from "../src/world/dioramas";
 import { DIORAMAS, ENDING_CORRIDOR } from "../src/world/ending";
+import { GOLDEN_RECORDINGS, goldenTape } from "../src/world/goldens";
 import { ROSTER } from "../src/world/roster";
 import { drive, framesFor } from "./support/fp-drive";
 
@@ -148,6 +151,77 @@ describe("the worn lines in the floor", () => {
         expect(path.wear).toBeGreaterThan(0);
         expect(path.wear).toBeLessThanOrEqual(1);
       }
+    }
+  });
+});
+
+describe("the recordings the game ships with", () => {
+  it("has one for every room that takes a recording, and none for the rooms that do not", () => {
+    const recording = ROSTER.all
+      .filter((chamber) => chamber.sim.recordingDisabled !== true)
+      .map((chamber) => chamber.sim.id);
+    expect(Object.keys(GOLDEN_RECORDINGS).sort()).toEqual([...recording].sort());
+  });
+
+  it("folds each one into a tape its own room accepts", () => {
+    // Built by playing the room, so a recording that stopped solving its room
+    // is a recording that fails to build rather than one that quietly rots.
+    for (const chamber of ROSTER.all) {
+      if (chamber.sim.recordingDisabled === true) continue;
+      const tape = goldenTape(chamber.sim);
+      expect({ room: chamber.sim.id, folded: tape !== null }).toEqual({ room: chamber.sim.id, folded: true });
+      expect(tape?.roomId).toBe(chamber.sim.id);
+      expect(tape?.duration).toBe(chamber.sim.tapeDurationTicks);
+    }
+  });
+});
+
+describe("what stands behind each window", () => {
+  it("puts somebody in every window but 08's, having played nothing", () => {
+    // The corridor is reachable without having played a single room. Every
+    // window still has to have someone in it.
+    const resolved = resolveDioramas(new TapeArchive());
+    const empty = resolved.filter((diorama) => diorama.pose === null).map((diorama) => diorama.spec.chamberId);
+    expect(empty).toEqual(["silence"]);
+  });
+
+  it("prefers the player's own recording, and does not say that it did", () => {
+    const archive = new TapeArchive();
+    const room = ROSTER.byIdOrNull("second-self")?.sim;
+    expect(room).toBeDefined();
+    if (!room) return;
+
+    // A recording that ends somewhere the golden does not.
+    const simulation = new Simulation(room);
+    drive(simulation, framesFor([{ forward: true, ticks: 20 }, { ticks: 30 }]));
+    simulation.fold();
+    archive.keep(simulation.currentTape);
+
+    const mine = resolveDioramas(archive).find((diorama) => diorama.spec.chamberId === "second-self");
+    const theirs = resolveDioramas(new TapeArchive()).find((diorama) => diorama.spec.chamberId === "second-self");
+    expect(mine?.isPlayers).toBe(true);
+    expect(theirs?.isPlayers).toBe(false);
+    expect(mine?.pose?.z).not.toBeCloseTo(theirs?.pose?.z ?? 0, 1);
+    // Same shape either way. Nothing downstream can tell them apart by looking.
+    expect(Object.keys(mine ?? {}).sort()).toEqual(Object.keys(theirs ?? {}).sort());
+  });
+
+  it("leaves only the first room still walking", () => {
+    const resolved = resolveDioramas(new TapeArchive());
+    const moving = resolved.filter((diorama) => diorama.loop.length > 0).map((diorama) => diorama.spec.chamberId);
+    expect(moving).toEqual(["awakening"]);
+    const awakening = resolved.find((diorama) => diorama.spec.chamberId === "awakening");
+    expect(awakening?.loop.length).toBe(awakening?.room?.tapeDurationTicks);
+  });
+
+  it("stands each of them still, in the posture the fold froze", () => {
+    for (const diorama of resolveDioramas(new TapeArchive())) {
+      if (!diorama.pose || !diorama.room) continue;
+      // On the floor of its own room, not falling and not out of bounds.
+      expect(diorama.pose.y).toBeGreaterThanOrEqual(0);
+      expect(Math.abs(diorama.pose.x)).toBeLessThan(20);
+      expect(diorama.pose.z).toBeGreaterThan(0);
+      expect(diorama.pose.z).toBeLessThan(40);
     }
   });
 });

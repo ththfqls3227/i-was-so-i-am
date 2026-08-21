@@ -6,13 +6,14 @@ import { createTape } from "../src/sim/tape";
 import { HOLDING_HAND, SECOND_SELF } from "../src/world/chambers";
 import { LAST_HOLD, SILENCE } from "../src/world/chambers-08-09";
 import { ROSTER } from "../src/world/roster";
+import { GOLDEN_RECORDINGS } from "../src/world/goldens";
 import { actorOf, doorOpen, drive, framesFor } from "./support/fp-drive";
 
 const holdActive = (simulation: Simulation, id = "grip-pillar"): boolean =>
   simulation.state.holds.find((hold) => hold.id === id)?.active ?? false;
 
 /** The recording 02 and 09 both ask for: walk to the grip, take it, end there. */
-const HOLD_THE_GRIP = [{ forward: true, ticks: 8 }, { act: true, ticks: MIN_TAPE_TICKS + 12 }];
+const HOLD_THE_GRIP = [...(GOLDEN_RECORDINGS["last-hold"] ?? [])];
 
 describe("08 — silence", () => {
   it("takes no recording and offers no key that would do nothing", () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Simulation } from "../src/sim/simulation";
 import { GIVING_BACK, LONG_STANDING, TWO_OF_US, UNKEPT } from "../src/world/chambers-04-07";
 import { ROSTER } from "../src/world/roster";
+import { GOLDEN_RECORDINGS } from "../src/world/goldens";
 import type { RoomDefinition } from "../src/sim/types";
 import { actorOf, doorOpen, drive, framesFor, type Hold } from "./support/fp-drive";
 
@@ -16,62 +17,44 @@ const holdActive = (simulation: Simulation, id: string): boolean =>
 const plateActive = (simulation: Simulation, id: string): boolean =>
   simulation.state.plates.find((plate) => plate.id === id)?.active ?? false;
 
+/** The first pass is the shipped recording; only the second pass is test data. */
+function golden(room: RoomDefinition, replay: Hold[]): Golden {
+  const record = GOLDEN_RECORDINGS[room.id];
+  if (!record) throw new Error(`No shipped recording for ${room.id}`);
+  return { room, record: [...record], replay };
+}
+
 const GOLDENS: Record<string, Golden> = {
-  "two-of-us": {
-    room: TWO_OF_US,
-    // Walk to the grip on the ground floor and end the recording holding it.
-    record: [{ forward: true, ticks: 30 }, { act: true, ticks: 40 }],
-    // Up the stairs he opened, along the gallery, take the second grip — which
-    // latches the way out — then walk through it.
-    replay: [
-      { forward: true, right: true, ticks: 34 },
-      { forward: true, ticks: 52 },
-      { act: true, ticks: 20 },
-      { forward: true, ticks: 80 },
-    ],
-  },
-  "long-standing": {
-    room: LONG_STANDING,
-    // Stand a long time on the first plate, then walk to the second and stop.
-    record: [
-      { forward: true, left: true, ticks: 32 },
-      { ticks: 150 },
-      { right: true, ticks: 50 },
-      { ticks: 12 },
-    ],
-    // In through the door his standing opens, and out through the one he opens
-    // by moving on.
-    replay: [
-      { forward: true, ticks: 70 },
-      { ticks: 150 },
-      { forward: true, ticks: 130 },
-    ],
-  },
-  "giving-back": {
-    room: GIVING_BACK,
-    // The same recording 03 taught: walk at the shut doorway and keep walking.
-    record: [{ forward: true, ticks: 220 }],
-    // Stand on the plate and wait. That is the room.
-    // Around the partition, not into it — it only spans the middle of the hall,
-    // which is the whole reason he cannot follow.
-    replay: [
-      { forward: true, right: true, ticks: 26 },
-      { ticks: 220 },
-      { forward: true, right: true, ticks: 40 },
-      { forward: true, ticks: 230 },
-    ],
-  },
-  unkept: {
-    room: UNKEPT,
-    // Forward and gripping at once — the tail that causes accidents elsewhere.
-    record: [{ forward: true, act: true, ticks: 80 }],
-    // Onto the plate and stay there — stepping off shuts the door on him.
-    replay: [
-      { forward: true, right: true, ticks: 36 },
-      { ticks: 200 },
-      { forward: true, ticks: 150 },
-    ],
-  },
+  // Up the stairs he opened, along the gallery, take the second grip — which
+  // latches the way out — then walk through it.
+  "two-of-us": golden(TWO_OF_US, [
+    { forward: true, right: true, ticks: 34 },
+    { forward: true, ticks: 52 },
+    { act: true, ticks: 20 },
+    { forward: true, ticks: 80 },
+  ]),
+  // In through the door his standing opens, and out through the one he opens
+  // by moving on.
+  "long-standing": golden(LONG_STANDING, [
+    { forward: true, ticks: 70 },
+    { ticks: 150 },
+    { forward: true, ticks: 130 },
+  ]),
+  // Stand on the plate and wait. That is the room. Then around the partition,
+  // not into it — it only spans the middle of the hall, which is the whole
+  // reason he cannot follow.
+  "giving-back": golden(GIVING_BACK, [
+    { forward: true, right: true, ticks: 26 },
+    { ticks: 220 },
+    { forward: true, right: true, ticks: 40 },
+    { forward: true, ticks: 230 },
+  ]),
+  // Onto the plate and stay there — stepping off shuts the door on him.
+  unkept: golden(UNKEPT, [
+    { forward: true, right: true, ticks: 36 },
+    { ticks: 200 },
+    { forward: true, ticks: 150 },
+  ]),
 };
 
 function play(golden: Golden): Simulation {

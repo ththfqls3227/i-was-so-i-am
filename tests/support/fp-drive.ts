@@ -1,21 +1,12 @@
-import { encodeFrame, type Frame, type Intent } from "../../src/sim/input";
+import type { Frame } from "../../src/sim/input";
 import type { Simulation } from "../../src/sim/simulation";
 import type { ActorId, ActorState, SimState } from "../../src/sim/types";
 
-/** A run of identical frames — how a held key actually reaches the tick loop. */
-export interface Hold extends Intent {
-  ticks: number;
-}
+// Both of these ship now — the corridor needs golden tapes at runtime, so the
+// recordings and the way they are turned into frames live in src.
+import type { Hold } from "../../src/world/goldens";
 
-export function framesFor(holds: readonly Hold[]): Frame[] {
-  const frames: Frame[] = [];
-  for (const hold of holds) {
-    const { ticks, ...intent } = hold;
-    const frame = encodeFrame(intent);
-    for (let index = 0; index < ticks; index += 1) frames.push(frame);
-  }
-  return frames;
-}
+export { framesFor, type Hold } from "../../src/world/goldens";
 
 export function drive(simulation: Simulation, frames: readonly Frame[]): string[] {
   const checksums: string[] = [];

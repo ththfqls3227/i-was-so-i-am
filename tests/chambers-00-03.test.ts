@@ -3,6 +3,7 @@ import { Simulation } from "../src/sim/simulation";
 import { AWAKENING } from "../src/world/room";
 import { HAND_NOT_BODY, HOLDING_HAND, SECOND_SELF } from "../src/world/chambers";
 import { ROSTER } from "../src/world/roster";
+import { GOLDEN_RECORDINGS } from "../src/world/goldens";
 import type { RoomDefinition } from "../src/sim/types";
 import { actorOf, doorOpen, drive, framesFor, type Hold } from "./support/fp-drive";
 
@@ -20,39 +21,25 @@ interface Golden {
   replay: Hold[];
 }
 
+/** The first pass is the shipped recording; only the second pass is test data. */
+function golden(room: RoomDefinition, replay: Hold[]): Golden {
+  const record = GOLDEN_RECORDINGS[room.id];
+  if (!record) throw new Error(`No shipped recording for ${room.id}`);
+  return { room, record: [...record], replay };
+}
+
 const GOLDENS: Record<string, Golden> = {
-  awakening: {
-    room: AWAKENING,
-    // Walk to the plate, stand until the door has moved, fold.
-    record: [{ forward: true, ticks: 38 }, { ticks: 30 }],
-    replay: [{ ticks: 20 }, { forward: true, ticks: 150 }],
-  },
-  "second-self": {
-    room: SECOND_SELF,
-    // The plate ignores you while you are the one standing on it. Stand there
-    // anyway — that is the recording.
-    record: [{ forward: true, ticks: 38 }, { ticks: 24 }],
-    replay: [{ ticks: 60 }, { forward: true, ticks: 150 }],
-  },
-  "holding-hand": {
-    room: HOLDING_HAND,
-    // Walk to the pillar, take hold, end the recording holding it.
-    record: [{ forward: true, ticks: 8 }, { act: true, ticks: 40 }],
-    replay: [{ ticks: 30 }, { forward: true, ticks: 190 }],
-  },
-  "hand-not-body": {
-    room: HAND_NOT_BODY,
-    // Walk into the shut doorway and keep walking. Nothing here can open it.
-    record: [{ forward: true, ticks: 70 }],
-    // Step onto the amber plate, wait for him to walk through and reach the
-    // alcove floor, then leave — which shuts the doorway behind him.
-    replay: [
-      { forward: true, right: true, ticks: 34 },
-      { forward: true, ticks: 12 },
-      { ticks: 90 },
-      { forward: true, ticks: 120 },
-    ],
-  },
+  awakening: golden(AWAKENING, [{ ticks: 20 }, { forward: true, ticks: 150 }]),
+  "second-self": golden(SECOND_SELF, [{ ticks: 60 }, { forward: true, ticks: 150 }]),
+  "holding-hand": golden(HOLDING_HAND, [{ ticks: 30 }, { forward: true, ticks: 190 }]),
+  // Step onto the amber plate, wait for him to walk through and reach the
+  // alcove floor, then leave — which shuts the doorway behind him.
+  "hand-not-body": golden(HAND_NOT_BODY, [
+    { forward: true, right: true, ticks: 34 },
+    { forward: true, ticks: 12 },
+    { ticks: 90 },
+    { forward: true, ticks: 120 },
+  ]),
 };
 
 function play(golden: Golden): Simulation {
