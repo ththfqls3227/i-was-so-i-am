@@ -36,11 +36,14 @@ const withHandle = async (what, attempts = 25) => {
     try {
       return await what();
     } catch (error) {
-      const message = String(error?.message ?? error);
-      const missingHandle = message.includes("__I_WAS_SO_I_AM_FP__")
-        || message.includes("Cannot read properties of undefined")
-        || message.includes("Execution context was destroyed");
-      if (!missingHandle) throw error;
+      // Ask whether the handle is actually missing rather than pattern-matching
+      // the message. "Cannot read properties of undefined" is also what a real
+      // bug inside the evaluated code says, and retrying that twenty-five times
+      // would bury it and then blame the handle for something else's fault.
+      const handlePresent = await page
+        .evaluate(() => globalThis.__I_WAS_SO_I_AM_FP__ !== undefined)
+        .catch(() => false);
+      if (handlePresent) throw error;
       last = error;
       await page.waitForTimeout(120);
     }
