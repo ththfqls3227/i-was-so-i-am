@@ -234,7 +234,10 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
   font-size: 38px;
   font-weight: 700;
   color: #f3e6c8;
-  background: #b83b2e;
+  /* The room's colour, not a fixed one. Red seals a record; the finale seals
+     someone, and had been coming down red because this ignored the variable
+     the HUD was already setting. */
+  background: var(--seal, #b83b2e);
   border-radius: 6px;
   box-shadow: inset 0 0 0 3px rgba(243, 230, 200, 0.42);
   opacity: 0;

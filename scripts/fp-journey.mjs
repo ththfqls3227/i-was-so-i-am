@@ -40,6 +40,10 @@ const read = () => page.evaluate(() => {
     rerecordNotice: fp.view.rerecordNotice ?? "",
     crosshairSealing: globalThis.document.querySelector(".crosshair")?.dataset.sealing ?? "",
     canFold: fp.view.canFold === true,
+    seal: (() => {
+      const stamp = globalThis.document.querySelector(".seal");
+      return stamp ? globalThis.getComputedStyle(stamp).backgroundColor : "none";
+    })(),
   };
 });
 const act = (name, ...args) => page.evaluate(([m, a]) => globalThis.__I_WAS_SO_I_AM_FP__[m](...a), [name, args]);
@@ -120,6 +124,7 @@ try {
   await act("press", "KeyE");
   await until((s) => s.holds[0] === true, 8000);
   check("02 grip can be taken", true);
+  check("02 seals a record, in red", (await read()).seal === "rgb(200, 64, 47)", (await read()).seal);
   const held02 = await read();
   check("02 exit opens while it is held", held02.exitOpen === true);
   await act("fold");
@@ -263,6 +268,8 @@ try {
   await act("press", "KeyE");
   await until((s) => s.holdById["grip-pillar"] === true, 8000);
   check("09 the grip is 02's, and it still opens the way out", (await read()).exitOpen === true);
+  // What is sealed here is not a record, and the stamp has to say so.
+  check("09 seals in cyan, not red", (await read()).seal === "rgb(111, 217, 242)", (await read()).seal);
 
   // The fold is held here, and the crosshair leaves before the room stops.
   await act("fold");
