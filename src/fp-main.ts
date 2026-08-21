@@ -23,6 +23,7 @@ declare global {
       look: (deltaX: number, deltaY: number) => void;
       setLook: (yaw: number, pitch: number) => void;
       switchChamber: (id: string) => boolean;
+      advanceChamber: () => boolean;
       chamberId: () => string;
       press: (code: string) => void;
       release: (code: string) => void;
@@ -48,6 +49,10 @@ const hud = new Hud(app, {
   },
   onRerecord: () => {
     scene.rerecord();
+    scene.requestPointerLock();
+  },
+  onAdvance: () => {
+    scene.advanceChamber();
     scene.requestPointerLock();
   },
 });
@@ -94,6 +99,7 @@ if (EXPOSE_TEST_API) {
       scene.switchChamber(chamber);
       return true;
     },
+    advanceChamber: () => scene.advanceChamber(),
     chamberId: () => scene.currentChamber.sim.id,
     press: (code) => scene.press(code),
     release: (code) => scene.release(code),

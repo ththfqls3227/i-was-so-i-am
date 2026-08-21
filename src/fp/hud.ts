@@ -4,6 +4,7 @@ import type { FailureCode } from "../sim/types";
 export interface HudCallbacks {
   onStart: () => void;
   onRerecord: () => void;
+  onAdvance: () => void;
 }
 
 interface Prompt {
@@ -63,6 +64,7 @@ export class Hud {
   private readonly resultBody = element("p");
   private readonly resultHint = element("p", "hint");
   private readonly again = element("button", undefined, "R · 다시 기록");
+  private readonly onward = element("button", undefined, "다음 방");
   private readonly diagnostic = element("div", "diagnostic");
   private readonly notice = element("p", "notice");
 
@@ -70,6 +72,7 @@ export class Hud {
   private subtitleText = "";
   private subtitleUntil = 0;
   private lastPhase: ViewModel["phase"] | null = null;
+  private lastEntryLine: string | null = null;
 
   constructor(parent: HTMLElement, private readonly callbacks: HudCallbacks) {
     for (let index = 0; index < 4; index += 1) this.crosshair.append(element("span"));
@@ -102,7 +105,9 @@ export class Hud {
     this.result.append(this.resultHeading, this.resultBody);
     this.again.id = "rerecord-button";
     this.again.addEventListener("click", () => this.callbacks.onRerecord());
-    this.result.append(this.again, this.resultHint);
+    this.onward.id = "advance-button";
+    this.onward.addEventListener("click", () => this.callbacks.onAdvance());
+    this.result.append(this.onward, this.again, this.resultHint);
     this.result.hidden = true;
 
     this.notice.textContent = "마우스 왼쪽 버튼을 누른 채 움직여 시점을 돌리세요";
@@ -150,7 +155,8 @@ export class Hud {
     const showNotice = playing && view.pointerLockDenied;
     if (this.notice.hidden === showNotice) this.notice.hidden = !showNotice;
 
-    const phaseName = view.phase === "recording" ? "1회차 · 기록" : view.phase === "replay" ? "2회차 · 재생" : view.phase === "success" ? "보관 완료" : "다시 기록";
+    const pass = view.phase === "recording" ? "1회차 · 기록" : view.phase === "replay" ? "2회차 · 재생" : view.phase === "success" ? "보관 완료" : "다시 기록";
+    const phaseName = `${view.chamberNumber} ${view.chamberName} · ${pass}`;
     if (this.passLabel.textContent !== phaseName) this.passLabel.textContent = phaseName;
     if (this.pass.dataset.phase !== view.phase) this.pass.dataset.phase = view.phase;
     if (this.tape.dataset.phase !== view.phase) this.tape.dataset.phase = view.phase;
@@ -226,16 +232,21 @@ export class Hud {
 
   /** Facility voice: says what just happened, once, then gets out of the way. */
   private renderSubtitle(view: ViewModel, now: number): void {
+    // The facility speaks once, on the way in. Arriving in a new chamber is the
+    // only thing that earns a line; a rerecord is the player's business.
+    //
+    // Nothing is consumed before the player has started, or the very first
+    // chamber's line is swallowed by the title screen and never said.
+    if (view.started && view.entryLine !== this.lastEntryLine) {
+      this.lastEntryLine = view.entryLine;
+      this.lastPhase = view.phase;
+      this.say(view.entryLine, now, 6400);
+      return;
+    }
     if (view.phase !== this.lastPhase) {
       const previous = this.lastPhase;
       this.lastPhase = view.phase;
-      if (view.phase === "recording" && previous === null) {
-        this.say("기록을 시작합니다. 하시던 대로 하세요.", now, 5200);
-      } else if (view.phase === "recording") {
-        this.say("다시 기록합니다.", now, 3000);
-      } else if (view.phase === "replay") {
-        this.say("지금 걷고 있는 것은 조금 전의 당신입니다.", now, 5200);
-      }
+      void previous;
     }
     const shown = this.subtitleText !== "" && now < this.subtitleUntil && !view.paused;
     if (this.subtitle.dataset.shown !== String(shown)) this.subtitle.dataset.shown = String(shown);
@@ -258,13 +269,15 @@ export class Hud {
       this.resultBody.textContent = "당신이 지나간 자리를, 당신이 다시 지나갔습니다.";
       this.again.hidden = !view.recordingEnabled;
       this.again.textContent = "R · 다시 해보기";
-      this.resultHint.textContent = "다음 방은 아직 준비 중입니다";
+      this.onward.hidden = !view.hasNextChamber;
+      this.resultHint.textContent = view.hasNextChamber ? "" : "여기까지가 지금 열려 있는 구역입니다";
     } else {
       this.result.dataset.kind = "fail";
       this.resultHeading.textContent = "다시 기록";
       this.resultBody.textContent = view.lastError ? FAILURE_COPY[view.lastError] : "이번 재생은 끝났습니다.";
       this.again.hidden = false;
       this.again.textContent = "R · 다시 기록";
+      this.onward.hidden = true;
       this.resultHint.textContent = "";
     }
   }

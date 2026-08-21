@@ -22,6 +22,7 @@
     "test:performance": "node scripts/performance-smoke.mjs",
     "test:fp-smoke": "node scripts/fp-smoke.mjs",
     "test:fp-cross-engine": "node scripts/fp-cross-engine.mjs",
+    "test:fp-journey": "node scripts/fp-journey.mjs",
     "captures:fp": "node scripts/fp-captures.mjs",
     "captures:stills": "node scripts/fp-stills.mjs",
     "captures:diff": "node scripts/image-diff.mjs",

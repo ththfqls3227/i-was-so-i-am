@@ -1,0 +1,173 @@
+import { describe, expect, it } from "vitest";
+import { Simulation } from "../src/sim/simulation";
+import { AWAKENING } from "../src/world/room";
+import { HAND_NOT_BODY, HOLDING_HAND, SECOND_SELF } from "../src/world/chambers";
+import { ROSTER } from "../src/world/roster";
+import type { RoomDefinition } from "../src/sim/types";
+import { actorOf, doorOpen, drive, framesFor, type Hold } from "./support/fp-drive";
+
+/**
+ * A golden tape per chamber: the recording the room is designed around, written
+ * as intent rather than as a frame dump, plus the second pass that it makes
+ * possible. Each one asserts the room can be finished, and — the part that
+ * matters — that it cannot be finished without the echo doing its half.
+ */
+interface Golden {
+  room: RoomDefinition;
+  /** First pass: what gets recorded. */
+  record: Hold[];
+  /** Second pass: what the living player does with it. */
+  replay: Hold[];
+}
+
+const GOLDENS: Record<string, Golden> = {
+  awakening: {
+    room: AWAKENING,
+    // Walk to the plate, stand until the door has moved, fold.
+    record: [{ forward: true, ticks: 38 }, { ticks: 30 }],
+    replay: [{ ticks: 20 }, { forward: true, ticks: 150 }],
+  },
+  "second-self": {
+    room: SECOND_SELF,
+    // The plate ignores you while you are the one standing on it. Stand there
+    // anyway — that is the recording.
+    record: [{ forward: true, ticks: 38 }, { ticks: 24 }],
+    replay: [{ ticks: 60 }, { forward: true, ticks: 150 }],
+  },
+  "holding-hand": {
+    room: HOLDING_HAND,
+    // Walk to the pillar, take hold, end the recording holding it.
+    record: [{ forward: true, ticks: 8 }, { act: true, ticks: 40 }],
+    replay: [{ ticks: 30 }, { forward: true, ticks: 190 }],
+  },
+  "hand-not-body": {
+    room: HAND_NOT_BODY,
+    // Walk into the shut doorway and keep walking. Nothing here can open it.
+    record: [{ forward: true, ticks: 70 }],
+    // Step onto the amber plate, wait for him to walk through and reach the
+    // alcove floor, then leave — which shuts the doorway behind him.
+    replay: [
+      { forward: true, right: true, ticks: 34 },
+      { forward: true, ticks: 12 },
+      { ticks: 90 },
+      { forward: true, ticks: 120 },
+    ],
+  },
+};
+
+function play(golden: Golden): Simulation {
+  const simulation = new Simulation(golden.room);
+  drive(simulation, framesFor(golden.record));
+  expect(simulation.canFold).toBe(true);
+  expect(simulation.fold()).toBe(true);
+  drive(simulation, framesFor(golden.replay));
+  return simulation;
+}
+
+describe("the golden path through 00 to 03", () => {
+  for (const [id, golden] of Object.entries(GOLDENS)) {
+    it(`${id} can be finished`, () => {
+      const simulation = play(golden);
+      expect(simulation.state.phase).toBe("success");
+      expect(simulation.state.success).toBe(true);
+    });
+
+    it(`${id} replays identically every time`, () => {
+      const first = play(golden);
+      const second = play(golden);
+      expect(first.checksum()).toBe(second.checksum());
+    });
+  }
+});
+
+describe("each chamber needs the echo to do its half", () => {
+  it("01: the plate will not answer the person standing on it", () => {
+    const simulation = new Simulation(SECOND_SELF);
+    drive(simulation, framesFor([{ forward: true, ticks: 38 }, { ticks: 30 }]));
+    // Standing squarely on it during the recording, and it stays shut.
+    expect(simulation.state.plates[0]?.pressedBy).toContain("present");
+    expect(simulation.state.plates[0]?.active).toBe(false);
+    expect(doorOpen(simulation.state, "inner-door")).toBe(false);
+  });
+
+  it("01: a recording that walks over the plate does not hold the door", () => {
+    // Folding mid-stride is the failure this room is shaped to teach.
+    const simulation = new Simulation(SECOND_SELF);
+    drive(simulation, framesFor([{ forward: true, ticks: 40 }]));
+    simulation.fold();
+    drive(simulation, framesFor([{ ticks: 120 }]));
+    // He walked on past it, so there is nothing standing on the plate.
+    expect(actorOf(simulation.state, "past").z).toBeGreaterThan(10);
+    expect(doorOpen(simulation.state, "inner-door")).toBe(false);
+  });
+
+  it("02: the way out is shut the moment the grip is let go", () => {
+    const simulation = new Simulation(HOLDING_HAND);
+    drive(simulation, framesFor([{ forward: true, ticks: 8 }, { act: true, ticks: 40 }]));
+    expect(simulation.state.holds[0]?.active).toBe(true);
+    expect(simulation.state.exitOpen).toBe(true);
+    drive(simulation, framesFor([{ ticks: 4 }]));
+    expect(simulation.state.exitOpen).toBe(false);
+  });
+
+  it("02: a recording that lets go early cannot be walked out of", () => {
+    const simulation = new Simulation(HOLDING_HAND);
+    drive(simulation, framesFor([{ forward: true, ticks: 8 }, { act: true, ticks: 34 }, { ticks: 6 }]));
+    simulation.fold();
+    drive(simulation, framesFor([{ ticks: 30 }, { forward: true, ticks: 190 }]));
+    expect(simulation.state.success).toBe(false);
+    expect(simulation.state.exitOpen).toBe(false);
+  });
+
+  it("03: the doorway cannot be opened by the recording", () => {
+    const simulation = new Simulation(HAND_NOT_BODY);
+    drive(simulation, framesFor([{ forward: true, right: true, ticks: 40 }, { ticks: 20 }]));
+    // The living player is standing on the amber plate, which is what opens it —
+    // but during the recording there is no one on the other side to walk through.
+    expect(simulation.state.plates.find((plate) => plate.id === "amber-plate")?.active).toBe(true);
+    expect(doorOpen(simulation.state, "partition-door")).toBe(true);
+    expect(simulation.state.exitOpen).toBe(false);
+  });
+
+  it("03: stepping off the plate shuts the doorway behind him", () => {
+    const simulation = play(GOLDENS["hand-not-body"] as Golden);
+    // He is in the alcove, past a doorway that is closed again.
+    const echo = actorOf(simulation.state, "past");
+    expect(echo.z).toBeGreaterThan(9.6);
+    expect(doorOpen(simulation.state, "partition-door")).toBe(false);
+    // And the floor he is standing on is what let the player leave.
+    expect(simulation.state.plates.find((plate) => plate.id === "alcove-plate")?.active).toBe(true);
+  });
+});
+
+describe("the roster", () => {
+  it("runs 00 to 03 in order, each with a distinct id", () => {
+    const ids = ROSTER.all.map((chamber) => chamber.sim.id);
+    expect(ids).toEqual(["awakening", "second-self", "holding-hand", "hand-not-body"]);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("numbers them 00 to 03", () => {
+    expect(ROSTER.all.map((chamber) => chamber.number)).toEqual(["00", "01", "02", "03"]);
+  });
+
+  it("chains each chamber to the next and stops at the end", () => {
+    expect(ROSTER.after("awakening")?.sim.id).toBe("second-self");
+    expect(ROSTER.after("second-self")?.sim.id).toBe("holding-hand");
+    expect(ROSTER.after("holding-hand")?.sim.id).toBe("hand-not-body");
+    expect(ROSTER.after("hand-not-body")).toBeNull();
+  });
+
+  it("gives every chamber a spawn that is inside its own room", () => {
+    for (const chamber of ROSTER.all) {
+      const simulation = new Simulation(chamber.sim);
+      const actor = actorOf(simulation.state, "present");
+      // A spawn buried in a wall would be pushed somewhere else on tick one.
+      drive(simulation, framesFor([{ ticks: 3 }]));
+      const settled = actorOf(simulation.state, "present");
+      expect(Math.abs(settled.x - actor.x)).toBeLessThan(0.05);
+      expect(Math.abs(settled.z - actor.z)).toBeLessThan(0.05);
+      expect(settled.y).toBeCloseTo(0, 3);
+    }
+  });
+});

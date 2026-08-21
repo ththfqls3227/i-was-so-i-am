@@ -125,7 +125,12 @@ try {
     await page.waitForTimeout(25);
   }
   await page.keyboard.up(needsBack ? "s" : "w");
-  await page.waitForTimeout(300);
+  // 00's door waits 0.6 s on the plate before it moves, so wait for the door
+  // rather than for a fixed moment.
+  for (let index = 0; index < 60; index += 1) {
+    if ((await read()).doorOpen) break;
+    await page.waitForTimeout(25);
+  }
   const onPlate = await read();
   check("standing on the plate opens the door", onPlate.plateActive && onPlate.doorOpen);
   check("the fold prompt appears once folding will work", onPlate.prompts.some((text) => text?.includes("기록 끝내기")));
@@ -171,7 +176,10 @@ try {
   await page.keyboard.down("w");
   await page.waitForTimeout(1400);
   await page.keyboard.up("w");
-  await page.waitForTimeout(300);
+  for (let index = 0; index < 60; index += 1) {
+    if ((await read()).doorOpen) break;
+    await page.waitForTimeout(25);
+  }
   const walkedAgain = await read();
   check("the rebuilt room can be played", walkedAgain.plateActive && walkedAgain.doorOpen, `plate ${walkedAgain.plateActive}, door ${walkedAgain.doorOpen}`);
   check("switching to a chamber that is not on the roster is refused", !(await page.evaluate(() => globalThis.__I_WAS_SO_I_AM_FP__.switchChamber("no-such-room"))));

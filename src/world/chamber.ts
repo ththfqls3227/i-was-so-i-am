@@ -90,6 +90,12 @@ export interface Chamber {
   shell: RoomShell;
   /** The number on the entrance board — "00" through "09". */
   number: string;
+  /**
+   * The one line the facility says on the way in. One per chamber and no more:
+   * the whole campaign has a budget of six, and a room that needs two lines to
+   * be understood is a room that has not been built yet.
+   */
+  subtitleOnEntry: string;
   dressing: ChamberDressing;
 }
 

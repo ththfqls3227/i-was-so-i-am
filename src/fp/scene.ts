@@ -66,6 +66,12 @@ export interface ViewModel {
   recordingEnabled: boolean;
   /** The colour this room's fold stamps its seal in. Cyan only in the finale. */
   sealColour: "red" | "cyan";
+  /** The chamber being played, and whether the archive goes any deeper. */
+  chamberNumber: string;
+  chamberName: string;
+  hasNextChamber: boolean;
+  /** What the facility says on the way into this chamber. */
+  entryLine: string;
   /** The browser refused pointer lock, so looking around means dragging. */
   pointerLockDenied: boolean;
 }
@@ -570,6 +576,14 @@ export class FirstPersonScene {
 
   get currentChamber(): Chamber {
     return this.chamber;
+  }
+
+  /** Move on to the next chamber in the roster. False at the end of the archive. */
+  advanceChamber(): boolean {
+    const next = ROSTER.after(this.chamber.sim.id);
+    if (!next) return false;
+    this.switchChamber(next);
+    return true;
   }
 
   /**
@@ -1370,6 +1384,10 @@ export class FirstPersonScene {
       started: this.started,
       recordingEnabled: this.simulation.recordingEnabled,
       sealColour: this.chamber.dressing.sealColour,
+      chamberNumber: this.chamber.number,
+      chamberName: this.chamber.sim.name,
+      entryLine: this.chamber.subtitleOnEntry,
+      hasNextChamber: ROSTER.after(this.chamber.sim.id) !== null,
       pointerLockDenied: this.pointerLockDenied && !this.pointerLocked,
     };
   }
