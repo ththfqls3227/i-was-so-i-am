@@ -18,6 +18,7 @@ import { DefaultRenderingPipeline } from "@babylonjs/core/PostProcesses/RenderPi
 import { Scene } from "@babylonjs/core/scene";
 
 import { Simulation, simConstants } from "../sim/simulation";
+import { TapeArchive } from "../sim/archive";
 import { encodeFrame } from "../sim/input";
 import { radiansFromYawUnits, yawUnitsFromRadians } from "../sim/trig";
 import type { ActorId, ActorState, SimState } from "../sim/types";
@@ -66,6 +67,10 @@ export interface ViewModel {
   recordingEnabled: boolean;
   /** The colour this room's fold stamps its seal in. Cyan only in the finale. */
   sealColour: "red" | "cyan";
+  /** The seal is landing: the crosshair fades first so the freeze does not read as a hang. */
+  sealing: boolean;
+  /** What rerecord says in this room, when the room wants to say something else. */
+  rerecordNotice: string | null;
   /** The chamber being played, and whether the archive goes any deeper. */
   chamberNumber: string;
   chamberName: string;
@@ -80,6 +85,8 @@ export interface SceneEvents {
   onFrame: (view: ViewModel) => void;
   onPhaseChange: (phase: SimState["phase"], previous: SimState["phase"]) => void;
   onFold: () => void;
+  /** The finale's fold has begun and will land in this many seconds. */
+  onSealing: (seconds: number) => void;
 }
 
 /**
@@ -147,6 +154,12 @@ export class FirstPersonScene {
   private readonly pipeline: DefaultRenderingPipeline;
   private chamber: Chamber;
   private simulation: Simulation;
+  /** Everything the player has recorded, kept for the rooms that ask for it back. */
+  readonly tapes = new TapeArchive();
+  /** Ticks left of the finale's sealing hold, or 0 when nothing is being sealed. */
+  private sealingTicks = 0;
+  /** The last frame handed to the tick, repeated while the seal lands. */
+  private lastFrame = 0;
   private events: SceneEvents | null = null;
 
   private readonly pressed = new Set<string>();
@@ -745,6 +758,10 @@ export class FirstPersonScene {
    */
   switchChamber(chamber: Chamber): void {
     const previousPhase = this.simulation.state.phase;
+    // Whatever this room recorded belongs to the player now, not to the
+    // simulation that is about to be thrown away.
+    this.tapes.keep(this.simulation.currentTape);
+    this.sealingTicks = 0;
     this.clearRoom();
     this.chamber = chamber;
     this.simulation = new Simulation(chamber.sim);
@@ -1574,7 +1591,7 @@ export class FirstPersonScene {
     if (down) {
       if (this.pressed.has(code)) return;
       this.pressed.add(code);
-      if (code === "Enter") this.fold();
+      if (code === "Enter") this.beginFold();
       if (code === "KeyR") this.rerecord();
     } else {
       this.pressed.delete(code);
@@ -1588,6 +1605,8 @@ export class FirstPersonScene {
   }
 
   look(deltaX: number, deltaY: number): void {
+    // The view is locked while the seal lands. Your hand is not yours for a moment.
+    if (this.sealingTicks > 0) return;
     this.yaw += deltaX * this.sensitivity;
     this.pitch += deltaY * this.sensitivity;
     if (this.pitch > PITCH_LIMIT) this.pitch = PITCH_LIMIT;
@@ -1595,8 +1614,9 @@ export class FirstPersonScene {
   }
 
   press(code: string): void {
+    if (this.sealingTicks > 0) return;
     this.pressed.add(code);
-    if (code === "Enter") this.fold();
+    if (code === "Enter") this.beginFold();
     if (code === "KeyR") this.rerecord();
   }
 
@@ -1620,6 +1640,32 @@ export class FirstPersonScene {
         },
       );
     }
+  }
+
+  /**
+   * Begin the fold. In the finale this takes eight tenths of a second, during
+   * which nothing responds.
+   *
+   * The wait is here rather than in the simulation on purpose. The tick keeps
+   * receiving the same frame it was already receiving, so the tape is identical
+   * to one folded instantly — the tail is the last sampled frame either way. A
+   * delay inside the simulation would have to record something during the wait,
+   * and recording neutral frames would leave the echo holding nothing, which is
+   * the one thing this room cannot survive.
+   */
+  beginFold(): boolean {
+    if (this.sealingTicks > 0) return false;
+    if (!this.simulation.canFold) return false;
+    const hold = this.chamber.sealHoldSeconds ?? 0;
+    if (hold <= 0) return this.fold();
+    this.sealingTicks = Math.round(hold * simConstants.tickRate);
+    this.events?.onSealing(hold);
+    return true;
+  }
+
+  /** True while the seal is landing: no input is read and the view is locked. */
+  get isSealing(): boolean {
+    return this.sealingTicks > 0;
   }
 
   fold(): boolean {
@@ -1718,6 +1764,15 @@ export class FirstPersonScene {
   }
 
   private tick(): void {
+    if (this.sealingTicks > 0) {
+      // Keep feeding the tick exactly what it was already getting, so the
+      // recording does not change while the room takes the moment.
+      this.sealingTicks -= 1;
+      this.simulation.step(this.lastFrame);
+      this.captureSnapshots();
+      if (this.sealingTicks === 0) this.fold();
+      return;
+    }
     const phaseBefore = this.simulation.state.phase;
     const frame = encodeFrame({
       forward: this.has("KeyW", "ArrowUp"),
@@ -1728,6 +1783,7 @@ export class FirstPersonScene {
       act: this.has("KeyE"),
       yawUnits: yawUnitsFromRadians(this.yaw),
     });
+    this.lastFrame = frame;
     const result = this.simulation.step(frame);
     this.captureSnapshots();
     if (result.phaseChanged) this.events?.onPhaseChange(result.state.phase, phaseBefore);
@@ -1871,6 +1927,8 @@ export class FirstPersonScene {
       started: this.started,
       recordingEnabled: this.simulation.recordingEnabled,
       sealColour: this.chamber.dressing.sealColour,
+      sealing: this.sealingTicks > 0,
+      rerecordNotice: this.chamber.rerecordNotice ?? null,
       chamberNumber: this.chamber.number,
       chamberName: this.chamber.sim.name,
       entryLine: this.chamber.subtitleOnEntry,

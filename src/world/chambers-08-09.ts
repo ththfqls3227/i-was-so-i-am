@@ -127,6 +127,10 @@ export const LAST_HOLD_CHAMBER: Chamber = {
   shell: FINALE_SHELL,
   number: "09",
   subtitleOnEntry: "이 방의 기록은 회수되지 않습니다.",
+  sealHoldSeconds: 0.8,
+  // R still works — nothing here is taken away from the player. Only the
+  // sentence changes, and it is the one the whole game has been building to.
+  rerecordNotice: "이 방의 기록은 회수되지 않습니다.",
   dressing: standardDressing(FINALE_SHELL, {
     seedBase: 9900,
     windows: [3, 7, 11, 15],

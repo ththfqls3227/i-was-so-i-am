@@ -142,6 +142,12 @@ export class Hud {
     this.prompts.hidden = !playing;
 
     this.crosshair.dataset.focus = String(view.focus !== null);
+    // The crosshair goes first, before everything stops. A freeze with no warning
+    // reads as the game hanging; a freeze the interface stepped out of first
+    // reads as the room taking a moment.
+    if (this.crosshair.dataset.sealing !== String(view.sealing)) {
+      this.crosshair.dataset.sealing = String(view.sealing);
+    }
     // The seal colour is the room's, and the HUD carries it as a custom property
     // so anything that stamps one picks it up without being told which room it
     // is in. Red for every chamber that seals a record; cyan for the one that
@@ -280,9 +286,21 @@ export class Hud {
       this.onward.hidden = true;
       this.resultHint.textContent = "";
     }
+    if (view.rerecordNotice) {
+      // The finale keeps the key and changes the sentence. Nothing is taken away
+      // from the player here — that is the whole point of the line.
+      this.resultHint.textContent = view.rerecordNotice;
+    }
+  }
+
+  /** Fade the crosshair out ahead of the freeze, then let the flash land. */
+  beginSeal(seconds: number): void {
+    this.crosshair.dataset.sealing = "true";
+    this.crosshair.style.setProperty("--seal-fade", `${Math.max(0.15, seconds * 0.4).toFixed(2)}s`);
   }
 
   playFoldFlash(): void {
+    this.crosshair.dataset.sealing = "false";
     this.flash.dataset.on = "false";
     // Force a reflow so the animation restarts on a second fold.
     void this.flash.offsetWidth;

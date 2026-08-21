@@ -63,6 +63,7 @@ scene.attach({
     if (phase === "success") hud.say("보관 완료.", performance.now(), 4200);
   },
   onFold: () => hud.playFoldFlash(),
+  onSealing: (seconds) => hud.beginSeal(seconds),
 });
 
 scene.start();

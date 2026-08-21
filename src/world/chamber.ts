@@ -155,6 +155,20 @@ export interface Chamber {
    * be understood is a room that has not been built yet.
    */
   subtitleOnEntry: string;
+  /**
+   * Seconds the fold is held before it takes, with everything frozen.
+   *
+   * Only the finale sets it. You watch your own hand stop being yours before
+   * the seal lands, and the recording is unchanged by the wait — the tail is the
+   * last sampled frame, so holding the same posture longer holds the same
+   * posture.
+   */
+  sealHoldSeconds?: number;
+  /**
+   * What pressing rerecord says here. Everywhere else it warns that the current
+   * record will be taken back; in the finale it says the opposite, and means it.
+   */
+  rerecordNotice?: string;
   dressing: ChamberDressing;
 }
 

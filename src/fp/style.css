@@ -59,6 +59,12 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
   opacity: 0.85;
 }
 .crosshair[data-focus="true"] { transform: scale(1.35); opacity: 1; }
+/* Leaving before the room stops, so the stop is not mistaken for a hang. */
+.crosshair[data-sealing="true"] {
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity var(--seal-fade, 0.32s) ease-out, transform var(--seal-fade, 0.32s) ease-out;
+}
 .crosshair[data-focus="true"] span { background: var(--cyan); }
 .crosshair[data-focus="true"]::after { background: var(--cyan); }
 
