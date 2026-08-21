@@ -129,6 +129,8 @@ const AWAKENING_DRESSING: ChamberDressing = {
   sealColour: "red",
   openBox: null,
   sign: null,
+  balustrades: [],
+  warmBand: null,
 };
 
 export const AWAKENING_CHAMBER: Chamber = {

@@ -182,6 +182,11 @@ export class FirstPersonScene {
   private shadows: ShadowGenerator | null = null;
   /** One band material per salchang, so a single window can be lit on its own. */
   private bandMaterials = new Map<string, StandardMaterial>();
+  /** Sync-beat state: how much of the swell is left, and whether it has fired. */
+  private warmBandLeft = 0;
+  private warmBandSpent = false;
+  private readonly bandRest = new Color3(1, 0.93, 0.78);
+  private readonly bandWarm = new Color3(1, 0.72, 0.42);
   /** Everything the current chamber built. Dropped whole when the room changes. */
   private worldRoot: TransformNode | null = null;
   private roomLights: Light[] = [];
@@ -502,6 +507,41 @@ export class FirstPersonScene {
       }
     }
 
+    // Gallery railings. Open, because the room's one frame is the player leaning
+    // over this to look down at him, and the brush behind it is a solid metre of
+    // parapet — the collision stops you falling, the balusters let you see.
+    for (const rail of this.chamber.dressing.balustrades) {
+      const span = rail.toZ - rail.fromZ;
+      const centreZ = (rail.fromZ + rail.toZ) / 2;
+      for (const [part, y, size] of [
+        ["sill", rail.baseY + 0.09, 0.14],
+        ["hand", rail.baseY + rail.height - 0.07, 0.16],
+      ] as const) {
+        const bar = MeshBuilder.CreateBox(`balustrade-${rail.id}-${part}`, {
+          width: 0.19, height: size, depth: span,
+        }, this.scene);
+        bar.position = new Vector3(rail.x, y, centreZ);
+        bar.material = timberBeam;
+        bar.isPickable = false;
+        bar.parent = root;
+        this.cast(bar);
+      }
+      const count = Math.max(2, Math.round(span / 0.19));
+      for (let index = 0; index <= count; index += 1) {
+        const baluster = MeshBuilder.CreateBox(`balustrade-${rail.id}-post-${index}`, {
+          width: 0.075, height: rail.height - 0.3, depth: 0.075,
+        }, this.scene);
+        baluster.position = new Vector3(
+          rail.x,
+          rail.baseY + rail.height / 2 - 0.01,
+          rail.fromZ + (index / count) * span,
+        );
+        baluster.material = timber;
+        baluster.isPickable = false;
+        baluster.parent = root;
+      }
+    }
+
     // The image the whole identity rests on: walls packed with cases. Which walls
     // and how they lean is the room's to say.
     for (const run of this.chamber.dressing.shelves) {
@@ -749,13 +789,19 @@ export class FirstPersonScene {
     key.intensity = 4.6;
     // The frustum is pinned to the room. Left to auto-fit over every wall it
     // spanned far more than the space and spent its resolution on nothing.
+    // Sized to the room rather than to a number. Pinned at ±10 it covered the
+    // 12 m hall it was tuned in and stopped partway down 06's 34 m one, which
+    // put a hard straight edge across the floor where the cast bands simply
+    // ended. The frustum is square about the room's middle, so a long room gets
+    // a coarser map rather than a truncated one.
+    const reach = Math.max(10, shell.depth * 0.62);
     key.shadowMinZ = 1;
-    key.shadowMaxZ = 26;
+    key.shadowMaxZ = Math.max(26, shell.depth + 14);
     key.autoUpdateExtends = false;
-    key.orthoLeft = -10;
-    key.orthoRight = 10;
-    key.orthoTop = 10;
-    key.orthoBottom = -10;
+    key.orthoLeft = -reach;
+    key.orthoRight = reach;
+    key.orthoTop = reach;
+    key.orthoBottom = -reach;
     this.shadows = new ShadowGenerator(2048, key);
     // PCF rather than blurred exponential. ESM bleeds through thin occluders,
     // and a 10 cm slat is exactly that — the bands washed out entirely under it.
@@ -1742,6 +1788,8 @@ export class FirstPersonScene {
     this.doorOffset += (target - this.doorOffset) * Math.min(1, deltaSeconds * 6.5);
     this.doorSlab.position.x = this.doorHome + this.doorOffset;
 
+    this.driveWarmBand(state, deltaSeconds);
+
     for (const visual of this.plates) {
       const active = state.plates.find((plate) => plate.id === visual.id)?.active ?? false;
       const pulse = active ? 1.35 + Math.sin(this.clock * 5.2) * 0.18 : 0.62 + Math.sin(this.clock * 1.5) * 0.06;
@@ -1753,6 +1801,39 @@ export class FirstPersonScene {
       visual.light.intensity = active ? 1.5 : 0.55;
       visual.ring.scaling.y = active ? 0.7 : 1;
     }
+  }
+
+  /**
+   * The one moment the building answers you.
+   *
+   * You reach the gallery because he is holding a grip on the floor below, and
+   * for a second and a half the slatted light he is standing in goes warmer than
+   * the rest of the room. It fires once, the first time you are up there while
+   * he is down there holding on, and never again — a second time would read as a
+   * mechanic with a rule to learn rather than as something the room did.
+   */
+  private driveWarmBand(state: SimState, deltaSeconds: number): void {
+    const beat = this.chamber.dressing.warmBand;
+    if (!beat) return;
+    const material = this.bandMaterials.get(beat.windowId);
+    if (!material) return;
+
+    if (!this.warmBandSpent) {
+      const above = (this.interpolated("present", 1)?.y ?? 0) > beat.aboveY;
+      // His hand, not just an active grip — the beat is thanks for what he is doing.
+      const holding = state.holds.some((hold) => hold.heldBy.includes("past"));
+      if (above && holding && state.phase === "replay") {
+        this.warmBandLeft = 1.5;
+        this.warmBandSpent = true;
+      }
+    }
+    if (this.warmBandLeft <= 0) return;
+
+    this.warmBandLeft = Math.max(0, this.warmBandLeft - deltaSeconds);
+    // Up fast, down slow, so it lands like a breath rather than a blink.
+    const life = this.warmBandLeft / 1.5;
+    const swell = life > 0.78 ? (1 - life) / 0.22 : life / 0.78;
+    material.emissiveColor = Color3.Lerp(this.bandRest, this.bandWarm, swell * 0.85);
   }
 
   private interpolated(id: ActorId, alpha: number): Snapshot | null {

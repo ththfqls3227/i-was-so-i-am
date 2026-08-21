@@ -38,7 +38,51 @@ const SHOTS = [
   // also the only pose that can photograph the alcove.
   { chamber: "hand-not-body", name: "03-alcove", to: { x: 3.6, z: 6.5 }, yaw: -0.96, pitch: 0.06 },
   { chamber: "hand-not-body", name: "03-threshold", to: { x: 4.7, z: 9.4 }, yaw: 0.04, pitch: 0.16 },
+
+  // 04 is the first room with an upstairs. The gallery shot is the beat the
+  // room is built around: you lean on the rail and look back down at him.
+  { chamber: "two-of-us", name: "04-entry", to: { x: 0, z: 2.4 }, yaw: 0.2, pitch: -0.06 },
+  { chamber: "two-of-us", name: "04-grip", to: { x: 0, z: 4.4 }, yaw: 0, pitch: 0.06 },
+  { chamber: "two-of-us", name: "04-stairs", to: { x: 4.6, z: 4.2 }, yaw: 0.06, pitch: -0.02 },
+  {
+    chamber: "two-of-us",
+    name: "04-gallery-wide",
+    play: true,
+    via: [{ x: 4.75, z: 4.4 }, { x: 4.75, z: 10.8 }, { x: 4.0, z: 12.4 }],
+    to: { x: 2.3, z: 14.2 },
+    yaw: -2.9,
+    pitch: 0.18,
+  },
+  {
+    chamber: "two-of-us",
+    name: "04-gallery",
+    play: true,
+    via: [{ x: 4.75, z: 4.4 }, { x: 4.75, z: 10.8 }, { x: 4.0, z: 12.4 }],
+    to: { x: 2.15, z: 13.0 },
+    yaw: -2.83,
+    pitch: 0.44,
+  },
+
+  { chamber: "long-standing", name: "05-entry", to: { x: 0, z: 2.4 }, yaw: 0, pitch: 0 },
+  { chamber: "long-standing", name: "05-plates", to: { x: 0, z: 4.0 }, yaw: -0.85, pitch: 0.2 },
+  { chamber: "long-standing", name: "05-passage", to: { x: 0, z: 6.6 }, yaw: 0, pitch: 0.02 },
+
+  // 06's subject is the length of the hall, so one shot has to be the length.
+  { chamber: "giving-back", name: "06-entry", to: { x: 0, z: 2.4 }, yaw: 0, pitch: 0 },
+  { chamber: "giving-back", name: "06-plate-wait", to: { x: 3, z: 4 }, yaw: -0.1, pitch: 0.02 },
+  { chamber: "giving-back", name: "06-long-hall", to: { x: 0, z: 14 }, yaw: 0, pitch: 0 },
+  { chamber: "giving-back", name: "06-partition", to: { x: 0, z: 25.5 }, yaw: 0, pitch: 0.02 },
+
+  { chamber: "unkept", name: "07-entry", to: { x: 0, z: 2.4 }, yaw: 0, pitch: 0 },
+  { chamber: "unkept", name: "07-lean", to: { x: -3.2, z: 5.6 }, yaw: -1.3, pitch: -0.08 },
+  { chamber: "unkept", name: "07-slot", to: { x: 0, z: 7.4 }, yaw: 0, pitch: 0.02 },
+  { chamber: "unkept", name: "07-plate", to: { x: 3.6, z: 3.4 }, yaw: 0.06, pitch: 0.34 },
 ];
+
+// ONLY=04,05 shoots just those rooms. Re-shooting thirteen frames to look at one
+// room is most of the cost of a dressing pass.
+const only = process.env.ONLY?.split(",").map((part) => part.trim()).filter(Boolean);
+const SELECTED = only?.length ? SHOTS.filter((shot) => only.some((p) => shot.name.startsWith(p))) : SHOTS;
 
 const browser = await chromium.launch({
   headless: true,
@@ -57,10 +101,10 @@ const setHudVisible = (visible) =>
 
 const here = () =>
   page.evaluate(() => {
-    const actor = globalThis.__I_WAS_SO_I_AM_FP__.state.actors.find((a) => a.id === "present");
-    return { x: actor?.x ?? 0, z: actor?.z ?? 0 };
+    const state = globalThis.__I_WAS_SO_I_AM_FP__.state;
+    const actor = state.actors.find((a) => a.id === "present");
+    return { x: actor?.x ?? 0, y: actor?.y ?? 0, z: actor?.z ?? 0, phase: state.phase };
   });
-
 /** Aim at the target and walk, re-aiming as you go. Good enough to stand still in. */
 const walkTo = async (target) => {
   await page.evaluate(() => globalThis.__I_WAS_SO_I_AM_FP__.press("KeyW"));
@@ -77,6 +121,41 @@ const walkTo = async (target) => {
   await page.waitForTimeout(700);
 };
 
+const act = (method, ...args) =>
+  page.evaluate(([m, a]) => globalThis.__I_WAS_SO_I_AM_FP__[m](...a), [method, args]);
+
+const until = async (predicate, budgetMs = 12000) => {
+  const deadline = Date.now() + budgetMs;
+  while (Date.now() < deadline) {
+    if (predicate(await here())) return true;
+    await page.waitForTimeout(50);
+  }
+  return false;
+};
+
+/**
+ * Getting a room into the state worth photographing.
+ *
+ * The frames that matter in these rooms are the ones with him in them, and he
+ * only exists after a tape has been recorded and folded. Walking to a spot and
+ * pointing the camera photographs an empty room doing nothing — 04's gallery is
+ * behind a door that is shut until he is holding the grip downstairs, so there
+ * is no pose that reaches it without playing the room first.
+ */
+const PLAYS = {
+  "two-of-us": async () => {
+    await walkTo({ x: 0, z: 5.6 });
+    await act("press", "KeyE");
+    await until((s) => s.z > 5.4);
+    await page.waitForTimeout(400);
+    await act("fold");
+    await act("release", "KeyE");
+    await until((s) => s.phase === "replay");
+    // Let him get back to the grip before starting the climb.
+    await page.waitForTimeout(1400);
+  },
+};
+
 await mkdir(outputDirectory, { recursive: true });
 try {
   await page.goto(gameUrl, { waitUntil: "networkidle" });
@@ -85,7 +164,8 @@ try {
   await page.waitForTimeout(400);
 
   let current = null;
-  for (const shot of SHOTS) {
+  let played = false;
+  for (const shot of SELECTED) {
     if (shot.chamber !== current) {
       const moved = await page.evaluate(
         (id) => globalThis.__I_WAS_SO_I_AM_FP__.switchChamber(id),
@@ -94,7 +174,15 @@ try {
       if (!moved) throw new Error(`No chamber called ${shot.chamber}`);
       current = shot.chamber;
       await page.waitForTimeout(500);
+      played = false;
     }
+    if (shot.play && !played) {
+      await PLAYS[shot.chamber]?.();
+      played = true;
+    }
+    // Waypoints, because a straight line into a staircase is a wall. 04 is the
+    // first room where the shot is upstairs and the route is not the aim.
+    for (const leg of shot.via ?? []) await walkTo(leg);
     await walkTo(shot.to);
     await page.evaluate(
       ([yaw, pitch]) => globalThis.__I_WAS_SO_I_AM_FP__.setLook(yaw, pitch),
@@ -104,7 +192,12 @@ try {
     await setHudVisible(false);
     await page.screenshot({ path: `${outputDirectory}/${shot.name}.png` });
     await setHudVisible(true);
-    console.log(`${outputDirectory}/${shot.name}.png`);
+    const at = await here();
+    // Where it actually stood, not where it was asked to: a pose that silently
+    // fell short is a frame of the wrong room.
+    console.log(
+      `${outputDirectory}/${shot.name}.png  at ${at.x.toFixed(2)},${at.y.toFixed(2)},${at.z.toFixed(2)} ${at.phase}`,
+    );
   }
 } finally {
   await browser.close();

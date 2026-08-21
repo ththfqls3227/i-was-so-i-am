@@ -1,4 +1,4 @@
-import type { ChamberDressing, RoomShell, SalchangSpec, ShelfRunSpec } from "./chamber";
+import type { BalustradeSpec, ChamberDressing, RoomShell, SalchangSpec, ShelfRunSpec } from "./chamber";
 
 /** Shelving stops here; salchang and plaster carry the wall above it. */
 export const SHELF_HEIGHT = 2.72;
@@ -17,8 +17,23 @@ export interface StandardDressingOptions {
   sign?: ChamberDressing["sign"];
   /** Where the windows sit along each long wall. */
   windows?: number[];
+  /**
+   * How tall the window band is. Defaults to everything between the shelving
+   * and the ceiling, which is right for a one-storey hall and wrong for 04:
+   * a seven-metre room got a near-four-metre window that read as venetian
+   * blinds. A tall room wants a band and a second storey, not a taller band.
+   */
+  salchangHeight?: number;
+  /** Windows this room adds to the standard row, such as a gallery band. */
+  extraSalchang?: SalchangSpec[];
+  /** Open railings, for a room with a gallery to fall off. */
+  balustrades?: BalustradeSpec[];
+  /** The one-shot sync beat. Only 04 has somewhere to look down from. */
+  warmBand?: ChamberDressing["warmBand"];
   /** Lean applied to both long runs. Only 07 uses it. */
   tiltRadians?: number;
+  /** Fraction of cases missing from both long runs. Only 07 uses it. */
+  decay?: number;
 }
 
 /**
@@ -44,6 +59,7 @@ export function standardDressing(shell: RoomShell, options: StandardDressingOpti
       height: SHELF_HEIGHT,
       seed: seed + 4211,
       ...(options.tiltRadians === undefined ? {} : { tiltRadians: options.tiltRadians }),
+      ...(options.decay === undefined ? {} : { decay: options.decay }),
     },
     {
       id: "east",
@@ -54,6 +70,7 @@ export function standardDressing(shell: RoomShell, options: StandardDressingOpti
       height: SHELF_HEIGHT,
       seed: seed + 8123,
       ...(options.tiltRadians === undefined ? {} : { tiltRadians: -options.tiltRadians }),
+      ...(options.decay === undefined ? {} : { decay: options.decay }),
     },
     ...(corridor
       ? [{
@@ -79,7 +96,7 @@ export function standardDressing(shell: RoomShell, options: StandardDressingOpti
         centreZ,
         width: 2.6,
         sillY: SHELF_HEIGHT + 0.24,
-        height: shell.height - SHELF_HEIGHT - 0.52,
+        height: options.salchangHeight ?? shell.height - SHELF_HEIGHT - 0.52,
         seed: seed + 100 + centreZ,
         // West is the sun side.
         castsBands: side < 0,
@@ -98,6 +115,7 @@ export function standardDressing(shell: RoomShell, options: StandardDressingOpti
         castsBands: false,
       }]
       : []),
+    ...(options.extraSalchang ?? []),
   ];
 
   return {
@@ -108,5 +126,7 @@ export function standardDressing(shell: RoomShell, options: StandardDressingOpti
     sealColour: options.sealColour ?? "red",
     openBox: options.openBox ?? null,
     sign: options.sign ?? null,
+    balustrades: options.balustrades ?? [],
+    warmBand: options.warmBand ?? null,
   };
 }

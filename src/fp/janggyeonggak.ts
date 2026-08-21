@@ -328,6 +328,17 @@ export interface ShelfWallOptions {
   seed: number;
   /** How far the shelving stands off the wall. Corridors get a shallower run. */
   depth?: number;
+  /**
+   * Floor the run stands on. A gallery is a floor too, and a two-storey room
+   * dressed only at ground level is four metres of blank plaster above the
+   * shelving — which is what 04 was.
+   */
+  baseY?: number;
+  /**
+   * Fraction of cases missing from the shelves, 0 to 1. 07 is the room nobody
+   * maintains, and an archive says that by what is not on the shelf.
+   */
+  decay?: number;
 }
 
 export interface ShelfWall {
@@ -361,6 +372,7 @@ export function buildShelfWall(
 ): ShelfWall {
   const { x, facing, fromZ, toZ, height, seed } = options;
   const depth = options.depth ?? 0.42;
+  const decay = options.decay ?? 0;
   const random = seededRandom(seed);
   const frame: Mesh[] = [];
 
@@ -370,7 +382,7 @@ export function buildShelfWall(
   // around the world origin instead of leaning it where it stands.
   const centreZ = (fromZ + toZ) / 2;
   const run = new TransformNode(`shelf-run-${options.id ?? x}`, scene);
-  run.position = new Vector3(x, 0, centreZ);
+  run.position = new Vector3(x, options.baseY ?? 0, centreZ);
   run.parent = parent;
 
   const shelfLevels: number[] = [];
@@ -422,6 +434,22 @@ export function buildShelfWall(
           z - centreZ,
         ),
       );
+      // Gaps, where a room is not kept. The slot is simply skipped, so the
+      // shelf reads as robbed rather than as sparsely stocked — and a handful
+      // of what went missing is lying on the floor below.
+      if (decay > 0 && random() < decay) {
+        if (random() < 0.16) {
+          const fallen = Matrix.RotationYawPitchRoll(random() * 3.14, 0, 1.57 + (random() - 0.5) * 0.5).multiply(
+            Matrix.Translation(
+              facing * (depth * 0.5 + 0.12 + random() * 0.5),
+              0.055,
+              z - centreZ + (random() - 0.5) * 0.3,
+            ),
+          );
+          plain.push(...fallen.asArray());
+        }
+        continue;
+      }
       // A memory that can still be replayed leaks light at its edge.
       (random() < 0.052 ? lit : plain).push(...matrix.asArray());
     }

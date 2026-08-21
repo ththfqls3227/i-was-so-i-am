@@ -46,6 +46,10 @@ export interface ShelfRunSpec {
   seed: number;
   depth?: number;
   tiltRadians?: number;
+  /** Which floor the run stands on. Ground unless a room has a gallery. */
+  baseY?: number;
+  /** Fraction of cases missing. Only 07, the room nobody keeps. */
+  decay?: number;
 }
 
 /**
@@ -114,6 +118,29 @@ export interface ChamberDressing {
    * Null keeps the far-wall default.
    */
   sign: { x: number; z: number } | null;
+  /**
+   * Open timber railings. A gallery edge authored as a solid brush is a metre
+   * of blank parapet in the one frame the room exists for — you lean on it to
+   * look down at him, and a slab is exactly what you cannot see over.
+   */
+  balustrades: BalustradeSpec[];
+  /**
+   * The sync beat: the window band he is standing in warms for a moment, once,
+   * the first time you look down on him from above. Render-only and latched —
+   * it says thank you without a subtitle, and saying it twice would make it a
+   * mechanic.
+   */
+  warmBand: { windowId: string; aboveY: number } | null;
+}
+
+/** A run of turned balusters between a bottom and a top rail, along z. */
+export interface BalustradeSpec {
+  id: string;
+  x: number;
+  fromZ: number;
+  toZ: number;
+  baseY: number;
+  height: number;
 }
 
 /** One chamber: what the simulation runs, what the renderer builds, what the sign says. */

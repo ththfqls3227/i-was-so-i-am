@@ -81,6 +81,12 @@ const stairs: Solid[] = Array.from({ length: 10 }, (_, index) =>
     `tread-${index}`,
     { x: 3, y: -WALL, z: STAIR_FROM_Z + index * 0.6 },
     { x: 6.5, y: STAIR_RISE * (index + 1), z: STAIR_FROM_Z + (index + 1) * 0.6 },
+    // Timber, not plaster. Plaster stairs and a plaster gallery floor put the
+    // brightest value in the room under the player's feet, and the storey read
+    // as a lit slab rather than as a floor you are standing on. Timber went
+    // black on vertical faces in 03, but a tread and a deck face up: they take
+    // the key light and the hemispheric directly.
+    "timber",
   ),
 );
 
@@ -88,7 +94,7 @@ const fourSolids: Solid[] = [
   ...shellOf(FOUR_HALF, FOUR_DEPTH, FOUR_HEIGHT),
   ...stairs,
   // The gallery the stairs arrive on, and the rail you lean over to see him.
-  solid("deck", { x: 1.6, y: DECK_Y - 0.4, z: 11 }, { x: 7, y: DECK_Y, z: FOUR_DEPTH }),
+  solid("deck", { x: 1.6, y: DECK_Y - 0.4, z: 11 }, { x: 7, y: DECK_Y, z: FOUR_DEPTH }, "timber"),
   solid("deck-rail", { x: 1.6, y: DECK_Y, z: 11 }, { x: 1.8, y: DECK_Y + 1, z: FOUR_DEPTH }, "timber"),
 ];
 
@@ -174,7 +180,78 @@ export const TWO_OF_US_CHAMBER: Chamber = {
       seedBase: 4400,
       corridor: false,
       windows: [3.5, 8, 12.5],
-      blocks: blocksOf(fourSolids).filter((block) => !block.id.startsWith("floor") && !block.id.startsWith("ceiling")),
+      // A band, not a wall of glass: the default fills everything above the
+      // shelving, which in a seven-metre room is nearly four metres of window.
+      salchangHeight: 1.15,
+      // The gallery is a floor, so it gets what a floor gets — cases along the
+      // wall it runs against, and its own light above them. Without this the
+      // upper half of the room is bare plaster and the storey the room is about
+      // looks like a ledge in a warehouse.
+      extraShelves: [
+        {
+          id: "gallery-east",
+          x: FOUR_HALF,
+          facing: -1,
+          fromZ: 11.4,
+          toZ: FOUR_DEPTH - 0.5,
+          height: 2.3,
+          seed: 4400 + 771,
+          baseY: DECK_Y,
+        },
+        {
+          id: "gallery-far",
+          x: FOUR_HALF - 0.44,
+          facing: -1,
+          fromZ: 11.4,
+          toZ: 11.5,
+          height: 2.3,
+          seed: 4400 + 772,
+          baseY: DECK_Y,
+          depth: 0.3,
+        },
+      ],
+      extraSalchang: [
+        {
+          id: "gallery-east-band",
+          x: FOUR_HALF,
+          facing: -1,
+          centreZ: 13.6,
+          width: 2.8,
+          sillY: DECK_Y + 2.54,
+          height: 0.78,
+          seed: 4400 + 880,
+          castsBands: false,
+        },
+        // The one you lean on the rail and look through: 01 is on the other
+        // side of it. West, because west is the sun side and the diorama has to
+        // be the brightest thing on that wall.
+        {
+          id: "gallery-view",
+          x: -FOUR_HALF,
+          facing: 1,
+          centreZ: 12.8,
+          width: 3.2,
+          sillY: DECK_Y + 0.55,
+          height: 1.6,
+          seed: 4400 + 881,
+          castsBands: false,
+        },
+      ],
+      blocks: blocksOf(fourSolids).filter(
+        (block) =>
+          !block.id.startsWith("floor")
+          && !block.id.startsWith("ceiling")
+          // The rail is drawn as a balustrade rather than a slab. Its brush
+          // stays exactly as authored; only the picture of it changes.
+          && block.id !== "deck-rail",
+      ),
+      balustrades: [
+        { id: "deck", x: 1.7, fromZ: 11, toZ: FOUR_DEPTH, baseY: DECK_Y, height: 1 },
+      ],
+      // The band he stands in, and the height you have to be at to be looking
+      // down rather than across. Both authored rather than guessed: the room
+      // knows which window is over its own grip.
+      warmBand: { windowId: "west-8", aboveY: DECK_Y - 0.4 },
     },
   ),
 };
@@ -427,6 +504,8 @@ export const UNKEPT_CHAMBER: Chamber = {
     // Wrong on purpose: the spacing nobody maintained.
     windows: [2.2, 5.1, 6.4, 12.9],
     tiltRadians: 0.06,
+    // Nearly a fifth of the shelf is gone, and some of it is on the floor.
+    decay: 0.18,
     blocks: blocksOf(sevenSolids).filter((block) => !block.id.startsWith("floor") && !block.id.startsWith("ceiling")),
   }),
 };
