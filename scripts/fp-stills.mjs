@@ -18,6 +18,8 @@ import { mkdir } from "node:fs/promises";
 
 const gameUrl = process.env.GAME_URL ?? "http://127.0.0.1:4173/";
 const outputDirectory = process.argv[2] ?? "captures/stills";
+/** Which chamber to shoot. Poses are per-chamber because rooms differ in shape. */
+const chamberId = process.env.CHAMBER ?? "awakening";
 const viewport = { width: 1280, height: 720 };
 
 /**
@@ -27,7 +29,22 @@ const viewport = { width: 1280, height: 720 };
  * milliseconds lands somewhere slightly different every run, and that difference
  * was the entire remaining noise floor once the HUD stopped moving.
  */
-const POSES = [
+const POSES_BY_CHAMBER = {
+  // 03 leaves through its own east wall and has a partition across the middle,
+  // so the shots that matter are the approach, the doorway, and the dead end.
+  "hand-not-body": [
+    { name: "01-spawn-forward", atZ: 0, yaw: 0, pitch: 0 },
+    { name: "02-spawn-left", atZ: 0, yaw: -1.2, pitch: 0.05 },
+    { name: "03-plate-side", atZ: 0, yaw: 1.1, pitch: 0.1 },
+    { name: "04-partition", atZ: 6.5, yaw: 0, pitch: 0 },
+    { name: "05-partition-up", atZ: 6.5, yaw: 0, pitch: -0.4 },
+    { name: "06-doorway", atZ: 8.2, yaw: 0, pitch: 0.05 },
+    { name: "07-looking-back", atZ: 8.2, yaw: Math.PI, pitch: 0.05 },
+    { name: "08-east-wall", atZ: 8.2, yaw: 1.4, pitch: 0.05 },
+  ],
+};
+
+const DEFAULT_POSES = [
   { name: "01-spawn-forward", atZ: 0, yaw: 0, pitch: 0 },
   { name: "02-spawn-left", atZ: 0, yaw: -1.2, pitch: 0.05 },
   { name: "03-spawn-right", atZ: 0, yaw: 1.2, pitch: 0.05 },
@@ -37,6 +54,8 @@ const POSES = [
   { name: "07-plate-door", atZ: 7.4, yaw: 0, pitch: 0.1 },
   { name: "08-plate-down", atZ: 7.4, yaw: 0, pitch: 0.8 },
 ];
+
+const POSES = POSES_BY_CHAMBER[chamberId] ?? DEFAULT_POSES;
 
 const browser = await chromium.launch({
   headless: true,
@@ -58,6 +77,13 @@ await mkdir(outputDirectory, { recursive: true });
 try {
   await page.goto(gameUrl, { waitUntil: "networkidle" });
   await page.waitForFunction(() => globalThis.__I_WAS_SO_I_AM_FP__?.renderer?.ready === true);
+  if (chamberId !== "awakening") {
+    const switched = await page.evaluate(
+      (id) => globalThis.__I_WAS_SO_I_AM_FP__.switchChamber(id),
+      chamberId,
+    );
+    if (!switched) throw new Error(`No chamber called ${chamberId}`);
+  }
   await page.evaluate(() => globalThis.__I_WAS_SO_I_AM_FP__.start());
   await page.waitForTimeout(400);
 

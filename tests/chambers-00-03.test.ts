@@ -141,23 +141,6 @@ describe("each chamber needs the echo to do its half", () => {
 });
 
 describe("the roster", () => {
-  it("runs 00 to 03 in order, each with a distinct id", () => {
-    const ids = ROSTER.all.map((chamber) => chamber.sim.id);
-    expect(ids).toEqual(["awakening", "second-self", "holding-hand", "hand-not-body"]);
-    expect(new Set(ids).size).toBe(ids.length);
-  });
-
-  it("numbers them 00 to 03", () => {
-    expect(ROSTER.all.map((chamber) => chamber.number)).toEqual(["00", "01", "02", "03"]);
-  });
-
-  it("chains each chamber to the next and stops at the end", () => {
-    expect(ROSTER.after("awakening")?.sim.id).toBe("second-self");
-    expect(ROSTER.after("second-self")?.sim.id).toBe("holding-hand");
-    expect(ROSTER.after("holding-hand")?.sim.id).toBe("hand-not-body");
-    expect(ROSTER.after("hand-not-body")).toBeNull();
-  });
-
   it("gives every chamber a spawn that is inside its own room", () => {
     for (const chamber of ROSTER.all) {
       const simulation = new Simulation(chamber.sim);

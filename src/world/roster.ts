@@ -1,5 +1,11 @@
 import { ChamberRegistry } from "./chamber";
 import { HAND_NOT_BODY_CHAMBER, HOLDING_HAND_CHAMBER, SECOND_SELF_CHAMBER } from "./chambers";
+import {
+  GIVING_BACK_CHAMBER,
+  LONG_STANDING_CHAMBER,
+  TWO_OF_US_CHAMBER,
+  UNKEPT_CHAMBER,
+} from "./chambers-04-07";
 import { AWAKENING_CHAMBER } from "./room";
 
 /**
@@ -14,4 +20,8 @@ export const ROSTER = new ChamberRegistry([
   SECOND_SELF_CHAMBER,
   HOLDING_HAND_CHAMBER,
   HAND_NOT_BODY_CHAMBER,
+  TWO_OF_US_CHAMBER,
+  LONG_STANDING_CHAMBER,
+  GIVING_BACK_CHAMBER,
+  UNKEPT_CHAMBER,
 ]);
