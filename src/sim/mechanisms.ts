@@ -24,7 +24,7 @@ export function initialHolds(room: RoomDefinition): HoldState[] {
 }
 
 export function initialDoors(room: RoomDefinition): DoorState[] {
-  return room.doors.map((door) => ({ id: door.id, open: false, latched: false }));
+  return room.doors.map((door) => ({ id: door.id, open: false, latched: false, heldTicks: 0 }));
 }
 
 /**
@@ -154,11 +154,19 @@ export function evaluateDoors(room: RoomDefinition, state: SimState): void {
       door.open = true;
       continue;
     }
-    const shouldOpen = gateActive(spec.gatedBy, state);
-    door.open = shouldOpen;
+    if (!gateActive(spec.gatedBy, state)) {
+      door.heldTicks = 0;
+      door.open = false;
+      continue;
+    }
+    door.heldTicks += 1;
+    // 00's door waits a beat before it moves, which is long enough that a player
+    // glances back at the plate they are standing on. That glance goes onto the
+    // first tape anyone records, and the ending gives it back to them.
+    door.open = door.heldTicks >= (spec.openDelayTicks ?? 0);
     // A one-way release: the first moment the gate opens this door, it stays
     // open. The room never takes back what a past self gave it.
-    if (shouldOpen && spec.latchOnOpen) door.latched = true;
+    if (door.open && spec.latchOnOpen) door.latched = true;
   }
 }
 

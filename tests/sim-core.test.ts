@@ -311,9 +311,11 @@ describe("the fold tail is the posture, not an event", () => {
     simulation.fold();
     drive(simulation, framesFor([{ ticks: 90 }]));
     const echo = actorOf(simulation.state, "past");
-    // Held forward for the whole tail, so it is pressed against the far wall.
+    // Held forward for the whole tail, so it is pressed against the far wall —
+    // which also means it crossed the plate without ever pausing on it, and 00's
+    // door needs a pause. The door is the delay tests' subject, not this one's.
     expect(echo.z).toBeGreaterThan(11);
-    expect(doorOpen(simulation.state, "inner-door")).toBe(true);
+    expect(echo.buttonsPrev & Button.Forward).toBeTruthy();
   });
 });
 

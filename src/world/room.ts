@@ -41,6 +41,15 @@ const PLATE_CENTRE_Z = 7.6;
 const SPAWN_Z = 1.6;
 
 /**
+ * Six tenths of a second between standing on the plate and the door moving.
+ *
+ * Long enough that a player looks back at what they just did, and that glance
+ * lands on the first tape anyone records. The ending replays that tape and the
+ * same idle movement reads as someone saying goodbye.
+ */
+export const DOOR_OPEN_DELAY_TICKS = 18;
+
+/**
  * 00 — Awakening. Walk to the plate, the door opens and stays open, walk out.
  * No cooperation is required: the living player can press the plate themselves,
  * so the first room can only teach the loop, never fail you for misreading it.
@@ -76,6 +85,7 @@ export const AWAKENING: RoomDefinition = {
       ),
       gatedBy: { kind: "plate", id: "entry-plate" },
       latchOnOpen: true,
+      openDelayTicks: DOOR_OPEN_DELAY_TICKS,
     },
   ],
   holds: [],

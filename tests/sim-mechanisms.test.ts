@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { Simulation } from "../src/sim/simulation";
 import { MIN_TAPE_TICKS } from "../src/sim/constants";
-import { AWAKENING } from "../src/world/room";
+import { solidsFor } from "../src/sim/mechanisms";
+import { AWAKENING, DOOR_OPEN_DELAY_TICKS } from "../src/world/room";
 import { actorOf, doorOpen, drive, framesFor, WALK_TO_PLATE } from "./support/fp-drive";
 import { door, ENTRY_PLATE, FAR_PLATE, PILLAR, roomWith, SECOND_PILLAR } from "./support/fp-rooms";
 
@@ -150,6 +151,79 @@ describe("the finale mechanism", () => {
     simulation.fold();
     drive(simulation, framesFor([{ ticks: AWAKENING.tapeDurationTicks + AWAKENING.replayGraceTicks }]));
     expect(simulation.state.phase).toBe("rerecord");
+  });
+});
+
+describe("a door that waits before it moves", () => {
+  const delay = DOOR_OPEN_DELAY_TICKS;
+
+  it("counts only while the plate is pressed, and opens exactly on the delay", () => {
+    const simulation = new Simulation(AWAKENING);
+    // Walk on and stand there, one tick at a time, watching the count.
+    drive(simulation, framesFor([{ forward: true, ticks: 38 }]));
+    while ((simulation.state.doors[0]?.heldTicks ?? 0) < delay - 1) {
+      expect(simulation.state.doors[0]?.open).toBe(false);
+      drive(simulation, framesFor([{ ticks: 1 }]));
+    }
+    // One short.
+    expect(simulation.state.doors[0]?.heldTicks).toBe(delay - 1);
+    expect(simulation.state.doors[0]?.open).toBe(false);
+    // And there.
+    drive(simulation, framesFor([{ ticks: 1 }]));
+    expect(simulation.state.doors[0]?.heldTicks).toBe(delay);
+    expect(simulation.state.doors[0]?.open).toBe(true);
+  });
+
+  it("is still solid one tick before the delay, and gone on it", () => {
+    // A plate that is pressed from the first tick, so the only thing between
+    // the player and the doorway is the wait.
+    const waiting = roomWith({
+      plates: [{ ...ENTRY_PLATE, forcedActive: true }],
+      holds: [],
+      doors: [{ ...door({ kind: "plate", id: "entry-plate" }, false), openDelayTicks: delay }],
+    });
+    const simulation = new Simulation(waiting);
+
+    drive(simulation, framesFor([{ ticks: delay - 1 }]));
+    expect(simulation.state.doors[0]?.open).toBe(false);
+    // The brush is what stops a player, so that is what gets asserted.
+    expect(solidsFor(waiting, simulation.state.doors).some((brush) => brush.id === "inner-door")).toBe(true);
+
+    drive(simulation, framesFor([{ ticks: 1 }]));
+    expect(simulation.state.doors[0]?.open).toBe(true);
+    expect(solidsFor(waiting, simulation.state.doors).some((brush) => brush.id === "inner-door")).toBe(false);
+  });
+
+  it("actually blocks a walking player until it opens", () => {
+    // Long enough that the player arrives at the doorway before the wait is up.
+    const slow = 120;
+    const waiting = roomWith({
+      plates: [{ ...ENTRY_PLATE, forcedActive: true }],
+      holds: [],
+      doors: [{ ...door({ kind: "plate", id: "entry-plate" }, true), openDelayTicks: slow }],
+    });
+    const simulation = new Simulation(waiting);
+    drive(simulation, framesFor([{ forward: true, ticks: slow - 20 }]));
+    expect(simulation.state.doors[0]?.open).toBe(false);
+    expect(actorOf(simulation.state, "present").z).toBeLessThan(12);
+
+    drive(simulation, framesFor([{ forward: true, ticks: 80 }]));
+    expect(simulation.state.doors[0]?.open).toBe(true);
+    expect(actorOf(simulation.state, "present").z).toBeGreaterThan(12.6);
+  });
+
+  it("forgets its progress if the gate is let go", () => {
+    const waiting = roomWith({
+      plates: [ENTRY_PLATE],
+      holds: [],
+      doors: [{ ...door({ kind: "plate", id: "entry-plate" }, false), openDelayTicks: delay }],
+    });
+    const simulation = new Simulation(waiting);
+    drive(simulation, framesFor([{ forward: true, ticks: 38 }, { ticks: 4 }]));
+    expect(simulation.state.doors[0]?.heldTicks).toBeGreaterThan(0);
+    expect(simulation.state.doors[0]?.open).toBe(false);
+    drive(simulation, framesFor([{ back: true, ticks: 30 }]));
+    expect(simulation.state.doors[0]?.heldTicks).toBe(0);
   });
 });
 

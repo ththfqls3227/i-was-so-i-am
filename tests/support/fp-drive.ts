@@ -35,10 +35,15 @@ export function doorOpen(state: SimState | Readonly<SimState>, id: string): bool
 
 /**
  * The recording a player makes in Awakening: walk to the plate, come to a stop
- * on it, then fold. Written as holds rather than a frame dump so the intent
- * survives a tuning change.
+ * on it, wait for the door to move, then fold. Written as holds rather than a
+ * frame dump so the intent survives a tuning change.
+ *
+ * The standing beat is longer than it needs to be to stop the actor, because
+ * 00's door waits 0.6 s before it opens. Standing there long enough to see it
+ * move is the room's whole lesson, and it is what the player is doing when they
+ * glance back.
  */
 export const WALK_TO_PLATE: Hold[] = [
   { forward: true, ticks: 38 },
-  { ticks: 12 },
+  { ticks: 30 },
 ];

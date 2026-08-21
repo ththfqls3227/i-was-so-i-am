@@ -38,8 +38,16 @@ export const FAR_PLATE: PlateSpec = {
   reach: 0.35,
 };
 
+/**
+ * Awakening's doorway, rewired for a mechanism test.
+ *
+ * The delay is explicitly cleared rather than inherited: 00's door waits a beat
+ * for narrative reasons, and a synthetic room testing grips should not silently
+ * pick up a timing choice made three chambers away. Tests that want a delay ask
+ * for one.
+ */
 export function door(gatedBy: GateRef, latchOnOpen = false): RoomDefinition["doors"][number] {
   const original = AWAKENING.doors[0];
   if (!original) throw new Error("Awakening has no door to borrow");
-  return { ...original, gatedBy, latchOnOpen };
+  return { ...original, gatedBy, latchOnOpen, openDelayTicks: 0 };
 }

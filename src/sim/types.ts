@@ -99,12 +99,23 @@ export interface DoorSpec {
    * finale: the only way to hold it open is to leave someone holding it.
    */
   latchOnOpen: boolean;
+  /**
+   * Ticks the gate must be held before the door moves at all.
+   *
+   * This is in the simulation rather than in the renderer's slide animation on
+   * purpose. A render-only delay produces a door that looks open while its brush
+   * is still solid, and a player walking into an opening they can see through is
+   * the worst lie this game could tell.
+   */
+  openDelayTicks?: number;
 }
 
 export interface DoorState {
   id: string;
   open: boolean;
   latched: boolean;
+  /** How long the gate has been satisfied. Reset the moment it stops being. */
+  heldTicks: number;
 }
 
 /** Something the crosshair can answer to, and that Act can be held against. */
