@@ -60,8 +60,8 @@ export const SECOND_SELF_CHAMBER: Chamber = {
 // ---------------------------------------------------------------- 02
 
 /** Where the grip stands, and where the one open memory box is left. */
-const PILLAR = { x: 0, y: 1.15, z: 3.4 };
-const OPEN_BOX = { x: -ROOM_SHELL.halfWidth + 0.46, y: 1.72, z: 8.4 };
+export const PILLAR = { x: 0, y: 1.15, z: 3.4 };
+export const OPEN_BOX = { x: -ROOM_SHELL.halfWidth + 0.46, y: 1.72, z: 8.4 };
 
 /**
  * 02 — The Hand That Holds. A brass grip near the entrance, and the way out at

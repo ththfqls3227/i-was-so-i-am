@@ -6,6 +6,7 @@ import {
   TWO_OF_US_CHAMBER,
   UNKEPT_CHAMBER,
 } from "./chambers-04-07";
+import { LAST_HOLD_CHAMBER, SILENCE_CHAMBER } from "./chambers-08-09";
 import { AWAKENING_CHAMBER } from "./room";
 
 /**
@@ -24,4 +25,6 @@ export const ROSTER = new ChamberRegistry([
   LONG_STANDING_CHAMBER,
   GIVING_BACK_CHAMBER,
   UNKEPT_CHAMBER,
+  SILENCE_CHAMBER,
+  LAST_HOLD_CHAMBER,
 ]);

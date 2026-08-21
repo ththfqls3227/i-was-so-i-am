@@ -16,7 +16,14 @@ import type {
 const PLATE_FOCUS_HEIGHT = 0.12;
 
 export function initialPlates(room: RoomDefinition): PlateState[] {
-  return room.plates.map((plate) => ({ id: plate.id, active: false, pressedBy: [] }));
+  // A forced plate is held down by something outside the simulation, so it is
+  // down before the first tick too. Otherwise the room draws one frame with an
+  // older self standing on a plate that has not noticed him.
+  return room.plates.map((plate) => ({
+    id: plate.id,
+    active: plate.forcedActive === true,
+    pressedBy: [],
+  }));
 }
 
 export function initialHolds(room: RoomDefinition): HoldState[] {

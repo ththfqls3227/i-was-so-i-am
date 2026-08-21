@@ -176,10 +176,9 @@ describe("each chamber needs the echo to do its half", () => {
 });
 
 describe("the full roster", () => {
-  it("runs 00 to 07 in order", () => {
-    expect(ROSTER.all.map((chamber) => chamber.number)).toEqual([
-      "00", "01", "02", "03", "04", "05", "06", "07",
-    ]);
+  it("runs the archive in order, with no gaps in the numbering", () => {
+    const numbers = ROSTER.all.map((chamber) => chamber.number);
+    expect(numbers).toEqual(numbers.map((_, index) => String(index).padStart(2, "0")));
   });
 
   it("chains every chamber to the next and stops at the end", () => {
