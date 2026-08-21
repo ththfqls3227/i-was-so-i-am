@@ -102,6 +102,8 @@ interface PlateVisual {
   light: PointLight;
   material: StandardMaterial;
   accent: Color3;
+  /** Whether the ring is a coloured signal or plain brass. See buildPlates. */
+  signal: boolean;
 }
 
 interface Snapshot {
@@ -321,6 +323,13 @@ export class FirstPersonScene {
     plane.isPickable = false;
     plane.parent = parent;
     if (occludes) this.cast(plane);
+    // Every shell surface occludes the glow layer. The layer draws only the
+    // meshes it includes, so without this nothing writes depth for it and the
+    // echo — the brightest thing in the game and the one the player is most
+    // likely to have a wall between them and — shines through the shell. Adding
+    // the panels one at a time chases it around the room; the shell is a dozen
+    // planes and none of them cost anything unlit.
+    this.glow.addIncludedOnlyMesh(plane);
     return plane;
   }
 
@@ -983,9 +992,25 @@ export class FirstPersonScene {
   private buildPlates(root: TransformNode, brass: StandardMaterial, timber: StandardMaterial): PlateVisual[] {
     const visuals: PlateVisual[] = [];
     for (const plate of this.chamber.sim.plates) {
-      const accent = plate.requiredActor === "present" ? PALETTE.amber : PALETTE.cyan;
+      // Three states, and the third one is the absence of a colour: cyan is his
+      // alone, amber is mine alone, and a plate either of us can stand on wears
+      // plain brass. 00's plate is pressed by me on the recording pass and by
+      // him on the replay, so either colour would have been a lie in the one
+      // room whose whole job is teaching the language the other rooms speak.
+      const signal = plate.requiredActor !== undefined;
+      const accent = plate.requiredActor === "present"
+        ? PALETTE.amber
+        : plate.requiredActor === "past"
+          ? PALETTE.cyan
+          : PALETTE.brass;
       const centre = new Vector3(plate.centre.x, 0, plate.centre.z);
-      const material = signalMaterial(this.scene, `plate-ring-${plate.id}`, accent);
+      // Brass is lit metal, not an emitter — the signal materials are unlit and
+      // go through the glow layer, and putting a no-colour plate through the
+      // same path would have made it a fourth signal rather than the absence of
+      // one.
+      const material = signal
+        ? signalMaterial(this.scene, `plate-ring-${plate.id}`, accent)
+        : brassMaterial(this.scene, `plate-ring-${plate.id}`);
       // A plate the size of a floor is a field, not a disc: it gets a bordered
       // bay with corner brackets so it still reads as one instrument.
       const field = plate.half.x > 1.1 || plate.half.z > 1.1;
@@ -1062,16 +1087,16 @@ export class FirstPersonScene {
       ring.material = material;
       ring.isPickable = false;
       ring.parent = root;
-      this.glow.addIncludedOnlyMesh(ring);
+      if (signal) this.glow.addIncludedOnlyMesh(ring);
 
       // A field is the floor of a whole alcove, and its light is the only light
       // in there — the rig outside cannot reach past the partition.
       const light = new PointLight(`plate-light-${plate.id}`, centre.add(new Vector3(0, field ? 1.1 : 0.6, 0)), this.scene);
-      light.diffuse = accent;
+      light.diffuse = signal ? accent : new Color3(1, 0.87, 0.66);
       light.intensity = field ? 1.15 : 0.55;
       light.range = field ? 7 : 5.5;
 
-      visuals.push({ id: plate.id, ring, light, material, accent });
+      visuals.push({ id: plate.id, ring, light, material, accent, signal });
     }
     return visuals;
   }
@@ -1287,11 +1312,10 @@ export class FirstPersonScene {
     slab.isPickable = false;
     slab.parent = root;
     this.cast(slab);
-    // Same glow-layer occlusion the partition needs: a shut door with a lit
-    // floor behind it was printing that floor onto its own paper. Only the
-    // partition doors — the far-wall ones have a corridor behind them, and
-    // adding them would change three rooms that are already signed off.
-    if (brush && !this.chamber.dressing.corridor) this.glow.addIncludedOnlyMesh(slab);
+    // Same glow-layer occlusion the partition needs. Every door, not just the
+    // partition ones: a far-wall door has a corridor behind it whose lit cases
+    // were showing through the shut paper exactly as the alcove floor did.
+    this.glow.addIncludedOnlyMesh(slab);
 
     // Paper panels between the muntins.
     //
@@ -1721,7 +1745,11 @@ export class FirstPersonScene {
     for (const visual of this.plates) {
       const active = state.plates.find((plate) => plate.id === visual.id)?.active ?? false;
       const pulse = active ? 1.35 + Math.sin(this.clock * 5.2) * 0.18 : 0.62 + Math.sin(this.clock * 1.5) * 0.06;
-      visual.material.emissiveColor = visual.accent.scale(pulse);
+      // Brass still answers when you stand on it — a plate that gave no feedback
+      // would be worse than one wearing the wrong colour — but at a quarter of
+      // the signal's throw, so it reads as metal catching the room rather than
+      // as a fourth thing in the colour language.
+      visual.material.emissiveColor = visual.accent.scale(visual.signal ? pulse : pulse * 0.26);
       visual.light.intensity = active ? 1.5 : 0.55;
       visual.ring.scaling.y = active ? 0.7 : 1;
     }

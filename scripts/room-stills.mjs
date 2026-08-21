@@ -14,6 +14,11 @@ const viewport = { width: 1600, height: 900 };
 
 /** Where to stand, where to look, in each room worth looking at. */
 const SHOTS = [
+  // The three plate states at one framing, for reading the colour language
+  // side by side: brass takes anyone, cyan is his alone, amber is mine alone.
+  { chamber: "awakening", name: "00-plate-brass", to: { x: 0, z: 5.0 }, yaw: 0, pitch: 0.34 },
+  { chamber: "second-self", name: "01-plate-cyan", to: { x: 0, z: 5.0 }, yaw: 0, pitch: 0.34 },
+
   { chamber: "second-self", name: "01-entry", to: { x: 0, z: 2.2 }, yaw: 0, pitch: 0.02 },
   { chamber: "second-self", name: "01-plate", to: { x: 0, z: 5.6 }, yaw: 0, pitch: 0.16 },
   { chamber: "second-self", name: "01-sign", to: { x: 0, z: 9.4 }, yaw: -0.42, pitch: -0.06 },
@@ -28,7 +33,7 @@ const SHOTS = [
   // Nose to the paper: 03 asks you to walk into this door and keep walking, so
   // how it reads at arm's length is a gameplay frame, not a detail shot.
   { chamber: "hand-not-body", name: "03-contact", to: { x: 0, z: 8.6 }, yaw: 0, pitch: 0.02 },
-  { chamber: "hand-not-body", name: "03-amber-plate", to: { x: 3.5, z: 3.9 }, yaw: 0.03, pitch: 0.34 },
+  { chamber: "hand-not-body", name: "03-plate-amber", to: { x: 3.5, z: 5.0 }, yaw: 0.03, pitch: 0.34 },
   // Standing on the amber plate is the only way the doorway is open, so it is
   // also the only pose that can photograph the alcove.
   { chamber: "hand-not-body", name: "03-alcove", to: { x: 3.6, z: 6.5 }, yaw: -0.96, pitch: 0.06 },
