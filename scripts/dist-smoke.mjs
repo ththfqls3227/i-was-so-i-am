@@ -55,7 +55,12 @@ async function inspectEntry(entryUrl) {
     if (assetResponse.status !== 404) throw new Error(`Retired flattened art must not ship: ${assetUrl}`);
     if (script.includes(file)) throw new Error(`Production bundle references retired flattened art: ${file}`);
   }
-  for (const testOnlyApi of ["runGolden", "loadGolden", "runTape"]) {
+  // The first three are the old 2D surface, still worth guarding while that
+  // bundle is in dist. The fourth is the one that matters now: the first-person
+  // build exposes it whenever VITE_E2E was set, and the gate builds set it. If a
+  // gate build ever lands in dist/ instead of dist-e2e/, this is what says so —
+  // and until it was added, nothing did.
+  for (const testOnlyApi of ["runGolden", "loadGolden", "runTape", "__I_WAS_SO_I_AM_FP__"]) {
     if (script.includes(testOnlyApi)) throw new Error(`Production bundle exposes test-only API: ${testOnlyApi}`);
   }
   return Buffer.byteLength(script);

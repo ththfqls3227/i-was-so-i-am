@@ -17,7 +17,9 @@ import { startGameServer } from "./support/serve.mjs";
 
 // Built and served by us, from dist-e2e/, on our own port. See support/serve.mjs
 // for why this must not be whatever happens to be listening on the dev port.
-const server = await startGameServer({ label: "cross-engine" });
+// This one runs the simulation from source inside each engine, so it needs a
+// server that can serve TypeScript. See DEV_PORT in support/serve.mjs.
+const server = await startGameServer({ label: "cross-engine", mode: "dev" });
 const gameUrl = server.url;
 const golden = JSON.parse(await readFile(new URL("../src/sim/corpus-checksums.json", import.meta.url), "utf8"));
 
