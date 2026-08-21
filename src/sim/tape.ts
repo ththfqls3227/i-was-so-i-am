@@ -43,7 +43,19 @@ export function validateTape(room: RoomDefinition, tape: Tape): FailureCode | nu
   }
 }
 
-/** Past the end of the tape the echo receives nothing — it stands where it stopped. */
+/**
+ * The frame the echo is living at this tick, clamped at both ends.
+ *
+ * Past the end of the tape it keeps receiving the last frame — which, because a
+ * fold pads the tape with the posture it ended in, is that posture. The earlier
+ * version returned a neutral frame here, so the moment the gauge ran out the
+ * echo let go of whatever it was holding and every door it was keeping open
+ * closed. The finale is built on the opposite promise: the recording ends in the
+ * posture you are holding, and it holds it for as long as you need.
+ */
 export function replayFrame(tape: Tape, tick: number): Frame {
-  return tick >= 0 && tick < tape.duration ? (tape.frames[tick] ?? NEUTRAL_FRAME) : NEUTRAL_FRAME;
+  if (tape.duration <= 0) return NEUTRAL_FRAME;
+  if (tick <= 0) return tape.frames[0] ?? NEUTRAL_FRAME;
+  if (tick < tape.duration) return tape.frames[tick] ?? NEUTRAL_FRAME;
+  return tape.frames[tape.duration - 1] ?? NEUTRAL_FRAME;
 }

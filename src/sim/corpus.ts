@@ -17,6 +17,7 @@ export interface CorpusStep {
   intent: Intent;
 }
 
+/** First pass. Recorded, then folded — so the last step is also the tail posture. */
 export const CORPUS: readonly CorpusStep[] = [
   { ticks: 24, intent: { forward: true, yawUnits: 0 } },
   { ticks: 18, intent: { forward: true, right: true, yawUnits: 377 } },
@@ -27,6 +28,25 @@ export const CORPUS: readonly CorpusStep[] = [
   { ticks: 40, intent: { forward: true, yawUnits: 55 } },
 ];
 
+/**
+ * Second pass, deliberately long enough to run off the end of the tape and
+ * through the grace span.
+ *
+ * This half exists because of a bug it would have caught: `replayFrame` used to
+ * hand the echo a neutral frame once the tape ran out, so at that exact tick the
+ * echo let go of everything and every door it was holding open closed. Nothing
+ * in the corpus reached the replay phase, so nothing noticed. It does now, and
+ * the last hundred and fifty ticks here are entirely past the end of the tape.
+ */
+export const CORPUS_REPLAY: readonly CorpusStep[] = [
+  { ticks: 30, intent: {} },
+  { ticks: 60, intent: { forward: true, yawUnits: 0 } },
+  { ticks: 40, intent: { right: true, yawUnits: 900 } },
+  { ticks: 20, intent: { jump: true, yawUnits: 900 } },
+  { ticks: 300, intent: { act: true, yawUnits: 2048 } },
+  { ticks: 150, intent: { forward: true, act: true, yawUnits: 2048 } },
+];
+
 export function runCorpus(room: RoomDefinition): string[] {
   const simulation = new Simulation(room);
   const checksums: string[] = [];
@@ -34,5 +54,16 @@ export function runCorpus(room: RoomDefinition): string[] {
     const frame = encodeFrame(step.intent);
     for (let index = 0; index < step.ticks; index += 1) checksums.push(simulation.step(frame).checksum);
   }
+  // Fold, then live with what was recorded. A room that cannot be folded this
+  // far in is a room whose corpus needs rewriting, so say so rather than
+  // silently checksumming a first pass twice.
+  if (!simulation.fold()) throw new Error(`Corpus could not fold in room ${room.id}`);
+  for (const step of CORPUS_REPLAY) {
+    const frame = encodeFrame(step.intent);
+    for (let index = 0; index < step.ticks; index += 1) checksums.push(simulation.step(frame).checksum);
+  }
   return checksums;
 }
+
+export const CORPUS_RECORDING_TICKS = CORPUS.reduce((sum, step) => sum + step.ticks, 0);
+export const CORPUS_REPLAY_TICKS = CORPUS_REPLAY.reduce((sum, step) => sum + step.ticks, 0);

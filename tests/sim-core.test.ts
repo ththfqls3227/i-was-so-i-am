@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Simulation } from "../src/sim/simulation";
 import { encodeFrame, NEUTRAL_FRAME, buttonsOf, yawUnitsOf, Button } from "../src/sim/input";
-import { createTape, validateTape } from "../src/sim/tape";
+import { createTape, replayFrame, validateTape } from "../src/sim/tape";
 import { cosYaw, sinYaw, wrapYawUnits, yawUnitsFromRadians } from "../src/sim/trig";
 import { resolveHorizontal, standingOn } from "../src/sim/collide";
 import { MIN_TAPE_TICKS, PLAYER_RADIUS, TICK_RATE, YAW_UNITS } from "../src/sim/constants";
@@ -315,6 +315,39 @@ describe("the fold tail is the posture, not an event", () => {
     expect(echo.z).toBeGreaterThan(11);
     expect(doorOpen(simulation.state, "inner-door")).toBe(true);
   });
+});
+
+describe("the tape holds its last posture past the end", () => {
+  it("clamps to the final frame instead of going neutral", () => {
+    const frames = framesFor([
+      { forward: true, ticks: AWAKENING.tapeDurationTicks - 1 },
+      { forward: true, act: true, yawUnits: 1234, ticks: 1 },
+    ]);
+    const tape = createTape(AWAKENING, frames);
+    const last = frames[frames.length - 1];
+    for (const beyond of [0, 1, 50, 5000]) {
+      expect(replayFrame(tape, AWAKENING.tapeDurationTicks + beyond)).toBe(last);
+    }
+    // Still the real frame while the tape is running.
+    expect(replayFrame(tape, 0)).toBe(frames[0]);
+    expect(replayFrame(tape, AWAKENING.tapeDurationTicks - 1)).toBe(last);
+  });
+
+  it("keeps the echo walking after the gauge runs out", () => {
+    // The tail is "walking forward". Under the old neutral-frame behaviour the
+    // echo coasted to a halt the tick the tape ended; now it keeps pressing on.
+    const simulation = fresh();
+    drive(simulation, framesFor([{ forward: true, ticks: 40 }]));
+    simulation.fold();
+    // Past the end of the tape, not merely up to it — the whole point.
+    drive(simulation, framesFor([{ ticks: AWAKENING.tapeDurationTicks + 60 }]));
+    const atTapeEnd = actorOf(simulation.state, "past");
+    // It is pressed against the far wall so its speed is zero either way; what
+    // separates the two behaviours is whether it is still being handed the key.
+    expect(atTapeEnd.z).toBeGreaterThan(11);
+    expect(atTapeEnd.buttonsPrev & Button.Forward).toBeTruthy();
+  });
+
 });
 
 describe("tapes", () => {

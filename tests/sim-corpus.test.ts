@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import golden from "../src/sim/corpus-checksums.json";
-import { CORPUS, runCorpus } from "../src/sim/corpus";
+import { CORPUS, CORPUS_RECORDING_TICKS, CORPUS_REPLAY_TICKS, runCorpus } from "../src/sim/corpus";
 import { AWAKENING } from "../src/world/room";
 
 /**
@@ -16,8 +16,7 @@ describe("replay corpus", () => {
   });
 
   it("covers the whole tape and every kind of intent", () => {
-    const ticks = CORPUS.reduce((sum, step) => sum + step.ticks, 0);
-    expect(golden.length).toBe(ticks);
+    expect(golden.length).toBe(CORPUS_RECORDING_TICKS + CORPUS_REPLAY_TICKS);
     const intents = CORPUS.map((step) => step.intent);
     expect(intents.some((intent) => intent.forward && intent.right)).toBe(true);
     expect(intents.some((intent) => intent.jump)).toBe(true);
@@ -27,5 +26,15 @@ describe("replay corpus", () => {
 
   it("is reproducible within one engine", () => {
     expect(runCorpus(AWAKENING)).toEqual(runCorpus(AWAKENING));
+  });
+
+  it("runs off the end of the tape, where the clamp lives", () => {
+    // The replay half has to outlast the tape or it cannot see the bug it was
+    // written for: the echo used to be handed a neutral frame at this exact
+    // tick and let go of everything it was holding.
+    expect(CORPUS_REPLAY_TICKS).toBeGreaterThan(AWAKENING.tapeDurationTicks);
+    expect(CORPUS_REPLAY_TICKS).toBeGreaterThanOrEqual(
+      AWAKENING.tapeDurationTicks + AWAKENING.replayGraceTicks,
+    );
   });
 });
