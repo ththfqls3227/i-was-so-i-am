@@ -300,7 +300,11 @@ export function hanjiMaterial(scene: Scene, name: string, seed: number, glow = 1
 
   const surface = new StandardMaterial(name, scene);
   surface.diffuseColor = Color3.Black();
-  surface.emissiveColor = PALETTE.hanji.scale(glow);
+  // Clamped deliberately. Paper lit past 1.0 clips to flat white, and then the
+  // glow layer and bloom finish the job — at which point the muntins vanish and
+  // a papered door reads as a rectangle of nothing. The sense of brightness is
+  // bloom's to supply; the material's job is to keep its fibre.
+  surface.emissiveColor = PALETTE.hanji.scale(Math.min(glow, 0.78));
   surface.emissiveTexture = texture;
   surface.specularColor = Color3.Black();
   surface.ambientColor = Color3.Black();
@@ -317,6 +321,8 @@ export interface ShelfWallOptions {
   toZ: number;
   height: number;
   seed: number;
+  /** How far the shelving stands off the wall. Corridors get a shallower run. */
+  depth?: number;
 }
 
 export interface ShelfWall {
@@ -344,6 +350,7 @@ export function buildShelfWall(
   options: ShelfWallOptions,
 ): ShelfWall {
   const { x, facing, fromZ, toZ, height, seed } = options;
+  const depth = options.depth ?? 0.42;
   const random = seededRandom(seed);
   const frame: Mesh[] = [];
 
@@ -353,7 +360,6 @@ export function buildShelfWall(
   for (let y = firstShelf; y <= height - 0.32; y += shelfPitch) shelfLevels.push(y);
 
   const span = toZ - fromZ;
-  const depth = 0.42;
 
   // Shelf boards and the uprights that carry them.
   for (const [index, y] of shelfLevels.entries()) {

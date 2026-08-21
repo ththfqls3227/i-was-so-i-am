@@ -434,12 +434,59 @@ export class FirstPersonScene {
     this.surface("corridor-west", corridorDepth, shell.corridorHeight, flat(-shell.corridorHalfWidth, shell.corridorHeight / 2, corridorMid), new Vector3(0, HALF_PI, 0), plaster, root);
     this.surface("corridor-east", corridorDepth, shell.corridorHeight, flat(shell.corridorHalfWidth, shell.corridorHeight / 2, corridorMid), new Vector3(0, -HALF_PI, 0), plaster, root);
     this.surface("corridor-end", corridorWidth, shell.corridorHeight, flat(0, shell.corridorHeight / 2, shell.corridorEnd), new Vector3(0, Math.PI, 0), plaster, root);
-    for (const z of [13.4, 15.2, 17]) {
+    for (const z of [13.1, 14.6, 16.1, 17.6]) {
       const rib = MeshBuilder.CreateBox(`corridor-beam-${z}`, { width: corridorWidth + 0.3, height: 0.24, depth: 0.2 }, this.scene);
       rib.position = new Vector3(0, shell.corridorHeight - 0.14, z);
       rib.material = timberBeam;
       rib.isPickable = false;
       rib.parent = root;
+      for (const side of [-1, 1] as const) {
+        const bracket = MeshBuilder.CreateBox(`corridor-bracket-${side}-${z}`, { width: 0.4, height: 0.18, depth: 0.24 }, this.scene);
+        bracket.position = new Vector3(side * (shell.corridorHalfWidth - 0.22), shell.corridorHeight - 0.36, z);
+        bracket.material = timberBeam;
+        bracket.isPickable = false;
+        bracket.parent = root;
+      }
+    }
+    const corridorPurlin = MeshBuilder.CreateBox("corridor-purlin", { width: 0.18, height: 0.16, depth: corridorDepth }, this.scene);
+    corridorPurlin.position = new Vector3(0, shell.corridorHeight - 0.34, corridorMid);
+    corridorPurlin.material = timberBeam;
+    corridorPurlin.isPickable = false;
+    corridorPurlin.parent = root;
+
+    // The archive does not stop at the door: a shallow run of cases follows you
+    // out, so the corridor reads as more of the same building rather than as a
+    // exit tube. This is the grammar the later chambers will connect with.
+    buildShelfWall(this.scene, root, timber, boxCase, boxLit, {
+      x: -shell.corridorHalfWidth,
+      facing: 1,
+      fromZ: shell.depth + 0.6,
+      toZ: shell.corridorEnd - 1.4,
+      height: 1.94,
+      seed: 5309,
+      depth: 0.3,
+    });
+    // And one lattice opposite it, so the light has a source on this side too.
+    buildSalchang(this.scene, root, timber, salchangGlass, {
+      x: shell.corridorHalfWidth,
+      facing: -1,
+      centreZ: 14.4,
+      width: 2.2,
+      sillY: 1.62,
+      height: 0.86,
+      seed: 611,
+    });
+    const corridorSun = new PointLight("corridor-salchang", new Vector3(shell.corridorHalfWidth - 0.7, 2.05, 14.4), this.scene);
+    corridorSun.diffuse = new Color3(1, 0.85, 0.62);
+    corridorSun.intensity = 0.5;
+    corridorSun.range = 6;
+    // A gradient toward the exit: each lamp a little warmer and stronger than
+    // the one behind it, so leaving reads as walking into daylight.
+    for (const [index, z] of [13.6, 15.6, 17.4].entries()) {
+      const lamp = new PointLight(`corridor-gradient-${index}`, new Vector3(0, shell.corridorHeight - 0.6, z), this.scene);
+      lamp.diffuse = new Color3(1, 0.86 + index * 0.03, 0.66 + index * 0.05);
+      lamp.intensity = 0.22 + index * 0.26;
+      lamp.range = 7;
     }
 
     // Doorway reveal, in timber rather than the old painted trim.
@@ -816,7 +863,6 @@ export class FirstPersonScene {
         panel.material = paper;
         panel.isPickable = false;
         panel.parent = slab;
-        this.glow.addIncludedOnlyMesh(panel);
       }
     }
     // Muntins over the paper.
@@ -879,10 +925,39 @@ export class FirstPersonScene {
       sideOrientation: Mesh.DOUBLESIDE,
     }, this.scene);
     panel.position = new Vector3(0, openingHeight / 2 + 0.04, wall - 0.13);
-    panel.material = hanjiMaterial(this.scene, "exit-hanji", 8801, 1.25);
+    panel.material = hanjiMaterial(this.scene, "exit-hanji", 8801, 0.78);
     panel.isPickable = false;
     panel.parent = root;
-    this.glow.addIncludedOnlyMesh(panel);
+    // Deliberately not in the glow layer. Bloom already carries it, and the
+    // extra pass was what turned the way out into a blank white rectangle from
+    // halfway down the corridor.
+
+    // The way out is a papered door too, so it keeps a lattice at any distance.
+    const exitColumns = 2;
+    const exitRows = 3;
+    const exitStile = 0.08;
+    for (let column = 0; column <= exitColumns; column += 1) {
+      const stile = MeshBuilder.CreateBox(`exit-stile-${column}`, {
+        width: exitStile,
+        height: openingHeight,
+        depth: 0.07,
+      }, this.scene);
+      stile.position = new Vector3(-openingWidth / 2 + (column / exitColumns) * openingWidth, openingHeight / 2 + 0.04, wall - 0.16);
+      stile.material = timber;
+      stile.isPickable = false;
+      stile.parent = root;
+    }
+    for (let row = 0; row <= exitRows; row += 1) {
+      const rail = MeshBuilder.CreateBox(`exit-rail-${row}`, {
+        width: openingWidth,
+        height: exitStile,
+        depth: 0.07,
+      }, this.scene);
+      rail.position = new Vector3(0, 0.04 + (row / exitRows) * openingHeight, wall - 0.16);
+      rail.material = timber;
+      rail.isPickable = false;
+      rail.parent = root;
+    }
 
     const spillFloor = MeshBuilder.CreateBox("exit-floor", { width: openingWidth, height: 0.01, depth: 1.2 }, this.scene);
     spillFloor.position = new Vector3(0, 0.026, wall - 0.78);
