@@ -538,12 +538,19 @@ export function buildSignBoard(
   context.fillStyle = "#221a12";
   context.textAlign = "center";
   context.textBaseline = "middle";
-  const glyphs = [...title];
-  const glyphSize = 118;
+  // Spaces are word breaks in the horizontal name, not characters in the
+  // column — laid out as glyphs they each ate a full slot, which pushed 「두 번째
+  // 나」 into the seal and 「몸이 아니라 손」 clean off the bottom of the board.
+  // The pitch then closes up to whatever fits above the seal, so a room can be
+  // named without anyone checking the length against a magic number.
+  const glyphs = [...title].filter((glyph) => glyph.trim() !== "");
   const startY = 190;
+  const columnEnd = height - 304;
+  const pitch = Math.min(144, (columnEnd - startY) / Math.max(1, glyphs.length - 1));
+  const glyphSize = Math.min(118, pitch - 26);
   for (const [index, glyph] of glyphs.entries()) {
     context.font = `600 ${glyphSize}px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif`;
-    context.fillText(glyph, width / 2 + 22, startY + index * (glyphSize + 26));
+    context.fillText(glyph, width / 2 + 22, startY + index * pitch);
   }
   // Roman subtitle, small, running up the left edge.
   context.save();

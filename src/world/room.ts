@@ -83,6 +83,8 @@ const SALCHANG_HEIGHT = ROOM_SHELL.height - SHELF_HEIGHT - 0.52;
 const WINDOW_ROW = [2.6, 6, 9.4];
 
 const AWAKENING_DRESSING: ChamberDressing = {
+  blocks: [],
+  corridor: true,
   shelves: [
     { id: "west", x: -ROOM_SHELL.halfWidth, facing: 1, fromZ: 0.55, toZ: ROOM_SHELL.depth - 0.55, height: SHELF_HEIGHT, seed: 4211 },
     { id: "east", x: ROOM_SHELL.halfWidth, facing: -1, fromZ: 0.55, toZ: ROOM_SHELL.depth - 0.55, height: SHELF_HEIGHT, seed: 8123 },
@@ -126,6 +128,7 @@ const AWAKENING_DRESSING: ChamberDressing = {
   ],
   sealColour: "red",
   openBox: null,
+  sign: null,
 };
 
 export const AWAKENING_CHAMBER: Chamber = {

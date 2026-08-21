@@ -103,7 +103,12 @@ export const HOLDING_HAND_CHAMBER: Chamber = {
   shell: ROOM_SHELL,
   number: "02",
   subtitleOnEntry: "메아리의 손은 성실합니다. 기록이 끝날 때까지, 잡은 것을 놓지 않습니다.",
-  dressing: standardDressing(ROOM_SHELL, { seedBase: 2600, openBox: OPEN_BOX }),
+  // Four windows rather than the standard three, evenly spaced. 01 and 02 were
+  // running the same window row, which put the same three bands on the same
+  // three patches of floor in both rooms — and 02 is the one room whose subject
+  // is the length of the walk. Four bands at an even pitch give it a metronome:
+  // the distance to the far gate is countable underfoot.
+  dressing: standardDressing(ROOM_SHELL, { seedBase: 2600, openBox: OPEN_BOX, windows: [2.2, 5, 7.8, 10.6] }),
 };
 
 // ---------------------------------------------------------------- 03
@@ -200,10 +205,63 @@ export const HAND_NOT_BODY: RoomDefinition = {
   exit: { id: "exit", min: { x: 3.4, y: 0, z: 12.4 }, max: { x: 6, y: 4, z: 14 } },
 };
 
+/**
+ * The partition and the dead end, drawn from the same constants the brushes are
+ * built from. Until this existed the room collided with a wall nobody could
+ * see: you walked into the middle of an empty hall and stopped.
+ */
+const HAND_BLOCKS = [
+  // Plastered, like the shell. Timber wings went black: nothing in the room
+  // lights a face that points back down the hall, and dark timber has no albedo
+  // to survive on. Plaster catches the door's own paper light.
+  { id: "partition-left", min: { x: -3, y: 0, z: PARTITION_Z }, max: { x: -ALCOVE_HALF, y: 4, z: PARTITION_Z + PARTITION_THICK }, finish: "plaster" as const },
+  { id: "partition-right", min: { x: ALCOVE_HALF, y: 0, z: PARTITION_Z }, max: { x: 3, y: 4, z: PARTITION_Z + PARTITION_THICK }, finish: "plaster" as const },
+  { id: "partition-lintel", min: { x: -ALCOVE_HALF, y: 2.6, z: PARTITION_Z }, max: { x: ALCOVE_HALF, y: 4, z: PARTITION_Z + PARTITION_THICK }, finish: "plaster" as const },
+  { id: "alcove-west", min: { x: -1.5, y: 0, z: PARTITION_Z + PARTITION_THICK }, max: { x: -ALCOVE_HALF, y: 4, z: ALCOVE_END_Z + 0.3 }, finish: "plaster" as const },
+  { id: "alcove-east", min: { x: ALCOVE_HALF, y: 0, z: PARTITION_Z + PARTITION_THICK }, max: { x: 1.5, y: 4, z: ALCOVE_END_Z + 0.3 }, finish: "plaster" as const },
+  { id: "alcove-end", min: { x: -1.5, y: 0, z: ALCOVE_END_Z }, max: { x: 1.5, y: 4, z: ALCOVE_END_Z + 0.3 }, finish: "plaster" as const },
+];
+
 export const HAND_NOT_BODY_CHAMBER: Chamber = {
   sim: HAND_NOT_BODY,
   shell: HAND_SHELL,
   number: "03",
   subtitleOnEntry: "안내: 기록되는 것은 위치가 아니라 행동입니다. 막힌 곳에서도 걸음은 기록됩니다.",
-  dressing: standardDressing(HAND_SHELL, { seedBase: 3300, windows: [3, 7, 11] }),
+  dressing: standardDressing(HAND_SHELL, {
+    seedBase: 3300,
+    windows: [3, 7, 11],
+    blocks: HAND_BLOCKS,
+    // On the partition's west wing, not the far wall. The far wall in this room
+    // is behind the partition on the side away from the exit, so the board hung
+    // there was never once in frame; here it is beside the lit door, which is
+    // what the player is looking at from the moment they walk in.
+    sign: { x: -2.1, z: PARTITION_Z },
+    // This room leaves through a doorway in its own east wall. It has no
+    // corridor, and drawing one puts a passage behind a solid wall.
+    corridor: false,
+    // The dead end is lined like an aisle: cases either side, and the plain
+    // plaster he ends up walking at.
+    extraShelves: [
+      {
+        id: "alcove-west-run",
+        x: -ALCOVE_HALF,
+        facing: 1,
+        fromZ: PARTITION_Z + PARTITION_THICK + 0.1,
+        toZ: ALCOVE_END_Z - 0.1,
+        height: 1.94,
+        seed: 3300 + 771,
+        depth: 0.26,
+      },
+      {
+        id: "alcove-east-run",
+        x: ALCOVE_HALF,
+        facing: -1,
+        fromZ: PARTITION_Z + PARTITION_THICK + 0.1,
+        toZ: ALCOVE_END_Z - 0.1,
+        height: 1.94,
+        seed: 3300 + 772,
+        depth: 0.26,
+      },
+    ],
+  }),
 };

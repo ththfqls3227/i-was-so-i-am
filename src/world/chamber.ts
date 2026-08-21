@@ -67,10 +67,32 @@ export interface SalchangSpec {
   castsBands: boolean;
 }
 
+/**
+ * A piece of the room's own structure that is not one of the four hall walls:
+ * a partition across the floor, the lining of a dead end. Authored beside the
+ * brush it stands in, from the same constants, so the wall you walk into and
+ * the wall you see cannot drift apart.
+ */
+export interface DressBlockSpec {
+  id: string;
+  min: { x: number; y: number; z: number };
+  max: { x: number; y: number; z: number };
+  /** Timber reads as built-in joinery; plaster as part of the shell. */
+  finish: "timber" | "plaster";
+}
+
 /** Everything the renderer needs that the simulation has no opinion about. */
 export interface ChamberDressing {
   shelves: ShelfRunSpec[];
   salchang: SalchangSpec[];
+  /** Structure beyond the shell: partitions, alcove linings. */
+  blocks: DressBlockSpec[];
+  /**
+   * Whether the way out is down a corridor past the far wall. 03 leaves through
+   * a doorway in its own east wall, and drawing it a corridor it does not have
+   * puts a walkable-looking passage behind a solid wall.
+   */
+  corridor: boolean;
   /**
    * The colour the fold stamps its seal in. Red everywhere; cyan in the finale,
    * where what is being sealed is not the record.
@@ -82,6 +104,16 @@ export interface ChamberDressing {
    * having to remember a number the other one chose.
    */
   openBox: { x: number; y: number; z: number } | null;
+  /**
+   * Where the hyeonpan hangs, when the far wall is the wrong place for it.
+   *
+   * Every room so far has put its name board on the far wall beside the way
+   * out, which works while the far wall is what you see from the door. 03 has a
+   * partition across the middle, so the board ended up behind it on the side
+   * the player has no reason to walk to — the room's own name was unreachable.
+   * Null keeps the far-wall default.
+   */
+  sign: { x: number; z: number } | null;
 }
 
 /** One chamber: what the simulation runs, what the renderer builds, what the sign says. */

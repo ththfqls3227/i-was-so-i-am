@@ -4,10 +4,17 @@ import type { ChamberDressing, RoomShell, SalchangSpec, ShelfRunSpec } from "./c
 export const SHELF_HEIGHT = 2.72;
 
 export interface StandardDressingOptions {
+  /** Extra structure this room has beyond the shell. */
+  blocks?: ChamberDressing["blocks"];
+  /** Rooms that leave through their own wall rather than down a corridor. */
+  corridor?: boolean;
+  /** Runs this room adds to the standard pair, such as an alcove lining. */
+  extraShelves?: ShelfRunSpec[];
   /** Offsets every seed, so two chambers of the same shape are not the same room. */
   seedBase: number;
   sealColour?: ChamberDressing["sealColour"];
   openBox?: ChamberDressing["openBox"];
+  sign?: ChamberDressing["sign"];
   /** Where the windows sit along each long wall. */
   windows?: number[];
   /** Lean applied to both long runs. Only 07 uses it. */
@@ -26,6 +33,7 @@ export function standardDressing(shell: RoomShell, options: StandardDressingOpti
   const windows = options.windows ?? [2.6, 6, 9.4];
   const seed = options.seedBase;
 
+  const corridor = options.corridor ?? true;
   const shelves: ShelfRunSpec[] = [
     {
       id: "west",
@@ -47,16 +55,19 @@ export function standardDressing(shell: RoomShell, options: StandardDressingOpti
       seed: seed + 8123,
       ...(options.tiltRadians === undefined ? {} : { tiltRadians: -options.tiltRadians }),
     },
-    {
-      id: "corridor",
-      x: -shell.corridorHalfWidth,
-      facing: 1,
-      fromZ: shell.depth + 0.6,
-      toZ: shell.corridorEnd - 1.4,
-      height: 1.94,
-      seed: seed + 5309,
-      depth: 0.3,
-    },
+    ...(corridor
+      ? [{
+        id: "corridor",
+        x: -shell.corridorHalfWidth,
+        facing: 1 as const,
+        fromZ: shell.depth + 0.6,
+        toZ: shell.corridorEnd - 1.4,
+        height: 1.94,
+        seed: seed + 5309,
+        depth: 0.3,
+      }]
+      : []),
+    ...(options.extraShelves ?? []),
   ];
 
   const salchang: SalchangSpec[] = [
@@ -74,23 +85,28 @@ export function standardDressing(shell: RoomShell, options: StandardDressingOpti
         castsBands: side < 0,
       })),
     ),
-    {
-      id: "corridor",
-      x: shell.corridorHalfWidth,
-      facing: -1,
-      centreZ: (shell.depth + shell.corridorEnd) / 2,
-      width: 2.2,
-      sillY: 1.62,
-      height: 0.86,
-      seed: seed + 611,
-      castsBands: false,
-    },
+    ...(corridor
+      ? [{
+        id: "corridor",
+        x: shell.corridorHalfWidth,
+        facing: -1 as const,
+        centreZ: (shell.depth + shell.corridorEnd) / 2,
+        width: 2.2,
+        sillY: 1.62,
+        height: 0.86,
+        seed: seed + 611,
+        castsBands: false,
+      }]
+      : []),
   ];
 
   return {
     shelves,
     salchang,
+    blocks: options.blocks ?? [],
+    corridor,
     sealColour: options.sealColour ?? "red",
     openBox: options.openBox ?? null,
+    sign: options.sign ?? null,
   };
 }

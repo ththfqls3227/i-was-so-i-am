@@ -96,6 +96,14 @@ export interface RoomEchoes {
   archival: StandardMaterial | null;
 }
 
+interface PlateVisual {
+  id: string;
+  ring: Mesh;
+  light: PointLight;
+  material: StandardMaterial;
+  accent: Color3;
+}
+
 interface Snapshot {
   x: number;
   y: number;
@@ -165,9 +173,10 @@ export class FirstPersonScene {
   private echoes: RoomEchoes = { live: null, archival: null };
   private doorSlab: Mesh;
   private doorOffset = 0;
-  private plateRing: Mesh;
-  private plateGlow: PointLight;
-  private plateRingMaterial: StandardMaterial;
+  /** Where the leaf sits when shut, and how far it slides. Both come from its brush. */
+  private doorHome = 0;
+  private doorTravel = 0;
+  private plates: PlateVisual[];
   private shadows: ShadowGenerator | null = null;
   /** One band material per salchang, so a single window can be lit on its own. */
   private bandMaterials = new Map<string, StandardMaterial>();
@@ -235,9 +244,7 @@ export class FirstPersonScene {
 
     const built = this.dressRoom();
     this.doorSlab = built.doorSlab;
-    this.plateRing = built.plateRing;
-    this.plateGlow = built.plateGlow;
-    this.plateRingMaterial = built.plateRingMaterial;
+    this.plates = built.plates;
     this.echo = built.echo;
     this.echoes = built.echoes;
 
@@ -324,9 +331,7 @@ export class FirstPersonScene {
    */
   private dressRoom(): {
     doorSlab: Mesh;
-    plateRing: Mesh;
-    plateGlow: PointLight;
-    plateRingMaterial: StandardMaterial;
+    plates: PlateVisual[];
     echo: Humanoid;
     echoes: RoomEchoes;
   } {
@@ -361,6 +366,11 @@ export class FirstPersonScene {
     this.surface("wall-back", width, shell.height, flat(0, shell.height / 2, 0), new Vector3(0, 0, 0), plaster, root, true, true);
 
     const sideWidth = shell.halfWidth - shell.doorwayHalfWidth;
+    if (!this.chamber.dressing.corridor) {
+      // No corridor means no doorway in the far wall: it is one solid plane, as
+      // the room's own brush already says it is.
+      this.surface("wall-far", width, shell.height, flat(0, shell.height / 2, shell.depth), new Vector3(0, Math.PI, 0), plaster, root, true, true);
+    } else {
     for (const side of [-1, 1] as const) {
       this.surface(
         `wall-far-${side < 0 ? "left" : "right"}`,
@@ -381,6 +391,7 @@ export class FirstPersonScene {
       plaster,
       root,
     );
+    }
     // Side walls are built as bands around the window openings rather than one
     // plane. The sun only enters where the lattice is, and that is the whole
     // reason the slats read as stripes instead of decoration.
@@ -392,9 +403,22 @@ export class FirstPersonScene {
       const x = side * shell.halfWidth;
       this.surface(`wall-${side}-sill`, shell.depth, sillY, flat(x, sillY / 2, shell.depth / 2), rotation, plaster, root, true, true);
       this.surface(`wall-${side}-head`, shell.depth, shell.height - headY, flat(x, (shell.height + headY) / 2, shell.depth / 2), rotation, plaster, root, true, true);
-      // Piers between and beyond the three windows.
-      for (const [index, bounds] of [[0, 1.3], [3.9, 4.7], [7.3, 8.1], [10.7, shell.depth]].entries()) {
-        const [from, to] = bounds as [number, number];
+      // Piers between and beyond the windows, derived from where the windows
+      // actually are. Hardcoding 00's spacing put solid wall across 03's
+      // openings and left gaps where it had none.
+      const openings = this.chamber.dressing.salchang
+        .filter((window) => Math.abs(window.x) === shell.halfWidth)
+        .map((window) => [window.centreZ - window.width / 2, window.centreZ + window.width / 2] as const)
+        .sort((left, right) => left[0] - right[0]);
+      const piers: [number, number][] = [];
+      let cursor = 0;
+      for (const [from, to] of openings) {
+        if (from - cursor > 0.05) piers.push([cursor, from]);
+        cursor = Math.max(cursor, to);
+      }
+      if (shell.depth - cursor > 0.05) piers.push([cursor, shell.depth]);
+      for (const [index, bounds] of piers.entries()) {
+        const [from, to] = bounds;
         this.surface(
           `wall-${side}-pier-${index}`,
           to - from,
@@ -406,6 +430,66 @@ export class FirstPersonScene {
           true,
           true,
         );
+      }
+    }
+
+    // Structure the shell does not describe: a partition across the floor, the
+    // lining of a dead end. Drawn before the shelving so an alcove run stands
+    // against a wall that is already there.
+    for (const block of this.chamber.dressing.blocks) {
+      const size = new Vector3(
+        block.max.x - block.min.x,
+        block.max.y - block.min.y,
+        block.max.z - block.min.z,
+      );
+      const piece = MeshBuilder.CreateBox(`block-${block.id}`, { width: size.x, height: size.y, depth: size.z }, this.scene);
+      piece.position = new Vector3(
+        (block.min.x + block.max.x) / 2,
+        (block.min.y + block.max.y) / 2,
+        (block.min.z + block.max.z) / 2,
+      );
+      piece.material = block.finish === "timber" ? timber : plaster;
+      piece.receiveShadows = true;
+      piece.isPickable = false;
+      piece.parent = root;
+      this.cast(piece);
+      // Into the glow layer as well, unlit. The layer renders only the meshes it
+      // includes, so nothing else in the room writes depth for it and every
+      // glowing thing shows through every wall — which nothing noticed until a
+      // room put a cyan floor behind a partition and it printed itself on the
+      // partition. Included and black, the wall occludes and adds no light.
+      this.glow.addIncludedOnlyMesh(piece);
+      // Timber joinery gets a banded face, so a partition reads as built rather
+      // than as a box someone left in the hall.
+      if (block.finish === "timber" && size.y > 1) {
+        for (const y of [size.y * 0.28, size.y * 0.72]) {
+          const band = MeshBuilder.CreateBox(`block-${block.id}-band-${y}`, {
+            width: size.x + 0.05,
+            height: 0.09,
+            depth: size.z + 0.05,
+          }, this.scene);
+          band.position = piece.position.add(new Vector3(0, -size.y / 2 + y, 0));
+          band.material = timberBeam;
+          band.isPickable = false;
+          band.parent = root;
+        }
+      }
+      // Plaster over a timber frame is how these walls are actually built, and a
+      // skirt and a rail are the two parts of that frame you see. Without them a
+      // partition four metres tall is a blank panel the size of the screen.
+      if (block.finish === "plaster" && size.y > 2.4 && size.x > 1) {
+        for (const [part, y, height] of [["skirt", 0.16, 0.32], ["rail", 2.6, 0.14]] as const) {
+          const trim = MeshBuilder.CreateBox(`block-${block.id}-${part}`, {
+            width: size.x,
+            height,
+            depth: size.z + 0.06,
+          }, this.scene);
+          trim.position = new Vector3(piece.position.x, y, piece.position.z);
+          trim.material = timberBeam;
+          trim.receiveShadows = true;
+          trim.isPickable = false;
+          trim.parent = root;
+        }
       }
     }
 
@@ -427,7 +511,18 @@ export class FirstPersonScene {
     }
 
     // Post and beam: the frame the building is actually made of.
-    for (const z of [0.5, 3.4, 6.3, 9.2, 11.6]) {
+    // A fixed bay of 2.9 m from the entrance, and whatever short bay is left
+    // over lands against the far wall — which is how the hand-authored row for
+    // the 12 m hall was spaced, and reproduces it exactly. Spreading a fixed
+    // count evenly instead looked equivalent and was not: it gave the 12 m hall
+    // four beams where it had five and moved every one of them, along with the
+    // shadows they throw down the floor.
+    const beamPitch = 2.9;
+    const lastBeamZ = shell.depth - 0.4;
+    const beamRow: number[] = [];
+    for (let z = 0.5; z < lastBeamZ - 0.5; z += beamPitch) beamRow.push(z);
+    beamRow.push(lastBeamZ);
+    for (const z of beamRow) {
       const beam = MeshBuilder.CreateBox(`beam-${z}`, { width: width + 0.4, height: 0.3, depth: 0.26 }, this.scene);
       beam.position = new Vector3(0, shell.height - 0.2, z);
       beam.material = timberBeam;
@@ -452,7 +547,10 @@ export class FirstPersonScene {
       purlin.parent = root;
     }
 
-    // Corridor: same materials, tighter section.
+    // Corridor: same materials, tighter section. Only for rooms that have one —
+    // 03 leaves through its own east wall, and drawing it a corridor puts a
+    // walkable-looking passage behind a solid wall.
+    if (this.chamber.dressing.corridor) {
     const corridorDepth = shell.corridorEnd - shell.depth;
     const corridorMid = shell.depth + corridorDepth / 2;
     const corridorWidth = shell.corridorHalfWidth * 2;
@@ -495,8 +593,10 @@ export class FirstPersonScene {
       lamp.intensity = 0.22 + index * 0.26;
       lamp.range = 7;
     }
+    }
 
     // Doorway reveal, in timber rather than the old painted trim.
+    if (this.chamber.dressing.corridor) {
     for (const side of [-1, 1] as const) {
       this.surface(
         `jamb-${side < 0 ? "left" : "right"}`,
@@ -530,15 +630,20 @@ export class FirstPersonScene {
     doorHead.isPickable = false;
     doorHead.parent = root;
     this.cast(doorHead);
+    }
 
     this.buildLightBands(root);
     this.buildRouteLines(root);
     this.buildSign(root, timber);
     this.buildReadingAlcove(root, timber, plaster);
 
-    const plate = this.buildPlate(root, brass, timber);
+    const plates = this.buildPlates(root, brass, timber);
+    const grips = this.buildGrips(root, brass, timber);
+    void grips;
     const doorSlab = this.buildDoor(root, timber);
-    this.buildExit(root, timber);
+    if (this.chamber.dressing.corridor) this.buildExit(root, timber);
+    else this.buildThreshold(root, timber);
+    this.buildOpenBox(root, timber, brass);
 
     const echoSkin = echoMaterial(this.scene, "echo-core");
     const echo = createHumanoid(this.scene, "echo", echoSkin);
@@ -555,9 +660,7 @@ export class FirstPersonScene {
 
     return {
       doorSlab,
-      plateRing: plate.ring,
-      plateGlow: plate.light,
-      plateRingMaterial: plate.ringMaterial,
+      plates,
       echo,
       echoes: { live: echoSkin, archival: null },
     };
@@ -599,9 +702,7 @@ export class FirstPersonScene {
 
     const built = this.dressRoom();
     this.doorSlab = built.doorSlab;
-    this.plateRing = built.plateRing;
-    this.plateGlow = built.plateGlow;
-    this.plateRingMaterial = built.plateRingMaterial;
+    this.plates = built.plates;
     this.echo = built.echo;
     this.echoes = built.echoes;
 
@@ -779,7 +880,11 @@ export class FirstPersonScene {
    */
   private buildSign(root: TransformNode, timber: StandardMaterial): void {
     const shell = this.chamber.shell;
-    const signX = -shell.doorwayHalfWidth - 1.5;
+    // Far wall beside the way out, unless the room says otherwise — 03 hangs it
+    // on the partition, which is the wall you are looking at from the door.
+    const hung = this.chamber.dressing.sign;
+    const signX = hung ? hung.x : -shell.doorwayHalfWidth - 1.5;
+    const signZ = hung ? hung.z : shell.depth;
     const board = buildSignBoard(
       this.scene,
       "chamber-sign",
@@ -789,7 +894,7 @@ export class FirstPersonScene {
     );
 
     const backing = MeshBuilder.CreateBox("sign-backing", { width: 1.08, height: 1.92, depth: 0.09 }, this.scene);
-    backing.position = new Vector3(signX, 2.05, shell.depth - 0.06);
+    backing.position = new Vector3(signX, 2.05, signZ - 0.06);
     backing.material = timber;
     backing.isPickable = false;
     backing.parent = root;
@@ -799,7 +904,7 @@ export class FirstPersonScene {
     // room. Double-siding it shows the back face, which is the same texture read
     // right to left.
     const face = MeshBuilder.CreatePlane("chamber-sign-plane", { width: 0.92, height: 1.76 }, this.scene);
-    face.position = new Vector3(signX, 2.05, shell.depth - 0.115);
+    face.position = new Vector3(signX, 2.05, signZ - 0.115);
     face.material = board;
     face.isPickable = false;
     face.parent = root;
@@ -807,11 +912,11 @@ export class FirstPersonScene {
     // A small brass lamp over the board, because a sign nobody lit is a sign
     // nobody reads.
     const hood = MeshBuilder.CreateBox("sign-lamp", { width: 0.42, height: 0.07, depth: 0.16 }, this.scene);
-    hood.position = new Vector3(signX, 3.02, shell.depth - 0.24);
+    hood.position = new Vector3(signX, 3.02, signZ - 0.24);
     hood.material = brassMaterial(this.scene, "sign-lamp-brass");
     hood.isPickable = false;
     hood.parent = root;
-    const lamp = new PointLight("sign-lamp-light", new Vector3(signX, 2.86, shell.depth - 0.5), this.scene);
+    const lamp = new PointLight("sign-lamp-light", new Vector3(signX, 2.86, signZ - 0.5), this.scene);
     lamp.diffuse = new Color3(1, 0.88, 0.68);
     lamp.intensity = 0.42;
     lamp.range = 3.4;
@@ -868,48 +973,263 @@ export class FirstPersonScene {
     });
   }
 
-  private buildPlate(root: TransformNode, brass: StandardMaterial, timber: StandardMaterial): { ring: Mesh; light: PointLight; ringMaterial: StandardMaterial } {
-    const shell = this.chamber.shell;
-    const centre = new Vector3(0, 0, shell.plateCentreZ);
+  /**
+   * Every plate the room actually has, where the simulation actually has it.
+   *
+   * Colour says who it answers to: amber is the living player's, cyan is the
+   * recording's. 03 puts one of each in the same room and the whole puzzle is
+   * knowing which is which, so this is not decoration.
+   */
+  private buildPlates(root: TransformNode, brass: StandardMaterial, timber: StandardMaterial): PlateVisual[] {
+    const visuals: PlateVisual[] = [];
+    for (const plate of this.chamber.sim.plates) {
+      const accent = plate.requiredActor === "present" ? PALETTE.amber : PALETTE.cyan;
+      const centre = new Vector3(plate.centre.x, 0, plate.centre.z);
+      const material = signalMaterial(this.scene, `plate-ring-${plate.id}`, accent);
+      // A plate the size of a floor is a field, not a disc: it gets a bordered
+      // bay with corner brackets so it still reads as one instrument.
+      const field = plate.half.x > 1.1 || plate.half.z > 1.1;
 
-    // A brass disc set into a timber surround, flush enough to walk over.
-    const surround = MeshBuilder.CreateCylinder("plate-surround", { diameter: shell.plateRadius * 2 + 0.46, height: 0.05, tessellation: 56 }, this.scene);
-    surround.position = centre.add(new Vector3(0, 0.025, 0));
-    surround.material = timber;
-    surround.receiveShadows = true;
-    surround.isPickable = false;
-    surround.parent = root;
+      if (field) {
+        const pad = MeshBuilder.CreateBox(`plate-pad-${plate.id}`, {
+          width: plate.half.x * 2,
+          height: 0.03,
+          depth: plate.half.z * 2,
+        }, this.scene);
+        pad.position = centre.add(new Vector3(0, 0.015, 0));
+        pad.material = timber;
+        pad.receiveShadows = true;
+        pad.isPickable = false;
+        pad.parent = root;
+        for (const sx of [-1, 1] as const) {
+          for (const sz of [-1, 1] as const) {
+            const along = MeshBuilder.CreateBox(`plate-bracket-x-${plate.id}-${sx}-${sz}`, {
+              width: plate.half.x * 0.5, height: 0.035, depth: 0.09,
+            }, this.scene);
+            along.position = centre.add(new Vector3(sx * (plate.half.x - plate.half.x * 0.25), 0.032, sz * (plate.half.z - 0.05)));
+            along.material = material;
+            along.isPickable = false;
+            along.parent = root;
+            this.glow.addIncludedOnlyMesh(along);
+            const across = MeshBuilder.CreateBox(`plate-bracket-z-${plate.id}-${sx}-${sz}`, {
+              width: 0.09, height: 0.035, depth: plate.half.z * 0.5,
+            }, this.scene);
+            across.position = centre.add(new Vector3(sx * (plate.half.x - 0.05), 0.032, sz * (plate.half.z - plate.half.z * 0.25)));
+            across.material = material;
+            across.isPickable = false;
+            across.parent = root;
+            this.glow.addIncludedOnlyMesh(across);
+          }
+        }
+      } else {
+        const surround = MeshBuilder.CreateCylinder(`plate-surround-${plate.id}`, {
+          diameter: plate.half.x * 2 + 0.46, height: 0.05, tessellation: 56,
+        }, this.scene);
+        surround.position = centre.add(new Vector3(0, 0.025, 0));
+        surround.material = timber;
+        surround.receiveShadows = true;
+        surround.isPickable = false;
+        surround.parent = root;
 
-    const face = MeshBuilder.CreateCylinder("plate-face", { diameter: shell.plateRadius * 2, height: 0.055, tessellation: 56 }, this.scene);
-    face.position = centre.add(new Vector3(0, 0.052, 0));
-    face.material = brass;
-    face.receiveShadows = true;
-    face.isPickable = false;
-    face.parent = root;
+        const face = MeshBuilder.CreateCylinder(`plate-face-${plate.id}`, {
+          diameter: plate.half.x * 2, height: 0.055, tessellation: 56,
+        }, this.scene);
+        face.position = centre.add(new Vector3(0, 0.052, 0));
+        face.material = brass;
+        face.receiveShadows = true;
+        face.isPickable = false;
+        face.parent = root;
 
-    // Concentric turned grooves, so the brass reads as a machined part.
-    for (const [index, diameter] of [0.5, 0.9, 1.4].entries()) {
-      const groove = MeshBuilder.CreateTorus(`plate-groove-${index}`, { diameter: shell.plateRadius * diameter, thickness: 0.016, tessellation: 44 }, this.scene);
-      groove.position = centre.add(new Vector3(0, 0.079, 0));
-      groove.material = brassMaterial(this.scene, `plate-groove-material-${index}`, 0.7);
-      groove.isPickable = false;
-      groove.parent = root;
+        for (const [index, scale] of [0.5, 0.9, 1.4].entries()) {
+          const groove = MeshBuilder.CreateTorus(`plate-groove-${plate.id}-${index}`, {
+            diameter: plate.half.x * scale, thickness: 0.016, tessellation: 44,
+          }, this.scene);
+          groove.position = centre.add(new Vector3(0, 0.079, 0));
+          groove.material = brassMaterial(this.scene, `plate-groove-material-${plate.id}-${index}`, 0.7);
+          groove.isPickable = false;
+          groove.parent = root;
+        }
+      }
+
+      const ring = field
+        ? MeshBuilder.CreateTorus(`plate-ring-mesh-${plate.id}`, {
+          diameter: Math.min(plate.half.x, plate.half.z) * 1.1, thickness: 0.045, tessellation: 56,
+        }, this.scene)
+        : MeshBuilder.CreateTorus(`plate-ring-mesh-${plate.id}`, {
+          diameter: plate.half.x * 2 - 0.08, thickness: 0.05, tessellation: 56,
+        }, this.scene);
+      ring.position = centre.add(new Vector3(0, field ? 0.038 : 0.082, 0));
+      ring.material = material;
+      ring.isPickable = false;
+      ring.parent = root;
+      this.glow.addIncludedOnlyMesh(ring);
+
+      // A field is the floor of a whole alcove, and its light is the only light
+      // in there — the rig outside cannot reach past the partition.
+      const light = new PointLight(`plate-light-${plate.id}`, centre.add(new Vector3(0, field ? 1.1 : 0.6, 0)), this.scene);
+      light.diffuse = accent;
+      light.intensity = field ? 1.15 : 0.55;
+      light.range = field ? 7 : 5.5;
+
+      visuals.push({ id: plate.id, ring, light, material, accent });
+    }
+    return visuals;
+  }
+
+  /**
+   * The grips. 02 is a room about holding one and the finale is the same room
+   * again, and until now the thing you hold was not drawn at all — you walked up
+   * to an empty patch of floor and pressed a key.
+   */
+  private buildGrips(root: TransformNode, brass: StandardMaterial, timber: StandardMaterial): Mesh[] {
+    const pillars: Mesh[] = [];
+    for (const hold of this.chamber.sim.holds) {
+      const base = new Vector3(hold.at.x, 0, hold.at.z);
+      const plinth = MeshBuilder.CreateCylinder(`grip-plinth-${hold.id}`, { diameter: 1.02, height: 0.14, tessellation: 32 }, this.scene);
+      plinth.position = base.add(new Vector3(0, 0.07, 0));
+      plinth.material = timber;
+      plinth.receiveShadows = true;
+      plinth.isPickable = false;
+      plinth.parent = root;
+      this.cast(plinth);
+
+      const column = MeshBuilder.CreateCylinder(`grip-column-${hold.id}`, { diameter: 0.34, height: hold.at.y, tessellation: 28 }, this.scene);
+      column.position = base.add(new Vector3(0, hold.at.y / 2 + 0.1, 0));
+      column.material = timber;
+      column.receiveShadows = true;
+      column.isPickable = false;
+      column.parent = root;
+      this.cast(column);
+      pillars.push(column);
+
+      // The brass the hand actually closes on, at the height the sim says.
+      const collar = MeshBuilder.CreateCylinder(`grip-collar-${hold.id}`, { diameter: 0.44, height: 0.1, tessellation: 28 }, this.scene);
+      collar.position = base.add(new Vector3(0, hold.at.y - 0.12, 0));
+      collar.material = brass;
+      collar.isPickable = false;
+      collar.parent = root;
+      const handle = MeshBuilder.CreateTorus(`grip-handle-${hold.id}`, { diameter: 0.4, thickness: 0.055, tessellation: 28 }, this.scene);
+      handle.position = base.add(new Vector3(0, hold.at.y, 0));
+      handle.rotation.x = Math.PI / 2;
+      handle.material = brass;
+      handle.isPickable = false;
+      handle.parent = root;
+      this.cast(handle);
+      const cap = MeshBuilder.CreateCylinder(`grip-cap-${hold.id}`, { diameter: 0.3, height: 0.07, tessellation: 24 }, this.scene);
+      cap.position = base.add(new Vector3(0, hold.at.y + 0.1, 0));
+      cap.material = brass;
+      cap.isPickable = false;
+      cap.parent = root;
+
+      const lamp = new PointLight(`grip-lamp-${hold.id}`, base.add(new Vector3(0, hold.at.y + 0.4, 0)), this.scene);
+      lamp.diffuse = new Color3(1, 0.86, 0.62);
+      lamp.intensity = 0.34;
+      lamp.range = 4.2;
+    }
+    return pillars;
+  }
+
+  /**
+   * The one memory box left standing open. 02 authors it and the finale inherits
+   * the same coordinates: the anchor has to be findable without being a prop
+   * with a spotlight on it.
+   */
+  private buildOpenBox(root: TransformNode, timber: StandardMaterial, brass: StandardMaterial): void {
+    const at = this.chamber.dressing.openBox;
+    if (!at) return;
+    const centre = new Vector3(at.x, at.y, at.z);
+    const shellBox = MeshBuilder.CreateBox("open-box-shell", { width: 0.36, height: 0.3, depth: 0.42 }, this.scene);
+    shellBox.position = centre;
+    shellBox.material = timber;
+    shellBox.isPickable = false;
+    shellBox.parent = root;
+    // The lid, dropped open, and the dark the box is empty of.
+    const lid = MeshBuilder.CreateBox("open-box-lid", { width: 0.36, height: 0.03, depth: 0.4 }, this.scene);
+    lid.position = centre.add(new Vector3(0.2, 0.12, 0));
+    lid.rotation.z = -0.72;
+    lid.material = timber;
+    lid.isPickable = false;
+    lid.parent = root;
+    const hollow = MeshBuilder.CreateBox("open-box-hollow", { width: 0.02, height: 0.24, depth: 0.36 }, this.scene);
+    hollow.position = centre.add(new Vector3(0.18, 0, 0));
+    hollow.material = matteMaterial(this.scene, "open-box-hollow-material", new Color3(0.02, 0.02, 0.025));
+    hollow.isPickable = false;
+    hollow.parent = root;
+
+    // A dark box among hundreds of dark boxes is not an anchor. The finale asks
+    // the player to recognise this one seven rooms later, so the mouth is
+    // trimmed in brass and given its own small warm light — the difference the
+    // eye catches is the lit rim and the shadow it throws inside, not a prop
+    // with a spotlight on it.
+    for (const [part, offset, size] of [
+      ["top", new Vector3(0.18, 0.14, 0), new Vector3(0.03, 0.03, 0.42)],
+      ["bottom", new Vector3(0.18, -0.14, 0), new Vector3(0.03, 0.03, 0.42)],
+      ["near", new Vector3(0.18, 0, 0.2), new Vector3(0.03, 0.31, 0.03)],
+      ["far", new Vector3(0.18, 0, -0.2), new Vector3(0.03, 0.31, 0.03)],
+    ] as const) {
+      const trim = MeshBuilder.CreateBox(`open-box-lip-${part}`, {
+        width: size.x, height: size.y, depth: size.z,
+      }, this.scene);
+      trim.position = centre.add(offset);
+      trim.material = brass;
+      trim.isPickable = false;
+      trim.parent = root;
+    }
+    const lamp = new PointLight("open-box-lamp", centre.add(new Vector3(0.7, 0.34, 0)), this.scene);
+    lamp.diffuse = new Color3(1, 0.87, 0.66);
+    lamp.intensity = 0.42;
+    lamp.range = 2.4;
+  }
+
+  /**
+   * For a room that leaves through its own wall: a corner of the floor is the
+   * way out, with no corridor to announce it.
+   *
+   * The first version laid a dim amber slab over the whole exit volume and lit
+   * it from above. Standing three metres away you could not tell it from floor —
+   * a room whose puzzle you have just solved has to say where to go, so this
+   * builds the thing a doorway actually is: two posts, a head across them, a
+   * bright band on the line you cross, and light coming from inside it.
+   */
+  private buildThreshold(root: TransformNode, timber: StandardMaterial): void {
+    const exit = this.chamber.sim.exit;
+    const centre = new Vector3((exit.min.x + exit.max.x) / 2, 0, (exit.min.z + exit.max.z) / 2);
+    const width = exit.max.x - exit.min.x;
+    const depth = exit.max.z - exit.min.z;
+    const height = 2.6;
+
+    for (const side of [-1, 1] as const) {
+      const post = MeshBuilder.CreateBox(`threshold-post-${side}`, { width: 0.24, height, depth: 0.34 }, this.scene);
+      post.position = new Vector3(centre.x + side * (width / 2 - 0.12), height / 2, exit.min.z);
+      post.material = timber;
+      post.receiveShadows = true;
+      post.isPickable = false;
+      post.parent = root;
+      this.cast(post);
     }
 
-    const ringMaterial = signalMaterial(this.scene, "plate-ring", PALETTE.cyan);
-    const ring = MeshBuilder.CreateTorus("plate-ring-mesh", { diameter: shell.plateRadius * 2 - 0.08, thickness: 0.05, tessellation: 56 }, this.scene);
-    ring.position = centre.add(new Vector3(0, 0.082, 0));
-    ring.material = ringMaterial;
-    ring.isPickable = false;
-    ring.parent = root;
-    this.glow.addIncludedOnlyMesh(ring);
+    const head = MeshBuilder.CreateBox("threshold-head", { width: width + 0.3, height: 0.28, depth: 0.36 }, this.scene);
+    head.position = new Vector3(centre.x, height + 0.14, exit.min.z);
+    head.material = timber;
+    head.isPickable = false;
+    head.parent = root;
+    this.cast(head);
 
-    const light = new PointLight("plate-light", centre.add(new Vector3(0, 0.6, 0)), this.scene);
-    light.diffuse = PALETTE.cyan;
-    light.intensity = 0.55;
-    light.range = 5.5;
+    // The line you cross, bright enough to read across the room, and narrow
+    // enough that it stays a threshold rather than a lit floor.
+    const band = MeshBuilder.CreateBox("threshold-sill", { width, height: 0.02, depth: 0.34 }, this.scene);
+    band.position = new Vector3(centre.x, 0.012, exit.min.z);
+    band.material = signalMaterial(this.scene, "threshold-glow", PALETTE.amber.scale(0.66), 0.95);
+    band.isPickable = false;
+    band.parent = root;
+    this.glow.addIncludedOnlyMesh(band);
 
-    return { ring, light, ringMaterial };
+    // Warm light from inside the opening, so the posts are rimmed from within
+    // and the corner is somewhere the room continues rather than ends.
+    const lamp = new PointLight("threshold-lamp", new Vector3(centre.x, 1.9, exit.min.z + depth * 0.6), this.scene);
+    lamp.diffuse = PALETTE.amber;
+    lamp.intensity = 2.1;
+    lamp.range = 7;
   }
 
   /**
@@ -918,20 +1238,76 @@ export class FirstPersonScene {
    * door that rose into a lintel would read as a shutter.
    */
   private buildDoor(root: TransformNode, timber: StandardMaterial): Mesh {
-    const shell = this.chamber.shell;
-    const leafWidth = shell.doorwayHalfWidth * 2 - 0.04;
-    const leafHeight = shell.doorwayHeight - 0.03;
+    // The leaf is measured from the door's own brush rather than from the shell.
+    // 03's door is in a partition halfway down the hall, and reading the shell
+    // put the only door in the room fifteen metres from the hole it fills.
+    const brush = this.chamber.sim.doors[0]?.brush;
+    const leafWidth = brush ? brush.max.x - brush.min.x - 0.04 : this.chamber.shell.doorwayHalfWidth * 2 - 0.04;
+    const leafHeight = brush ? brush.max.y - brush.min.y - 0.03 : this.chamber.shell.doorwayHeight - 0.03;
+    const leafX = brush ? (brush.min.x + brush.max.x) / 2 : 0;
+    const leafZ = brush
+      ? (brush.min.z + brush.max.z) / 2
+      : this.chamber.shell.depth + this.chamber.shell.wallThickness / 2;
+    this.doorHome = leafX;
+    this.doorTravel = leafWidth + 0.04;
+
+    // A door that is not in the far wall needs its own frame; the far-wall one
+    // already has posts and a head from the doorway reveal.
+    if (brush && !this.chamber.dressing.corridor) {
+      for (const side of [-1, 1] as const) {
+        const post = MeshBuilder.CreateBox(`partition-post-${side}`, { width: 0.22, height: leafHeight + 0.3, depth: 0.34 }, this.scene);
+        post.position = new Vector3(leafX + side * (leafWidth / 2 + 0.11), (leafHeight + 0.3) / 2, leafZ);
+        post.material = timber;
+        post.isPickable = false;
+        post.parent = root;
+        this.cast(post);
+      }
+      const head = MeshBuilder.CreateBox("partition-head", { width: leafWidth + 0.5, height: 0.24, depth: 0.36 }, this.scene);
+      head.position = new Vector3(leafX, leafHeight + 0.12, leafZ);
+      head.material = timber;
+      head.isPickable = false;
+      head.parent = root;
+      this.cast(head);
+
+      // The paper's own light, thrown back down the hall. A partition faces the
+      // way the player came from, which is the one direction nothing in the
+      // lighting rig points, so without this the wall the room is about is a
+      // black rectangle with a lit door floating in it.
+      const spill = new PointLight("partition-spill", new Vector3(leafX, leafHeight * 0.62, leafZ - 0.9), this.scene);
+      spill.diffuse = new Color3(1, 0.9, 0.72);
+      spill.specular = new Color3(0.18, 0.15, 0.11);
+      spill.intensity = 1.35;
+      spill.range = 7.5;
+    }
 
     const slab = MeshBuilder.CreateBox("door-slab", { width: leafWidth, height: leafHeight, depth: 0.1 }, this.scene);
-    slab.position = new Vector3(0, leafHeight / 2, shell.depth + shell.wallThickness / 2);
+    slab.position = new Vector3(leafX, leafHeight / 2, leafZ);
     slab.material = timber;
     slab.receiveShadows = true;
     slab.isPickable = false;
     slab.parent = root;
     this.cast(slab);
+    // Same glow-layer occlusion the partition needs: a shut door with a lit
+    // floor behind it was printing that floor onto its own paper. Only the
+    // partition doors — the far-wall ones have a corridor behind them, and
+    // adding them would change three rooms that are already signed off.
+    if (brush && !this.chamber.dressing.corridor) this.glow.addIncludedOnlyMesh(slab);
 
-    // Paper panels between the muntins, glowing with the corridor behind.
-    const paper = hanjiMaterial(this.scene, "door-hanji", 5501, 0.34);
+    // Paper panels between the muntins.
+    //
+    // A partition door has a dead-end alcove behind it, not a lit corridor, and
+    // 03 is the room that asks you to walk face-first into this door and hold
+    // the key down. At corridor brightness that filled the screen with flat
+    // white at the exact moment the room is teaching you something.
+    //
+    // Zero here is not unlit paper: the fibre texture carries the sheet on its
+    // own and the emissive colour only lays a flat pedestal over it, which is
+    // what was crushing the fibre out. Measured at the contact pose, sampling
+    // the centre panel — 0.12, 0.22 and 0.34 all land on 222 with a three-point
+    // spread, clipped and indistinguishable from each other, while 0 reads 200
+    // with a twelve-point spread and the mulberry strands come back. From
+    // across the room it is still the brightest thing in the wall.
+    const paper = hanjiMaterial(this.scene, "door-hanji", 5501, this.chamber.dressing.corridor ? 0.34 : 0);
     const columns = 3;
     const rows = 4;
     const stileWidth = 0.09;
@@ -978,7 +1354,7 @@ export class FirstPersonScene {
 
     // The pocket the leaf slides into, so it disappears somewhere real.
     const pocket = MeshBuilder.CreateBox("door-pocket", { width: leafWidth + 0.2, height: leafHeight + 0.2, depth: 0.16 }, this.scene);
-    pocket.position = new Vector3(shell.doorwayHalfWidth + leafWidth / 2 + 0.1, leafHeight / 2, shell.depth + shell.wallThickness / 2 + 0.1);
+    pocket.position = new Vector3(leafX + this.doorTravel + leafWidth / 2 - 0.1, leafHeight / 2, leafZ + 0.1);
     pocket.material = timber;
     pocket.isPickable = false;
     pocket.parent = root;
@@ -1337,16 +1713,18 @@ export class FirstPersonScene {
     const door = state.doors[0];
     // Sideways, into the pocket: a papered leaf that rose into the lintel would
     // read as a shutter rather than a door.
-    const target = door?.open ? this.chamber.shell.doorwayHalfWidth * 2 - 0.08 : 0;
+    const target = door?.open ? this.doorTravel : 0;
     // Ease rather than snap: a leaf that teleports open reads as a bug.
     this.doorOffset += (target - this.doorOffset) * Math.min(1, deltaSeconds * 6.5);
-    this.doorSlab.position.x = this.doorOffset;
+    this.doorSlab.position.x = this.doorHome + this.doorOffset;
 
-    const plateActive = state.plates[0]?.active ?? false;
-    const pulse = plateActive ? 1.35 + Math.sin(this.clock * 5.2) * 0.18 : 0.62 + Math.sin(this.clock * 1.5) * 0.06;
-    this.plateRingMaterial.emissiveColor = PALETTE.cyan.scale(pulse);
-    this.plateGlow.intensity = plateActive ? 1.5 : 0.55;
-    this.plateRing.scaling.y = plateActive ? 0.7 : 1;
+    for (const visual of this.plates) {
+      const active = state.plates.find((plate) => plate.id === visual.id)?.active ?? false;
+      const pulse = active ? 1.35 + Math.sin(this.clock * 5.2) * 0.18 : 0.62 + Math.sin(this.clock * 1.5) * 0.06;
+      visual.material.emissiveColor = visual.accent.scale(pulse);
+      visual.light.intensity = active ? 1.5 : 0.55;
+      visual.ring.scaling.y = active ? 0.7 : 1;
+    }
   }
 
   private interpolated(id: ActorId, alpha: number): Snapshot | null {
