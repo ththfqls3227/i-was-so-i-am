@@ -71,6 +71,9 @@ export const SILENCE_CHAMBER: Chamber = {
   shell: ROOM_SHELL,
   number: "08",
   subtitleOnEntry: "이 구역은 기록이 허가되지 않습니다.",
+  // The same plate the room forces down, so the man and the reason the plate is
+  // down cannot drift apart.
+  archivalFigure: { fromChamberId: "second-self", at: OLD_ECHO_PLATE },
   dressing: standardDressing(ROOM_SHELL, { seedBase: 8800 }),
 };
 

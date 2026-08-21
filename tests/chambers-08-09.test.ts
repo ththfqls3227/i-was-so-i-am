@@ -45,6 +45,23 @@ describe("08 — silence", () => {
     expect(simulation.state.lastError).toBeNull();
   });
 
+  it("stands somebody on the forced plate, and no other room does", () => {
+    // The room is that a man is standing there and nothing says so. A later
+    // edit that drops the figure leaves a lit plate with nobody on it, which is
+    // the room saying nothing about nothing.
+    const withFigures = ROSTER.all.filter((chamber) => chamber.archivalFigure).map((chamber) => chamber.sim.id);
+    expect(withFigures).toEqual(["silence"]);
+
+    const chamber = ROSTER.byIdOrNull("silence");
+    const figure = chamber?.archivalFigure;
+    expect(figure?.fromChamberId).toBe("second-self");
+    // On the plate the room forces down, not near it.
+    const forced = SILENCE.plates.find((plate) => plate.forcedActive === true);
+    expect({ x: figure?.at.x, z: figure?.at.z }).toEqual({ x: forced?.centre.x, z: forced?.centre.z });
+    // And the room he came from is one the player may never have opened.
+    expect(ROSTER.byIdOrNull(figure?.fromChamberId ?? "")).not.toBeNull();
+  });
+
   it("puts him where the plate is, from the tape you left in 01", () => {
     // 01 is solved by standing still on a plate, so the pose is the plate.
     const first = new Simulation(SECOND_SELF);

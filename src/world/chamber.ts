@@ -190,6 +190,23 @@ export interface Chamber {
    */
   sealHoldSeconds?: number;
   /**
+   * Somebody from an earlier room, standing here, not replaying.
+   *
+   * Only 08 has one. He is the record you left in 01, and the room says nothing
+   * about him — the plate under him is already down when you arrive, and the
+   * only way to open the door is to go and stand on the other one.
+   *
+   * The place is the room's, not the tape's: 01's plate is not where 08's plate
+   * is, so the coordinates cannot simply carry over. What the tape supplies is
+   * the posture, which is the part that means something — he is standing, and
+   * he is standing because that is how you left him.
+   */
+  archivalFigure?: {
+    /** Whose recording this is. Falls back to that room's golden, silently. */
+    fromChamberId: string;
+    at: { x: number; z: number };
+  };
+  /**
    * What pressing rerecord says here. Everywhere else it warns that the current
    * record will be taken back; in the finale it says the opposite, and means it.
    */

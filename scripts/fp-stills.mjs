@@ -42,6 +42,31 @@ const POSES_BY_CHAMBER = {
     { name: "07-looking-back", atZ: 8.2, yaw: Math.PI, pitch: 0.05 },
     { name: "08-east-wall", atZ: 8.2, yaw: 1.4, pitch: 0.05 },
   ],
+  // 08 is about one thing: somebody is already standing on the west plate, and
+  // nobody mentions it. Every shot here is either him or the room refusing to
+  // say anything about him.
+  silence: [
+    { name: "01-spawn-forward", atZ: 0, yaw: 0, pitch: 0 },
+    { name: "02-spawn-west", atZ: 0, yaw: -1.0, pitch: 0.05 },
+    { name: "03-approach-him", atZ: 4.4, yaw: -1.2, pitch: 0.08 },
+    { name: "04-level-with-him", atZ: 7.2, yaw: -Math.PI / 2, pitch: 0.05 },
+    { name: "05-his-plate-down", atZ: 7.2, yaw: -Math.PI / 2, pitch: 0.45 },
+    { name: "06-your-plate", atZ: 7.2, yaw: Math.PI / 2, pitch: 0.3 },
+    { name: "07-the-door", atZ: 9.6, yaw: 0, pitch: 0.05 },
+    { name: "08-looking-back", atZ: 9.6, yaw: Math.PI, pitch: 0.05 },
+  ],
+  // 09 is 02 at a longer walk. The shots worth having are the grip you already
+  // know, and the length of the room you have to cross while he holds it.
+  "last-hold": [
+    { name: "01-spawn-forward", atZ: 0, yaw: 0, pitch: 0 },
+    { name: "02-the-open-box", atZ: 0, yaw: -1.25, pitch: 0.1 },
+    { name: "03-the-grip", atZ: 2.6, yaw: 0, pitch: 0.15 },
+    { name: "04-past-the-pillar", atZ: 5.2, yaw: 0, pitch: 0 },
+    { name: "05-the-long-way-out", atZ: 11, yaw: 0, pitch: 0 },
+    { name: "06-looking-back-at-him", atZ: 11, yaw: Math.PI, pitch: 0.05 },
+    { name: "07-the-doorway", atZ: 18.4, yaw: 0, pitch: 0.05 },
+    { name: "08-from-the-doorway", atZ: 18.4, yaw: Math.PI, pitch: 0.05 },
+  ],
 };
 
 const DEFAULT_POSES = [

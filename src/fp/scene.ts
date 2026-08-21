@@ -18,11 +18,12 @@ import { DefaultRenderingPipeline } from "@babylonjs/core/PostProcesses/RenderPi
 import { Scene } from "@babylonjs/core/scene";
 
 import { Simulation, simConstants } from "../sim/simulation";
-import { TapeArchive } from "../sim/archive";
+import { TapeArchive, finalPose } from "../sim/archive";
 import { encodeFrame } from "../sim/input";
 import { radiansFromYawUnits, yawUnitsFromRadians } from "../sim/trig";
 import type { ActorId, ActorState, SimState } from "../sim/types";
 import type { Chamber } from "../world/chamber";
+import { goldenTape } from "../world/goldens";
 import { ROSTER } from "../world/roster";
 import { echoMaterial, matteMaterial, signalMaterial } from "./materials";
 import {
@@ -185,6 +186,7 @@ export class FirstPersonScene {
   private started = false;
 
   private echo: Humanoid;
+  private archival: Humanoid | null = null;
   private echoes: RoomEchoes = { live: null, archival: null };
   private doorSlab: Mesh;
   private doorOffset = 0;
@@ -266,6 +268,7 @@ export class FirstPersonScene {
     this.doorSlab = built.doorSlab;
     this.plates = built.plates;
     this.echo = built.echo;
+    this.archival = built.archival;
     this.echoes = built.echoes;
 
     this.captureSnapshots();
@@ -360,6 +363,8 @@ export class FirstPersonScene {
     doorSlab: Mesh;
     plates: PlateVisual[];
     echo: Humanoid;
+    /** The one left standing from an earlier room. Only 08 has one. */
+    archival: Humanoid | null;
     echoes: RoomEchoes;
   } {
     const root = new TransformNode(`world-${this.chamber.sim.id}`, this.scene);
@@ -717,6 +722,35 @@ export class FirstPersonScene {
     }
     this.glow.addIncludedOnlyMesh(echo.parts[0] as Mesh);
 
+    // Somebody left standing here from an earlier room. Built from the same rig
+    // as the live echo, on its own material so it can be told apart from one
+    // that is still replaying — the look of it is c1's to set.
+    const figure = this.chamber.archivalFigure;
+    let archivalSkin: StandardMaterial | null = null;
+    let archival: Humanoid | null = null;
+    if (figure) {
+      archivalSkin = echoMaterial(this.scene, "echo-archival");
+      archivalSkin.alpha = 0.5;
+      archival = createHumanoid(this.scene, "echo-archival", archivalSkin);
+      archival.root.parent = root;
+      for (const part of archival.parts) {
+        part.receiveShadows = false;
+        part.applyFog = false;
+      }
+      this.glow.addIncludedOnlyMesh(archival.parts[0] as Mesh);
+
+      // Where the room says, in the posture the tape ended in. The coordinates
+      // are the room's because 01's plate is not 08's plate; the tape supplies
+      // the fact that he is standing rather than caught mid-stride.
+      const source = ROSTER.byIdOrNull(figure.fromChamberId)?.sim ?? null;
+      const tape = source ? this.tapes.tapeFor(source, goldenTape(source)) : null;
+      const pose = source && tape ? finalPose(source, tape) : null;
+      archival.root.position.set(figure.at.x, pose?.y ?? 0, figure.at.z);
+      // Facing the way out, which is the way he was facing when you left him.
+      archival.root.rotation.y = 0;
+      poseHumanoid(archival, { speed: 0, phase: 0, grounded: true, clock: 0 });
+    }
+
     this.worldRoot = root;
     this.roomLights = this.scene.lights.filter((light) => !lightsBefore.has(light));
 
@@ -724,7 +758,8 @@ export class FirstPersonScene {
       doorSlab,
       plates,
       echo,
-      echoes: { live: echoSkin, archival: null },
+      archival,
+      echoes: { live: echoSkin, archival: archivalSkin },
     };
   }
 
@@ -770,6 +805,7 @@ export class FirstPersonScene {
     this.doorSlab = built.doorSlab;
     this.plates = built.plates;
     this.echo = built.echo;
+    this.archival = built.archival;
     this.echoes = built.echoes;
 
     this.doorOffset = 0;
