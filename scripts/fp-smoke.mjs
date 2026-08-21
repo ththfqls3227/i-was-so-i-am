@@ -43,6 +43,7 @@ const read = () =>
       pointerLocked: globalThis.document.pointerLockElement !== null,
       prompts: [...globalThis.globalThis.document.querySelectorAll(".prompts .key")].map((node) => node.textContent),
       crosshairFocus: globalThis.document.querySelector(".crosshair")?.dataset.focus,
+      chamberId: fp.chamberId(),
     };
   });
 
@@ -152,6 +153,29 @@ try {
   await page.waitForTimeout(300);
   const rerecorded = await read();
   check("R starts a fresh recording", rerecorded.phase === "recording" && rerecorded.tapeTick < 20);
+
+  console.log("chamber teardown and rebuild");
+  const beforeSwitch = await read();
+  const switched = await page.evaluate(
+    (id) => globalThis.__I_WAS_SO_I_AM_FP__.switchChamber(id),
+    beforeSwitch.chamberId,
+  );
+  check("switching to a chamber rebuilds the room", switched);
+  await page.waitForTimeout(600);
+  const afterSwitch = await read();
+  check("the rebuilt room starts from its own spawn", Math.abs(afterSwitch.z - 1.6) < 0.2, `z ${afterSwitch.z.toFixed(2)}`);
+  check("the rebuilt room is a fresh run", afterSwitch.phase === "recording" && !afterSwitch.doorOpen, `phase ${afterSwitch.phase}, door ${afterSwitch.doorOpen}`);
+  // The crosshair still answering means the rebuilt room's mechanisms are wired
+  // to the rebuilt room, not to the one that was disposed.
+  await page.evaluate(() => globalThis.__I_WAS_SO_I_AM_FP__.setLook(0, 0));
+  await page.keyboard.down("w");
+  await page.waitForTimeout(1400);
+  await page.keyboard.up("w");
+  await page.waitForTimeout(300);
+  const walkedAgain = await read();
+  check("the rebuilt room can be played", walkedAgain.plateActive && walkedAgain.doorOpen, `plate ${walkedAgain.plateActive}, door ${walkedAgain.doorOpen}`);
+  check("switching to a chamber that is not on the roster is refused", !(await page.evaluate(() => globalThis.__I_WAS_SO_I_AM_FP__.switchChamber("no-such-room"))));
+
 } finally {
   await browser.close();
 }

@@ -23,6 +23,8 @@
     "test:fp-smoke": "node scripts/fp-smoke.mjs",
     "test:fp-cross-engine": "node scripts/fp-cross-engine.mjs",
     "captures:fp": "node scripts/fp-captures.mjs",
+    "captures:stills": "node scripts/fp-stills.mjs",
+    "captures:diff": "node scripts/image-diff.mjs",
     "test:visual-diff": "node scripts/visual-diff.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",

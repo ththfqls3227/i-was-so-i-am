@@ -1,5 +1,6 @@
 import { Engine } from "@babylonjs/core/Engines/engine";
 import { GlowLayer } from "@babylonjs/core/Layers/glowLayer";
+import type { Light } from "@babylonjs/core/Lights/light";
 import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { PointLight } from "@babylonjs/core/Lights/pointLight";
@@ -20,7 +21,8 @@ import { Simulation, simConstants } from "../sim/simulation";
 import { encodeFrame } from "../sim/input";
 import { radiansFromYawUnits, yawUnitsFromRadians } from "../sim/trig";
 import type { ActorId, ActorState, SimState } from "../sim/types";
-import { AWAKENING, ROOM_SHELL } from "../world/room";
+import type { Chamber } from "../world/chamber";
+import { ROSTER } from "../world/roster";
 import { echoMaterial, matteMaterial, signalMaterial } from "./materials";
 import {
   brassMaterial,
@@ -111,11 +113,12 @@ export class FirstPersonScene {
   private readonly camera: UniversalCamera;
   private readonly glow: GlowLayer;
   private readonly pipeline: DefaultRenderingPipeline;
-  private simulation = new Simulation(AWAKENING);
+  private chamber: Chamber;
+  private simulation: Simulation;
   private events: SceneEvents | null = null;
 
   private readonly pressed = new Set<string>();
-  private yaw = radiansFromYawUnits(AWAKENING.spawn.yawUnits);
+  private yaw: number;
   private pitch = 0;
   private sensitivity = DEFAULT_MOUSE_SENSITIVITY;
   private pointerLocked = false;
@@ -144,9 +147,15 @@ export class FirstPersonScene {
   private plateGlow: PointLight;
   private plateRingMaterial: StandardMaterial;
   private shadows: ShadowGenerator | null = null;
+  /** Everything the current chamber built. Dropped whole when the room changes. */
+  private worldRoot: TransformNode | null = null;
+  private roomLights: Light[] = [];
   private readonly resizeObserver: ResizeObserver;
 
-  constructor(parent: HTMLElement) {
+  constructor(parent: HTMLElement, chamber: Chamber = ROSTER.first) {
+    this.chamber = chamber;
+    this.simulation = new Simulation(chamber.sim);
+    this.yaw = radiansFromYawUnits(chamber.sim.spawn.yawUnits);
     this.canvas = document.createElement("canvas");
     this.canvas.id = "fp-canvas";
     this.canvas.tabIndex = 0;
@@ -169,7 +178,7 @@ export class FirstPersonScene {
     this.scene.fogDensity = 0.008;
     this.scene.fogColor = new Color3(0.66, 0.69, 0.74);
 
-    this.camera = new UniversalCamera("fp-camera", new Vector3(0, simConstants.eyeHeight, AWAKENING.spawn.z), this.scene);
+    this.camera = new UniversalCamera("fp-camera", new Vector3(0, simConstants.eyeHeight, chamber.sim.spawn.z), this.scene);
     this.camera.inputs.clear();
     this.camera.rotationQuaternion = null;
     this.camera.fov = 1.05;
@@ -200,7 +209,7 @@ export class FirstPersonScene {
     this.glow = new GlowLayer("fp-glow", this.scene, { blurKernelSize: 32 });
     this.glow.intensity = 0.62;
 
-    const built = this.buildWorld();
+    const built = this.dressRoom();
     this.doorSlab = built.doorSlab;
     this.plateRing = built.plateRing;
     this.plateGlow = built.plateGlow;
@@ -284,7 +293,12 @@ export class FirstPersonScene {
     return plane;
   }
 
-  private buildWorld(): {
+  /**
+   * Build one chamber. Everything it makes hangs off a single root, and the
+   * lights it adds are noted by diffing the scene, because lights are not
+   * children of anything — that pair is what makes a room disposable.
+   */
+  private dressRoom(): {
     doorSlab: Mesh;
     plateRing: Mesh;
     plateGlow: PointLight;
@@ -292,8 +306,9 @@ export class FirstPersonScene {
     echo: Humanoid;
     echoMaterials: StandardMaterial[];
   } {
-    const root = new TransformNode("world", this.scene);
-    const shell = ROOM_SHELL;
+    const root = new TransformNode(`world-${this.chamber.sim.id}`, this.scene);
+    const lightsBefore = new Set(this.scene.lights);
+    const shell = this.chamber.shell;
     const width = shell.halfWidth * 2;
 
     // The archive's material set. Timber and near-black cases carry the walls,
@@ -545,6 +560,9 @@ export class FirstPersonScene {
     }
     this.glow.addIncludedOnlyMesh(echo.parts[0] as Mesh);
 
+    this.worldRoot = root;
+    this.roomLights = this.scene.lights.filter((light) => !lightsBefore.has(light));
+
     return {
       doorSlab,
       plateRing: plate.ring,
@@ -555,13 +573,58 @@ export class FirstPersonScene {
     };
   }
 
+  /** Drop the current chamber: its tree, its materials and its lights. */
+  private clearRoom(): void {
+    for (const light of this.roomLights) light.dispose();
+    this.roomLights = [];
+    // A chamber's materials and textures are procedural and its own, so they go
+    // with it rather than accumulating one room's worth of atlases per switch.
+    this.worldRoot?.dispose(false, true);
+    this.worldRoot = null;
+    this.shadows = null;
+  }
+
+  get currentChamber(): Chamber {
+    return this.chamber;
+  }
+
+  /**
+   * Tear the room down and put another one up. The simulation is replaced
+   * wholesale rather than reset, because a chamber is a different world and
+   * carrying anything across would be a bug waiting to be found later.
+   */
+  switchChamber(chamber: Chamber): void {
+    const previousPhase = this.simulation.state.phase;
+    this.clearRoom();
+    this.chamber = chamber;
+    this.simulation = new Simulation(chamber.sim);
+
+    const built = this.dressRoom();
+    this.doorSlab = built.doorSlab;
+    this.plateRing = built.plateRing;
+    this.plateGlow = built.plateGlow;
+    this.plateRingMaterial = built.plateRingMaterial;
+    this.echo = built.echo;
+    this.echoMaterials = built.echoMaterials;
+
+    this.doorOffset = 0;
+    this.stride.clear();
+    this.pressed.clear();
+    this.setLook(radiansFromYawUnits(chamber.sim.spawn.yawUnits), 0);
+    this.captureSnapshots();
+    this.previous = new Map(this.current);
+    this.accumulator = 0;
+    this.lastFrameTime = performance.now();
+    this.events?.onPhaseChange(this.simulation.state.phase, previousPhase);
+  }
+
   /** Register a mesh with the key light. Contact shadow is what seats an object on a floor. */
   private cast(mesh: Mesh): void {
     this.shadows?.addShadowCaster(mesh, false);
   }
 
   private buildLighting(root: TransformNode, timber: StandardMaterial): void {
-    const shell = ROOM_SHELL;
+    const shell = this.chamber.shell;
     // Sky is the cool bounce off plaster; ground is the warm one off brick.
     const sky = new HemisphericLight("sky", new Vector3(0, 1, 0), this.scene);
     sky.diffuse = new Color3(0.62, 0.66, 0.76);
@@ -623,7 +686,7 @@ export class FirstPersonScene {
    * at the pitch of the slats and where the window geometry puts it.
    */
   private buildLightBands(root: TransformNode): void {
-    const shell = ROOM_SHELL;
+    const shell = this.chamber.shell;
     const sillY = SHELF_HEIGHT + 0.24;
     const windowHeight = shell.height - SHELF_HEIGHT - 0.52;
     const slope = 0.46 / 0.86;
@@ -667,7 +730,7 @@ export class FirstPersonScene {
 
   /** Cyan dashed for what the recording should walk, amber solid for the present. */
   private buildRouteLines(root: TransformNode): void {
-    const shell = ROOM_SHELL;
+    const shell = this.chamber.shell;
     const past = signalMaterial(this.scene, "route-past", PALETTE.cyan.scale(0.4), 0.8);
     const present = signalMaterial(this.scene, "route-present", PALETTE.amber.scale(0.34), 0.8);
 
@@ -697,9 +760,15 @@ export class FirstPersonScene {
    * only thing here that names where you are.
    */
   private buildSign(root: TransformNode, timber: StandardMaterial): void {
-    const shell = ROOM_SHELL;
+    const shell = this.chamber.shell;
     const signX = -shell.doorwayHalfWidth - 1.5;
-    const board = buildSignBoard(this.scene, "chamber-sign", AWAKENING.name, AWAKENING.subtitle, "00");
+    const board = buildSignBoard(
+      this.scene,
+      "chamber-sign",
+      this.chamber.sim.name,
+      this.chamber.sim.subtitle,
+      this.chamber.number,
+    );
 
     const backing = MeshBuilder.CreateBox("sign-backing", { width: 1.08, height: 1.92, depth: 0.09 }, this.scene);
     backing.position = new Vector3(signX, 2.05, shell.depth - 0.06);
@@ -736,7 +805,7 @@ export class FirstPersonScene {
    * here suggesting the archive is staffed at all.
    */
   private buildReadingAlcove(root: TransformNode, timber: StandardMaterial, plaster: StandardMaterial): void {
-    const shell = ROOM_SHELL;
+    const shell = this.chamber.shell;
     const x = shell.halfWidth;
     const centreZ = 6;
     const width = 2.4;
@@ -782,7 +851,7 @@ export class FirstPersonScene {
   }
 
   private buildPlate(root: TransformNode, brass: StandardMaterial, timber: StandardMaterial): { ring: Mesh; light: PointLight; ringMaterial: StandardMaterial } {
-    const shell = ROOM_SHELL;
+    const shell = this.chamber.shell;
     const centre = new Vector3(0, 0, shell.plateCentreZ);
 
     // A brass disc set into a timber surround, flush enough to walk over.
@@ -831,7 +900,7 @@ export class FirstPersonScene {
    * door that rose into a lintel would read as a shutter.
    */
   private buildDoor(root: TransformNode, timber: StandardMaterial): Mesh {
-    const shell = ROOM_SHELL;
+    const shell = this.chamber.shell;
     const leafWidth = shell.doorwayHalfWidth * 2 - 0.04;
     const leafHeight = shell.doorwayHeight - 0.03;
 
@@ -899,7 +968,7 @@ export class FirstPersonScene {
   }
 
   private buildExit(root: TransformNode, timber: StandardMaterial): void {
-    const shell = ROOM_SHELL;
+    const shell = this.chamber.shell;
     const wall = shell.corridorEnd;
     const openingWidth = 1.62;
     const openingHeight = 2.28;
@@ -1104,7 +1173,7 @@ export class FirstPersonScene {
     if (this.simulation.state.phase === "recording") return;
     const previousPhase = this.simulation.state.phase;
     this.simulation.rerecord();
-    this.yaw = radiansFromYawUnits(AWAKENING.spawn.yawUnits);
+    this.yaw = radiansFromYawUnits(this.chamber.sim.spawn.yawUnits);
     this.pitch = 0;
     this.doorOffset = 0;
     this.captureSnapshots();
@@ -1138,7 +1207,7 @@ export class FirstPersonScene {
     this.paused = false;
     if (!this.started) {
       this.started = true;
-      this.yaw = radiansFromYawUnits(AWAKENING.spawn.yawUnits);
+      this.yaw = radiansFromYawUnits(this.chamber.sim.spawn.yawUnits);
       this.pitch = 0;
     }
     this.lastFrameTime = performance.now();
@@ -1165,7 +1234,7 @@ export class FirstPersonScene {
       // burning until the player does.
       this.accumulator = 0;
       if (!this.started) {
-        this.yaw = radiansFromYawUnits(AWAKENING.spawn.yawUnits) + Math.sin(this.clock * 0.16) * 0.09;
+        this.yaw = radiansFromYawUnits(this.chamber.sim.spawn.yawUnits) + Math.sin(this.clock * 0.16) * 0.09;
         this.pitch = Math.sin(this.clock * 0.11) * 0.02;
       }
     } else {
@@ -1250,7 +1319,7 @@ export class FirstPersonScene {
     const door = state.doors[0];
     // Sideways, into the pocket: a papered leaf that rose into the lintel would
     // read as a shutter rather than a door.
-    const target = door?.open ? ROOM_SHELL.doorwayHalfWidth * 2 - 0.08 : 0;
+    const target = door?.open ? this.chamber.shell.doorwayHalfWidth * 2 - 0.08 : 0;
     // Ease rather than snap: a leaf that teleports open reads as a bug.
     this.doorOffset += (target - this.doorOffset) * Math.min(1, deltaSeconds * 6.5);
     this.doorSlab.position.x = this.doorOffset;
@@ -1282,8 +1351,8 @@ export class FirstPersonScene {
     return {
       phase: state.phase,
       tapeTick: state.tapeTick,
-      tapeDuration: AWAKENING.tapeDurationTicks,
-      replaySpan: AWAKENING.tapeDurationTicks + AWAKENING.replayGraceTicks,
+      tapeDuration: this.chamber.sim.tapeDurationTicks,
+      replaySpan: this.chamber.sim.tapeDurationTicks + this.chamber.sim.replayGraceTicks,
       canFold: this.simulation.canFold,
       focus: present?.focusId ?? null,
       plateActive: state.plates[0]?.active ?? false,

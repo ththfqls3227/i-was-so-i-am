@@ -1,6 +1,7 @@
 import "./fp/style.css";
 import { Hud } from "./fp/hud";
 import { DEFAULT_MOUSE_SENSITIVITY, FirstPersonScene } from "./fp/scene";
+import { ROSTER } from "./world/roster";
 import type { SimState } from "./sim/types";
 
 /**
@@ -21,6 +22,8 @@ declare global {
       start: () => void;
       look: (deltaX: number, deltaY: number) => void;
       setLook: (yaw: number, pitch: number) => void;
+      switchChamber: (id: string) => boolean;
+      chamberId: () => string;
       press: (code: string) => void;
       release: (code: string) => void;
       fold: () => boolean;
@@ -85,6 +88,13 @@ if (EXPOSE_TEST_API) {
     start: () => scene.resume(),
     look: (deltaX, deltaY) => scene.look(deltaX, deltaY),
     setLook: (yaw, pitch) => scene.setLook(yaw, pitch),
+    switchChamber: (id) => {
+      const chamber = ROSTER.byIdOrNull(id);
+      if (!chamber) return false;
+      scene.switchChamber(chamber);
+      return true;
+    },
+    chamberId: () => scene.currentChamber.sim.id,
     press: (code) => scene.press(code),
     release: (code) => scene.release(code),
     fold: () => scene.fold(),

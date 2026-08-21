@@ -1,4 +1,5 @@
 import type { Brush, RoomDefinition, Vec3 } from "../sim/types";
+import type { Chamber, RoomShell } from "./chamber";
 
 const WALL = 0.6;
 
@@ -86,7 +87,7 @@ export const AWAKENING: RoomDefinition = {
 };
 
 /** Numbers the renderer needs to dress the same geometry the simulation collides with. */
-export const ROOM_SHELL = {
+export const ROOM_SHELL: RoomShell = {
   halfWidth: ROOM_HALF_WIDTH,
   depth: ROOM_DEPTH,
   height: ROOM_HEIGHT,
@@ -99,4 +100,10 @@ export const ROOM_SHELL = {
   plateCentreZ: PLATE_CENTRE_Z,
   plateRadius: 1.05,
   spawnZ: SPAWN_Z,
-} as const;
+};
+
+export const AWAKENING_CHAMBER: Chamber = {
+  sim: AWAKENING,
+  shell: ROOM_SHELL,
+  number: "00",
+};
