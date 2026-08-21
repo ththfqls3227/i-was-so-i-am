@@ -10,3 +10,4 @@ captures/
 .omx/state/
 .omx/tmux-hook.json
 .omc/
+.bkit/
