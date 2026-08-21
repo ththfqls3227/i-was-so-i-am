@@ -1,4 +1,4 @@
-// Plays all four chambers end to end in a real browser, through the real
+// Plays the whole campaign end to end in a real browser, through the real
 // controls, and advances between them the way a player does. A golden tape that
 // passes in Node still has to survive a renderer, a HUD, and a room teardown.
 // Usage: node scripts/fp-journey.mjs
@@ -36,6 +36,10 @@ const read = () => page.evaluate(() => {
     doorById: Object.fromEntries(state.doors.map((d) => [d.id, d.open])),
     y: present?.y ?? 0,
     subtitle: globalThis.document.querySelector(".subtitle")?.textContent ?? "",
+    sealing: fp.view.sealing === true,
+    rerecordNotice: fp.view.rerecordNotice ?? "",
+    crosshairSealing: globalThis.document.querySelector(".crosshair")?.dataset.sealing ?? "",
+    canFold: fp.view.canFold === true,
   };
 });
 const act = (name, ...args) => page.evaluate(([m, a]) => globalThis.__I_WAS_SO_I_AM_FP__[m](...a), [name, args]);
@@ -233,6 +237,72 @@ try {
   await walkUntil(["KeyW", "KeyD"], (s) => s.x > 3.7, 15000);
   await walkUntil(["KeyW"], (s) => s.phase === "success", 25000);
   check("07 can be finished", true);
+
+  // ---- 08 Silence. Nothing is recorded here and nothing can go wrong.
+  await act("advanceChamber");
+  await page.waitForTimeout(700);
+  check("advancing reaches 08", (await read()).chamber === "silence");
+  const on08 = await read();
+  check("08 offers no recording at all", on08.canFold === false);
+  check("08 already has someone standing on the first plate", on08.plateById["old-plate"] === true);
+  check("08 the door is shut until you take the other one", on08.doorById["inner-door"] === false);
+  await act("setLook", 0, 0);
+  await walkUntil(["KeyW", "KeyD"], (s) => s.x > 3.4, 15000);
+  await walkUntil(["KeyW"], (s) => s.plateById["your-plate"] === true, 15000);
+  check("08 the door opens because two of you are standing on it", (await read()).doorById["inner-door"] === true);
+  await walkUntil(["KeyW", "KeyA"], (s) => Math.abs(s.x) < 1, 15000);
+  await walkUntil(["KeyW"], (s) => s.phase === "success", 25000);
+  check("08 can be finished", true);
+
+  // ---- 09 The Last Hold. 02 again, and the door that does not latch.
+  await act("advanceChamber");
+  await page.waitForTimeout(700);
+  check("advancing reaches 09", (await read()).chamber === "last-hold");
+  await act("setLook", 0, 0);
+  await hold(["KeyW"], 280);
+  await act("press", "KeyE");
+  await until((s) => s.holdById["grip-pillar"] === true, 8000);
+  check("09 the grip is 02's, and it still opens the way out", (await read()).exitOpen === true);
+
+  // The fold is held here, and the crosshair leaves before the room stops.
+  await act("fold");
+  const froze = await until((s) => s.sealing === true, 3000);
+  check("09 the fold is held rather than instant", froze.sealing === true);
+  check("09 the crosshair goes first, so the freeze is not read as a hang", froze.crosshairSealing === "true");
+  const sealStart = Date.now();
+  await until((s) => s.phase === "replay", 5000);
+  const sealHeld = (Date.now() - sealStart) / 1000;
+  check("09 the hold is about eight tenths of a second", sealHeld > 0.4 && sealHeld < 1.6, `${sealHeld.toFixed(2)} s`);
+  await act("release", "KeyE");
+
+  // Stand still until the replay window has expired, and watch nothing happen.
+  // This is the whole ending: everywhere else he would be gone by now.
+  await until((s) => s.holdById["grip-pillar"] === true, 8000);
+  await page.waitForTimeout(21000);
+  const after = await read();
+  check("09 he is still there after the window has expired", after.pastZ !== null);
+  check("09 he is still holding it", after.holdById["grip-pillar"] === true);
+  check("09 the door he is holding is still open", after.doorById["inner-door"] === true && after.exitOpen === true);
+  check("09 the room did not fail out from under him", after.phase === "replay");
+
+  // And rerecord still works — it just says the opposite of what it always said.
+  check("09 rerecord says the record is not taken back", after.rerecordNotice.includes("회수되지 않습니다"), after.rerecordNotice);
+
+  await walkUntil(["KeyW"], (s) => s.phase === "success", 40000);
+  const finished09 = await read();
+  check("09 can be finished", finished09.phase === "success");
+  check("09 he is left there after you have gone", finished09.holdById["grip-pillar"] === true);
+
+  // ---- The corridor. Nothing to solve; one window per room, in reverse.
+  await act("advanceChamber");
+  await page.waitForTimeout(900);
+  check("advancing reaches the corridor", (await read()).chamber === "ending-corridor");
+  const corridor = await read();
+  check("the corridor asks for nothing", corridor.canFold === false && corridor.plates.length === 0 && corridor.doors.length === 0);
+  await act("setLook", 0, 0);
+  await walkUntil(["KeyW"], (s) => s.phase === "success", 60000);
+  check("the corridor can be walked to the end", true);
+  check("and there is nothing after it", (await act("advanceChamber")) === false);
 } finally {
   await browser.close();
 }
@@ -241,5 +311,5 @@ if (failures.length) {
   console.error(`\nfp journey: FAIL (${failures.length}) — ${failures.join("; ")}`);
   process.exitCode = 1;
 } else {
-  console.log("\nfp journey: PASS — 00 to 07 played through in a browser");
+  console.log("\nfp journey: PASS — 00 to 09 and the corridor, played through in a browser");
 }

@@ -1657,7 +1657,7 @@ export class FirstPersonScene {
     if (this.sealingTicks > 0) return false;
     if (!this.simulation.canFold) return false;
     const hold = this.chamber.sealHoldSeconds ?? 0;
-    if (hold <= 0) return this.fold();
+    if (hold <= 0) return this.completeFold();
     this.sealingTicks = Math.round(hold * simConstants.tickRate);
     this.events?.onSealing(hold);
     return true;
@@ -1668,7 +1668,13 @@ export class FirstPersonScene {
     return this.sealingTicks > 0;
   }
 
-  fold(): boolean {
+  /**
+   * Private on purpose. Every way of folding has to go through beginFold, or a
+   * caller that is not the keyboard silently skips the finale's held seal —
+   * which is exactly what the exposed test API did until the browser journey
+   * caught it.
+   */
+  private completeFold(): boolean {
     const folded = this.simulation.fold();
     if (folded) {
       this.captureSnapshots();
@@ -1770,7 +1776,7 @@ export class FirstPersonScene {
       this.sealingTicks -= 1;
       this.simulation.step(this.lastFrame);
       this.captureSnapshots();
-      if (this.sealingTicks === 0) this.fold();
+      if (this.sealingTicks === 0) this.completeFold();
       return;
     }
     const phaseBefore = this.simulation.state.phase;

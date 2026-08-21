@@ -104,7 +104,7 @@ if (EXPOSE_TEST_API) {
     chamberId: () => scene.currentChamber.sim.id,
     press: (code) => scene.press(code),
     release: (code) => scene.release(code),
-    fold: () => scene.fold(),
+    fold: () => scene.beginFold(),
     rerecord: () => scene.rerecord(),
     setSensitivity: (value) => {
       scene.mouseSensitivity = value;
