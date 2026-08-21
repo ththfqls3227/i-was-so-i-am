@@ -1,5 +1,10 @@
 import type { BalustradeSpec, ChamberDressing, RoomShell, SalchangSpec, ShelfRunSpec } from "./chamber";
 
+/** Two points and a wear level, which is what most routes are. */
+export function route(id: string, points: { x: number; z: number }[], wear = 1): ChamberDressing["routes"][number] {
+  return { id, points, wear };
+}
+
 /** Shelving stops here; salchang and plaster carry the wall above it. */
 export const SHELF_HEIGHT = 2.72;
 
@@ -30,6 +35,8 @@ export interface StandardDressingOptions {
   balustrades?: BalustradeSpec[];
   /** The one-shot sync beat. Only 04 has somewhere to look down from. */
   warmBand?: ChamberDressing["warmBand"];
+  /** Worn floor inlay, for rooms whose route is not a straight line to the far wall. */
+  routes?: ChamberDressing["routes"];
   /** Lean applied to both long runs. Only 07 uses it. */
   tiltRadians?: number;
   /** Fraction of cases missing from both long runs. Only 07 uses it. */
@@ -128,5 +135,6 @@ export function standardDressing(shell: RoomShell, options: StandardDressingOpti
     sign: options.sign ?? null,
     balustrades: options.balustrades ?? [],
     warmBand: options.warmBand ?? null,
+    routes: options.routes ?? [],
   };
 }

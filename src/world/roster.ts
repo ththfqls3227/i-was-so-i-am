@@ -7,6 +7,7 @@ import {
   UNKEPT_CHAMBER,
 } from "./chambers-04-07";
 import { LAST_HOLD_CHAMBER, SILENCE_CHAMBER } from "./chambers-08-09";
+import { ENDING_CHAMBER } from "./ending";
 import { AWAKENING_CHAMBER } from "./room";
 
 /**
@@ -15,6 +16,10 @@ import { AWAKENING_CHAMBER } from "./room";
  * 00 teaches the loop, 01 makes the echo necessary, 02 makes it a hand you leave
  * behind, and 03 is the first time what you did to him is something your own
  * feet did.
+ *
+ * The corridor is the last entry rather than a special case after the last one,
+ * so walking out of 09 does what walking out of every other room has done. It is
+ * the end of the game because nothing follows it, not because anything says so.
  */
 export const ROSTER = new ChamberRegistry([
   AWAKENING_CHAMBER,
@@ -27,4 +32,5 @@ export const ROSTER = new ChamberRegistry([
   UNKEPT_CHAMBER,
   SILENCE_CHAMBER,
   LAST_HOLD_CHAMBER,
+  ENDING_CHAMBER,
 ]);

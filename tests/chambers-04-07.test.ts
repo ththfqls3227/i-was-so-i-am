@@ -177,8 +177,12 @@ describe("each chamber needs the echo to do its half", () => {
 
 describe("the full roster", () => {
   it("runs the archive in order, with no gaps in the numbering", () => {
+    // Ten numbered chambers, then the corridor, which is not one of them and
+    // must never be given a number — it is the only room with nothing to solve.
     const numbers = ROSTER.all.map((chamber) => chamber.number);
-    expect(numbers).toEqual(numbers.map((_, index) => String(index).padStart(2, "0")));
+    expect(numbers.slice(0, -1)).toEqual(numbers.slice(0, -1).map((_, index) => String(index).padStart(2, "0")));
+    expect(numbers[numbers.length - 1]).toBe("—");
+    expect(ROSTER.all[ROSTER.all.length - 1]?.sim.id).toBe("ending-corridor");
   });
 
   it("chains every chamber to the next and stops at the end", () => {

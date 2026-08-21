@@ -131,6 +131,11 @@ export interface ChamberDressing {
    * mechanic.
    */
   warmBand: { windowId: string; aboveY: number } | null;
+  /**
+   * Brass inlay worn into the floor. Empty in the early rooms, which are one
+   * space with one thing in it and need no help being read.
+   */
+  routes: RouteSpec[];
 }
 
 /** A run of turned balusters between a bottom and a top rail, along z. */
@@ -141,6 +146,26 @@ export interface BalustradeSpec {
   toZ: number;
   baseY: number;
   height: number;
+}
+
+/**
+ * A worn line in the floor, from somewhere to somewhere.
+ *
+ * The rooms with two things to do in them read as one undifferentiated hall
+ * from the door — 05 and 06 in particular, where the thing you must reach is
+ * around a corner you cannot see. A brass strip set into the boards, rubbed
+ * bright by everyone who walked it before you, points without saying anything.
+ * It is inlay, not signage: no arrows, no glow, nothing that turns on.
+ */
+export interface RouteSpec {
+  id: string;
+  /** Floor points in order. Two is a straight run; more is a route with a turn. */
+  points: { x: number; z: number }[];
+  /**
+   * Faint enough to miss. The second route in a room is fainter than the first,
+   * because it is the leg you walk once you already know the room.
+   */
+  wear: number;
 }
 
 /** One chamber: what the simulation runs, what the renderer builds, what the sign says. */

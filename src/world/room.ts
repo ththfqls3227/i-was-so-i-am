@@ -85,6 +85,10 @@ const WINDOW_ROW = [2.6, 6, 9.4];
 const AWAKENING_DRESSING: ChamberDressing = {
   blocks: [],
   corridor: true,
+  // The first room is one space with one thing in it. A line pointing at the
+  // only object in the room would be the game explaining a room it has not
+  // finished showing you.
+  routes: [],
   shelves: [
     { id: "west", x: -ROOM_SHELL.halfWidth, facing: 1, fromZ: 0.55, toZ: ROOM_SHELL.depth - 0.55, height: SHELF_HEIGHT, seed: 4211 },
     { id: "east", x: ROOM_SHELL.halfWidth, facing: -1, fromZ: 0.55, toZ: ROOM_SHELL.depth - 0.55, height: SHELF_HEIGHT, seed: 8123 },

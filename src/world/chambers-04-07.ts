@@ -1,6 +1,6 @@
 import type { Brush, RoomDefinition } from "../sim/types";
 import type { Chamber, DressBlockSpec, RoomShell } from "./chamber";
-import { standardDressing } from "./dressing";
+import { route, standardDressing } from "./dressing";
 import { box } from "./shell";
 
 const TAPE_TICKS = 450;
@@ -252,6 +252,13 @@ export const TWO_OF_US_CHAMBER: Chamber = {
       // down rather than across. Both authored rather than guessed: the room
       // knows which window is over its own grip.
       warmBand: { windowId: "west-8", aboveY: DECK_Y - 0.4 },
+      // Two legs: the grip on the floor, then the stair the second pass frees.
+      // The upper leg is fainter — you only walk it once you have understood
+      // the room, and a bright line to it would answer the room's own question.
+      routes: [
+        route("to-grip", [{ x: 0, z: 2.4 }, { x: 0, z: 6 }]),
+        route("to-stair", [{ x: 0, z: 6 }, { x: -3.4, z: STAIR_FROM_Z }], 0.5),
+      ],
     },
   ),
 };
@@ -341,6 +348,13 @@ export const LONG_STANDING_CHAMBER: Chamber = {
     corridor: false,
     windows: [3, 7.5, 16],
     blocks: blocksOf(fiveSolids).filter((block) => !block.id.startsWith("floor") && !block.id.startsWith("ceiling")),
+    // Both plates are worn the same amount, because the room is the same walk
+    // twice and neither leg is the clever one.
+    routes: [
+      route("to-west-plate", [{ x: 0, z: 2.4 }, { x: -4, z: 6 }], 0.7),
+      route("to-east-plate", [{ x: 0, z: 2.4 }, { x: 4, z: 6 }], 0.7),
+      route("through", [{ x: 0, z: 2.4 }, { x: 0, z: PASSAGE_TO + 1.6 }]),
+    ],
   }),
 };
 
@@ -425,6 +439,21 @@ export const GIVING_BACK_CHAMBER: Chamber = {
     corridor: false,
     windows: [4, 10, 16, 22, 27],
     blocks: blocksOf(sixSolids).filter((block) => !block.id.startsWith("floor") && !block.id.startsWith("ceiling")),
+    // Thirty-four metres of identical shelving. Without a line on the floor the
+    // far end is not a destination, it is just where the room stops being
+    // visible — and the whole room is the walk to it and back.
+    routes: [
+      route("the-long-walk", [{ x: 0, z: 2.4 }, { x: 0, z: SIX_PARTITION_Z - 1.4 }]),
+      route("to-plate", [{ x: 0, z: 2.4 }, { x: 3, z: 4 }], 0.55),
+      // Around the east wing, not through the doorway. The partition only spans
+      // the middle of the hall, and the way out is past the end of it — which
+      // is the fact the room is built on and the one you cannot see from here.
+      route("around", [
+        { x: 0, z: SIX_PARTITION_Z - 1.4 },
+        { x: 4.2, z: SIX_PARTITION_Z - 1.4 },
+        { x: 4.2, z: SIX_DEPTH - 1 },
+      ], 0.5),
+    ],
   }),
 };
 
@@ -507,5 +536,12 @@ export const UNKEPT_CHAMBER: Chamber = {
     // Nearly a fifth of the shelf is gone, and some of it is on the floor.
     decay: 0.18,
     blocks: blocksOf(sevenSolids).filter((block) => !block.id.startsWith("floor") && !block.id.startsWith("ceiling")),
+    // Barely there. This is the wing that was taken off the maintenance roster,
+    // and the brass went unpolished with everything else — you can follow it,
+    // but you have to want to.
+    routes: [
+      route("to-plate", [{ x: 0, z: 2.4 }, { x: 3.6, z: 5 }], 0.3),
+      route("to-slot", [{ x: 0, z: 2.4 }, { x: 0, z: SEVEN_SLOT_TO - 1.2 }], 0.24),
+    ],
   }),
 };

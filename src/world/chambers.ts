@@ -1,6 +1,6 @@
 import type { Brush, RoomDefinition } from "../sim/types";
 import type { Chamber, RoomShell } from "./chamber";
-import { standardDressing } from "./dressing";
+import { route, standardDressing } from "./dressing";
 import { box, corridorExit, doorwayBrush, hallBrushes } from "./shell";
 import { ROOM_SHELL } from "./room";
 
@@ -139,6 +139,8 @@ const PARTITION_Z = 9;
 const PARTITION_THICK = 0.6;
 const ALCOVE_HALF = 1.2;
 const ALCOVE_END_Z = 11.6;
+/** Dead centre of the alcove, which is where the plate is and where the line stops. */
+const ALCOVE_PLATE_Z = (PARTITION_Z + PARTITION_THICK + ALCOVE_END_Z) / 2;
 const WALL = 0.6;
 
 const handBrushes: Brush[] = [
@@ -182,7 +184,7 @@ export const HAND_NOT_BODY: RoomDefinition = {
     },
     {
       id: "alcove-plate",
-      centre: { x: 0, z: (PARTITION_Z + PARTITION_THICK + ALCOVE_END_Z) / 2 },
+      centre: { x: 0, z: ALCOVE_PLATE_Z },
       half: { x: ALCOVE_HALF, z: (ALCOVE_END_Z - PARTITION_Z - PARTITION_THICK) / 2 },
       reach: 0.35,
       requiredActor: "past",
@@ -236,6 +238,12 @@ export const HAND_NOT_BODY_CHAMBER: Chamber = {
     // there was never once in frame; here it is beside the lit door, which is
     // what the player is looking at from the moment they walk in.
     sign: { x: -2.1, z: PARTITION_Z },
+    // The plate is off to one side and the alcove is through a gap in a wall.
+    // From the door, neither is where the room looks like it goes.
+    routes: [
+      route("to-plate", [{ x: 0, z: 2.2 }, { x: 3.6, z: 4.4 }, { x: 3.6, z: 6.5 }]),
+      route("through-partition", [{ x: 0, z: 2.2 }, { x: 0, z: ALCOVE_PLATE_Z }], 0.55),
+    ],
     // This room leaves through a doorway in its own east wall. It has no
     // corridor, and drawing one puts a passage behind a solid wall.
     corridor: false,
