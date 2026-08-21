@@ -13,8 +13,12 @@
 // Usage: node scripts/fp-cross-engine.mjs   (needs the dev server on 4173)
 import { chromium, firefox, webkit } from "@playwright/test";
 import { readFile } from "node:fs/promises";
+import { startGameServer } from "./support/serve.mjs";
 
-const gameUrl = process.env.GAME_URL ?? "http://127.0.0.1:4173/";
+// Built and served by us, from dist-e2e/, on our own port. See support/serve.mjs
+// for why this must not be whatever happens to be listening on the dev port.
+const server = await startGameServer({ label: "cross-engine" });
+const gameUrl = server.url;
 const golden = JSON.parse(await readFile(new URL("../src/sim/corpus-checksums.json", import.meta.url), "utf8"));
 
 const collect = (page) =>
@@ -59,6 +63,9 @@ for (const [name, launcher] of engines) {
     await browser.close();
   }
 }
+
+// After every engine, not after each one — they all share the one server.
+await server.stop();
 
 if (failures.length > 0) {
   console.error(`\ncross-engine determinism: FAIL — ${failures.join(", ")}`);

@@ -15,8 +15,12 @@
 // Usage: node scripts/fp-stills.mjs [outputDirectory]
 import { chromium } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
+import { startGameServer } from "./support/serve.mjs";
 
-const gameUrl = process.env.GAME_URL ?? "http://127.0.0.1:4173/";
+// Built and served by us, from dist-e2e/, on our own port. See support/serve.mjs
+// for why this must not be whatever happens to be listening on the dev port.
+const server = await startGameServer({ label: "stills" });
+const gameUrl = server.url;
 const outputDirectory = process.argv[2] ?? "captures/stills";
 /** Which chamber to shoot. Poses are per-chamber because rooms differ in shape. */
 const chamberId = process.env.CHAMBER ?? "awakening";
@@ -143,4 +147,5 @@ try {
   }
 } finally {
   await browser.close();
+  await server.stop();
 }

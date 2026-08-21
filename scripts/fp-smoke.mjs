@@ -4,8 +4,12 @@
 // drives the scene directly cannot tell you whether a player can play it.
 // Usage: node scripts/fp-smoke.mjs
 import { chromium } from "@playwright/test";
+import { startGameServer } from "./support/serve.mjs";
 
-const gameUrl = process.env.GAME_URL ?? "http://127.0.0.1:4173/";
+// Built and served by us, from dist-e2e/, on our own port. See support/serve.mjs
+// for why this must not be whatever happens to be listening on the dev port.
+const server = await startGameServer({ label: "smoke" });
+const gameUrl = server.url;
 const failures = [];
 const check = (label, condition, detail = "") => {
   if (condition) console.log(`  PASS  ${label}`);
@@ -186,6 +190,7 @@ try {
 
 } finally {
   await browser.close();
+  await server.stop();
 }
 
 if (failures.length > 0) {

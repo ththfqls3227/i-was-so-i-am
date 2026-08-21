@@ -15,6 +15,7 @@
     "test:replay-corpus": "vitest run tests/replay-corpus.test.ts",
     "test:levels": "vitest run tests/levels.test.ts",
     "test:licenses": "node scripts/license-audit.mjs",
+    "build:e2e": "VITE_E2E=true vite build --outDir dist-e2e",
     "test:e2e": "playwright test",
     "test:e2e:dist": "node scripts/e2e-dist.mjs",
     "test:e2e:dist:all": "node scripts/e2e-dist.mjs --all",

@@ -3,8 +3,12 @@
 // passes in Node still has to survive a renderer, a HUD, and a room teardown.
 // Usage: node scripts/fp-journey.mjs
 import { chromium } from "@playwright/test";
+import { startGameServer } from "./support/serve.mjs";
 
-const gameUrl = process.env.GAME_URL ?? "http://127.0.0.1:4173/";
+// Built and served by us, from dist-e2e/, on our own port. See support/serve.mjs
+// for why this must not be whatever happens to be listening on the dev port.
+const server = await startGameServer({ label: "journey" });
+const gameUrl = server.url;
 const failures = [];
 const check = (label, ok, detail = "") => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${label}${ok || !detail ? "" : ` — ${detail}`}`);
@@ -17,7 +21,34 @@ await page.addInitScript(() => {
   Object.defineProperty(globalThis.navigator, "webdriver", { configurable: true, get: () => false });
 });
 
-const read = () => page.evaluate(() => {
+/**
+ * Do a thing to the page, and forgive the handle being briefly absent.
+ *
+ * The handle is assigned once at module scope, so a page that has just been
+ * reloaded has no handle until the module runs again. That should not happen
+ * against the static build this now serves, but a run that dies on a transient
+ * empty document tells you nothing, whereas a run that waits a moment and then
+ * still finds nothing tells you the handle is genuinely gone.
+ */
+const withHandle = async (what, attempts = 25) => {
+  let last = null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await what();
+    } catch (error) {
+      const message = String(error?.message ?? error);
+      const missingHandle = message.includes("__I_WAS_SO_I_AM_FP__")
+        || message.includes("Cannot read properties of undefined")
+        || message.includes("Execution context was destroyed");
+      if (!missingHandle) throw error;
+      last = error;
+      await page.waitForTimeout(120);
+    }
+  }
+  throw new Error(`The page never produced a test handle: ${last?.message ?? "unknown"}`, { cause: last });
+};
+
+const read = () => withHandle(() => page.evaluate(() => {
   const fp = globalThis.__I_WAS_SO_I_AM_FP__;
   const state = fp.state;
   const present = state.actors.find((a) => a.id === "present");
@@ -49,8 +80,33 @@ const read = () => page.evaluate(() => {
       return stamp ? globalThis.getComputedStyle(stamp).backgroundColor : "none";
     })(),
   };
-});
-const act = (name, ...args) => page.evaluate(([m, a]) => globalThis.__I_WAS_SO_I_AM_FP__[m](...a), [name, args]);
+}));
+const act = (name, ...args) =>
+  withHandle(() => page.evaluate(([m, a]) => globalThis.__I_WAS_SO_I_AM_FP__[m](...a), [name, args]));
+
+/**
+ * Advance, and wait for the room to actually be the next one.
+ *
+ * This replaced ten fixed waits. A blind 700 ms is wrong in both directions: it
+ * is dead time when the switch is quick, and it hands the next assertion a
+ * half-built room when it is slow.
+ */
+/**
+ * Keep hold of something long enough for the recording to be worth replaying.
+ *
+ * The minimum tape the rules accept is far shorter than any recording a player
+ * actually makes, and a tape at that minimum behaves differently — the echo
+ * reaches the grip only as the tape runs out. Driving the game at its limits
+ * tests the limits, not the game.
+ */
+const heldForARealBeat = () => page.waitForTimeout(1300);
+
+const advanceTo = async (expected) => {
+  await act("advanceChamber");
+  await until((s) => s.chamber === expected, 20000);
+  // The renderer rebuilds the room after the simulation has already swapped.
+  await page.waitForFunction(() => globalThis.__I_WAS_SO_I_AM_FP__?.renderer?.ready === true, null, { timeout: 20000 });
+};
 const hold = async (keys, ms) => {
   for (const k of keys) await act("press", k);
   await page.waitForTimeout(ms);
@@ -92,13 +148,15 @@ try {
   check("00 door waits, then opens on the plate", true);
   await act("fold");
   await until((s) => s.phase === "replay");
-  await hold(["KeyW"], 4200);
-  await until((s) => s.phase === "success");
+  // Walk until the room says it is finished, rather than for a guessed number
+  // of milliseconds. A duration that is a hair too short leaves the player
+  // standing still while the replay window runs out, which fails as "the room
+  // is broken" when the truth is "the walk was 200 ms short".
+  await walkUntil(["KeyW"], (s) => s.phase === "success", 20000);
   check("00 can be finished", true);
 
   // ---- advance to 01
-  await act("advanceChamber");
-  await page.waitForTimeout(700);
+  await advanceTo("second-self");
   check("advancing reaches 01", (await read()).chamber === "second-self");
   const entry01 = (await read()).subtitle;
   check("01 says its line", entry01.includes("메아리"), entry01);
@@ -115,19 +173,22 @@ try {
   await until((s) => s.phase === "replay");
   await until((s) => s.doors[0] === true, 12000);
   check("01 door opens once the echo is standing there", true);
-  await hold(["KeyW"], 4500);
-  await until((s) => s.phase === "success");
+  await walkUntil(["KeyW"], (s) => s.phase === "success", 20000);
   check("01 can be finished", true);
 
   // ---- 02
-  await act("advanceChamber");
-  await page.waitForTimeout(700);
+  await advanceTo("holding-hand");
   check("advancing reaches 02", (await read()).chamber === "holding-hand");
   await act("setLook", 0, 0);
   await hold(["KeyW"], 280);
   await act("press", "KeyE");
   await until((s) => s.holds[0] === true, 8000);
   check("02 grip can be taken", true);
+  // Hold it for a beat before folding. Folding the instant the grip registers
+  // makes the shortest tape the rules allow, and a tape that short is one the
+  // shipped recording never produces — 02's golden holds for 40 ticks. It also
+  // sits right on the minimum length, so the fold is sometimes refused outright.
+  await heldForARealBeat();
   check("02 seals a record, in red", (await read()).seal === "rgb(200, 64, 47)", (await read()).seal);
   const held02 = await read();
   check("02 exit opens while it is held", held02.exitOpen === true);
@@ -136,13 +197,11 @@ try {
   await until((s) => s.phase === "replay");
   const replay02 = await until((s) => s.holds[0] === true, 8000);
   check("02 echo is holding it in the second pass", replay02.exitOpen === true);
-  await hold(["KeyW"], 6000);
-  await until((s) => s.phase === "success", 15000);
+  await walkUntil(["KeyW"], (s) => s.phase === "success", 20000);
   check("02 can be finished", true);
 
   // ---- 03
-  await act("advanceChamber");
-  await page.waitForTimeout(700);
+  await advanceTo("hand-not-body");
   check("advancing reaches 03", (await read()).chamber === "hand-not-body");
   await act("setLook", 0, 0);
   await hold(["KeyW"], 2600);
@@ -160,20 +219,19 @@ try {
   check("03 amber plate opens the doorway for him", (await read()).doors[0] === true);
   const through = await until((s) => s.exitOpen === true, 15000);
   check("03 he reaches the alcove and opens the way out", through.pastZ !== null && through.pastZ > 9.6);
-  await hold(["KeyW"], 4500);
-  await until((s) => s.phase === "success", 15000);
+  await walkUntil(["KeyW"], (s) => s.phase === "success", 20000);
   const done = await read();
   check("03 can be finished", true);
   check("03 the doorway shut behind him", done.doors[0] === false);
   // ---- 04 Two People's Worth
-  await act("advanceChamber");
-  await page.waitForTimeout(700);
+  await advanceTo("two-of-us");
   check("advancing reaches 04", (await read()).chamber === "two-of-us");
   await act("setLook", 0, 0);
   await walkUntil(["KeyW"], (s) => s.z > 5.4);
   await act("press", "KeyE");
   await until((s) => s.holdById["ground-grip"] === true, 8000);
   check("04 the ground grip opens the way up", (await read()).doorById["upper-door"] === true);
+  await heldForARealBeat();
   await act("fold");
   await act("release", "KeyE");
   await until((s) => s.phase === "replay");
@@ -191,8 +249,7 @@ try {
   check("04 can be finished", true);
 
   // ---- 05 The One Who Stood a Long Time
-  await act("advanceChamber");
-  await page.waitForTimeout(700);
+  await advanceTo("long-standing");
   check("advancing reaches 05", (await read()).chamber === "long-standing");
   await act("setLook", 0, 0);
   await walkUntil(["KeyW", "KeyA"], (s) => s.x < -3.6);
@@ -213,8 +270,7 @@ try {
   check("05 can be finished", true);
 
   // ---- 06 The Hand That Gives Back
-  await act("advanceChamber");
-  await page.waitForTimeout(700);
+  await advanceTo("giving-back");
   check("advancing reaches 06", (await read()).chamber === "giving-back");
   await act("setLook", 0, 0);
   await walkUntil(["KeyW"], (s) => s.z > 28, 30000);
@@ -230,8 +286,7 @@ try {
   check("06 can be finished", true);
 
   // ---- 07 The Stacks Nobody Keeps
-  await act("advanceChamber");
-  await page.waitForTimeout(700);
+  await advanceTo("unkept");
   check("advancing reaches 07", (await read()).chamber === "unkept");
   await act("setLook", 0, 0);
   await act("press", "KeyE");
@@ -248,8 +303,7 @@ try {
   check("07 can be finished", true);
 
   // ---- 08 Silence. Nothing is recorded here and nothing can go wrong.
-  await act("advanceChamber");
-  await page.waitForTimeout(700);
+  await advanceTo("silence");
   check("advancing reaches 08", (await read()).chamber === "silence");
   const on08 = await read();
   check("08 offers no recording at all", on08.canFold === false);
@@ -264,14 +318,14 @@ try {
   check("08 can be finished", true);
 
   // ---- 09 The Last Hold. 02 again, and the door that does not latch.
-  await act("advanceChamber");
-  await page.waitForTimeout(700);
+  await advanceTo("last-hold");
   check("advancing reaches 09", (await read()).chamber === "last-hold");
   await act("setLook", 0, 0);
   await hold(["KeyW"], 280);
   await act("press", "KeyE");
   await until((s) => s.holdById["grip-pillar"] === true, 8000);
   check("09 the grip is 02's, and it still opens the way out", (await read()).exitOpen === true);
+  await heldForARealBeat();
   // What is sealed here is not a record, and the stamp has to say so.
   check("09 seals in cyan, not red", (await read()).seal === "rgb(111, 217, 242)", (await read()).seal);
 
@@ -305,8 +359,7 @@ try {
   check("09 he is left there after you have gone", finished09.holdById["grip-pillar"] === true);
 
   // ---- The corridor. Nothing to solve; one window per room, in reverse.
-  await act("advanceChamber");
-  await page.waitForTimeout(900);
+  await advanceTo("ending-corridor");
   check("advancing reaches the corridor", (await read()).chamber === "ending-corridor");
   const corridor = await read();
   check("the corridor asks for nothing", corridor.canFold === false && corridor.plates.length === 0 && corridor.doors.length === 0);
@@ -330,6 +383,7 @@ try {
   check("pressing it again does nothing", (await read()).resultKind === "ending");
 } finally {
   await browser.close();
+  await server.stop();
 }
 
 if (failures.length) {
