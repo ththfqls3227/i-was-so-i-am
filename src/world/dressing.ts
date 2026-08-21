@@ -35,6 +35,8 @@ export interface StandardDressingOptions {
   balustrades?: BalustradeSpec[];
   /** The one-shot sync beat. Only 04 has somewhere to look down from. */
   warmBand?: ChamberDressing["warmBand"];
+  /** Sets behind the west windows. Only the ending corridor has them. */
+  dioramas?: boolean;
   /** Worn floor inlay, for rooms whose route is not a straight line to the far wall. */
   routes?: ChamberDressing["routes"];
   /** Lean applied to both long runs. Only 07 uses it. */
@@ -135,6 +137,7 @@ export function standardDressing(shell: RoomShell, options: StandardDressingOpti
     sign: options.sign ?? null,
     balustrades: options.balustrades ?? [],
     warmBand: options.warmBand ?? null,
+    dioramas: options.dioramas ?? false,
     routes: options.routes ?? [],
   };
 }

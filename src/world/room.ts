@@ -135,6 +135,7 @@ const AWAKENING_DRESSING: ChamberDressing = {
   sign: null,
   balustrades: [],
   warmBand: null,
+  dioramas: false,
 };
 
 export const AWAKENING_CHAMBER: Chamber = {

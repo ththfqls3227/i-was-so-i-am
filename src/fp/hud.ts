@@ -161,7 +161,8 @@ export class Hud {
     }
     // Only say this when it is true. If the browser gave us pointer lock, the
     // player never needs to know there was another way.
-    const showNotice = playing && view.pointerLockDenied;
+    // Nothing left to aim at once the last door is closed.
+    const showNotice = playing && view.pointerLockDenied && !this.ended;
     if (this.notice.hidden === showNotice) this.notice.hidden = !showNotice;
 
     const pass = view.phase === "recording" ? "1회차 · 기록" : view.phase === "replay" ? "2회차 · 재생" : view.phase === "success" ? "보관 완료" : "다시 기록";
@@ -317,6 +318,11 @@ export class Hud {
    */
   showEnding(line: string): void {
     this.ended = true;
+    // The room's own closing line is still on screen from a moment ago. One
+    // sentence at the end, not two.
+    this.subtitle.textContent = "";
+    this.subtitleUntil = 0;
+    this.notice.hidden = true;
     this.result.hidden = false;
     this.result.dataset.kind = "ending";
     this.resultHeading.textContent = "";

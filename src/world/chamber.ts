@@ -132,6 +132,13 @@ export interface ChamberDressing {
    */
   warmBand: { windowId: string; aboveY: number } | null;
   /**
+   * Build the sets behind the corridor's west windows. What stands in them is
+   * not dressing data — it is what the player left in each room, resolved from
+   * the archive at build time — so the flag says only that this chamber is the
+   * one with windows worth looking through.
+   */
+  dioramas: boolean;
+  /**
    * Brass inlay worn into the floor. Empty in the early rooms, which are one
    * space with one thing in it and need no help being read.
    */

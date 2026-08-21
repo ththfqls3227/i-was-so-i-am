@@ -237,6 +237,53 @@ export const ECHO_ALPHA = 0.46;
  * is the usual fix for self-overlap, and here it renders the whole ghost as a
  * black silhouette.
  */
+/**
+ * An echo that is not replaying: a record the archive has kept, not a tape
+ * running now.
+ *
+ * The difference has to survive a glance across a room, so it is carried by
+ * three things at once rather than by opacity alone — the ramp desaturates
+ * toward paper grey instead of cyan, the shimmer streaks are absent (a live
+ * echo flickers; this one has stopped), and the rim is dimmed so it stops
+ * reading as lit from within. 08 puts one of these on a plate a few metres
+ * from a living echo, and a player who cannot tell them apart loses the whole
+ * point of the room.
+ */
+export function archivalEchoMaterial(scene: Scene, name: string): StandardMaterial {
+  const ramp = new DynamicTexture(`${name}-ramp`, { width: 8, height: 256 }, scene, false);
+  const context = ramp.getContext();
+  const gradient = context.createLinearGradient(0, 0, 0, 256);
+  gradient.addColorStop(0, "#cdd3d6");
+  gradient.addColorStop(0.24, "#96a3a9");
+  gradient.addColorStop(0.6, "#68767d");
+  gradient.addColorStop(1, "#39454b");
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, 8, 256);
+  // No streaks. What made the live one look powered is exactly what this one
+  // must not have.
+  ramp.update(false);
+  ramp.wrapV = Texture.WRAP_ADDRESSMODE;
+
+  const surface = new StandardMaterial(name, scene);
+  surface.diffuseColor = new Color3(0.1, 0.11, 0.12);
+  surface.emissiveColor = new Color3(0.62, 0.66, 0.68);
+  surface.emissiveTexture = ramp;
+  surface.specularColor = Color3.Black();
+  surface.ambientColor = Color3.Black();
+  surface.disableLighting = true;
+  surface.alpha = 0.62;
+  surface.needDepthPrePass = false;
+  surface.backFaceCulling = true;
+
+  const edge = new FresnelParameters();
+  edge.bias = 0.2;
+  edge.power = 2.6;
+  edge.leftColor = new Color3(0.5, 0.53, 0.55);
+  edge.rightColor = new Color3(0.13, 0.15, 0.16);
+  surface.emissiveFresnelParameters = edge;
+  return surface;
+}
+
 export function echoMaterial(scene: Scene, name: string, alpha = ECHO_ALPHA, rim = 1): StandardMaterial {
   const ramp = new DynamicTexture(`${name}-ramp`, { width: 8, height: 256 }, scene, false);
   const context = ramp.getContext();

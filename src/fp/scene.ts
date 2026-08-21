@@ -25,7 +25,7 @@ import type { ActorId, ActorState, SimState } from "../sim/types";
 import type { Chamber } from "../world/chamber";
 import { goldenTape } from "../world/goldens";
 import { ROSTER } from "../world/roster";
-import { echoMaterial, matteMaterial, signalMaterial } from "./materials";
+import { archivalEchoMaterial, echoMaterial, matteMaterial, signalMaterial } from "./materials";
 import {
   brassMaterial,
   brickFloorMaterial,
@@ -735,8 +735,7 @@ export class FirstPersonScene {
     let archivalSkin: StandardMaterial | null = null;
     let archival: Humanoid | null = null;
     if (figure) {
-      archivalSkin = echoMaterial(this.scene, "echo-archival");
-      archivalSkin.alpha = 0.5;
+      archivalSkin = archivalEchoMaterial(this.scene, "echo-archival");
       archival = createHumanoid(this.scene, "echo-archival", archivalSkin);
       archival.root.parent = root;
       for (const part of archival.parts) {

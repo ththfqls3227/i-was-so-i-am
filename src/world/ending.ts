@@ -136,6 +136,7 @@ export const ENDING_CHAMBER: Chamber = {
   dressing: standardDressing(ENDING_SHELL, {
     seedBase: 10000,
     corridor: false,
+    dioramas: true,
     // One bay per room walked. The west lattice of each pair has a room behind it.
     windows: DIORAMAS.map((diorama) => diorama.centreZ),
     blocks: shellSolids
