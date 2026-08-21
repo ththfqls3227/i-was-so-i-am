@@ -132,6 +132,18 @@ describe("the finale mechanism", () => {
     expect(doorOpen(simulation.state, "inner-door")).toBe(true);
   });
 
+  it("leaves the echo standing there after the run is won", () => {
+    // "Cross the threshold and look back and he is still there." Nothing has to
+    // be skipped for this — winning freezes the world rather than clearing it —
+    // so the test exists to stop that being changed by accident.
+    const simulation = new Simulation(roomWith({ holds: [], doors: [door({ kind: "plate", id: "entry-plate" }, true)] }));
+    drive(simulation, framesFor(WALK_TO_PLATE));
+    simulation.fold();
+    drive(simulation, framesFor([{ forward: true, ticks: 200 }]));
+    expect(simulation.state.phase).toBe("success");
+    expect(simulation.state.actors.map((actor) => actor.id).sort()).toEqual(["past", "present"]);
+  });
+
   it("still ends the second pass in a room that does not ask for that", () => {
     const simulation = new Simulation(roomWith({ holds: [PILLAR], doors: [door({ kind: "hold", id: "pillar" }, false)] }));
     drive(simulation, framesFor([{ act: true, ticks: MIN_TAPE_TICKS + 4 }]));
