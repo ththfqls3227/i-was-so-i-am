@@ -39,7 +39,7 @@ import {
   timberMaterial,
 } from "./janggyeonggak";
 import { createHumanoid, poseHumanoid, type Humanoid } from "./rig";
-import { resolveDioramas } from "../world/dioramas";
+import { resolveDioramas, resolveView, type ResolvedDiorama } from "../world/dioramas";
 
 // One texture tile per 2.4 m of surface, so a 12 m wall and a 0.6 m jamb keep
 // the same texel density.
@@ -2067,18 +2067,50 @@ export class FirstPersonScene {
    * be tempted to fill it.
    */
   private buildDioramas(root: TransformNode, timber: StandardMaterial): void {
-    if (!this.chamber.dressing.dioramas) return;
-    const shell = this.chamber.shell;
-    const wallX = -shell.halfWidth;
-    const depth = 1.5;
-    const width = 2.9;
-    const height = 2.2;
-    const sillY = 0.75;
+    const dressing = this.chamber.dressing;
+    if (dressing.dioramas) {
+      const wallX = -this.chamber.shell.halfWidth;
+      for (const diorama of resolveDioramas(this.tapes)) {
+        this.buildDioramaSet(root, timber, diorama, {
+          wallX, z: diorama.spec.centreZ, width: 2.9, height: 2.2, sillY: 0.75, facing: 1,
+        });
+      }
+    }
+    // One-off views take their opening from the window the room already
+    // authored, so the set can never be a different size from the hole it is
+    // seen through.
+    for (const view of dressing.views) {
+      const window = dressing.salchang.find((pane) => pane.id === view.windowId);
+      if (!window) continue;
+      const resolved = resolveView(this.tapes, view.chamberId, view.windowId);
+      if (!resolved) continue;
+      this.buildDioramaSet(root, timber, resolved, {
+        wallX: window.x,
+        z: window.centreZ,
+        width: window.width,
+        height: window.height,
+        sillY: window.sillY,
+        facing: window.facing,
+      });
+    }
+  }
 
-    for (const diorama of resolveDioramas(this.tapes)) {
-      const z = diorama.spec.centreZ;
-      const id = diorama.spec.chamberId;
-      const backX = wallX - depth;
+  /** One shallow set behind one opening. Shared by the corridor and 04's view. */
+  private buildDioramaSet(
+    root: TransformNode,
+    timber: StandardMaterial,
+    diorama: ResolvedDiorama,
+    at: { wallX: number; z: number; width: number; height: number; sillY: number; facing: 1 | -1 },
+  ): void {
+    const depth = 1.5;
+    const { wallX, z, width, height, sillY } = at;
+    // The set sits on the far side of the wall from the room, whichever side
+    // that is. The corridor's windows all face east off a west wall; 04's faces
+    // west off an east one, and hardcoding the sign put its set inside the room.
+    const out = -at.facing;
+    {
+      const id = `${diorama.spec.chamberId}-${Math.round(z * 10)}`;
+      const backX = wallX + out * depth;
 
       // The box. Plaster on the back so the figure has something to be a
       // silhouette against, timber on the returns so it reads as joinery.
@@ -2086,7 +2118,7 @@ export class FirstPersonScene {
         width, height, sideOrientation: Mesh.DOUBLESIDE,
       }, this.scene);
       back.position = new Vector3(backX, sillY + height / 2, z);
-      back.rotation.y = -Math.PI / 2;
+      back.rotation.y = at.facing > 0 ? -Math.PI / 2 : Math.PI / 2;
       // Self-lit rather than lamp-lit. Ten point lights is more than a
       // StandardMaterial will take — the default budget is four — so the lamps
       // were silently dropped from the shader and every set stayed black. An
@@ -2103,7 +2135,7 @@ export class FirstPersonScene {
         const slab = MeshBuilder.CreateBox(`diorama-${part}-${id}`, {
           width: depth, height: 0.08, depth: width,
         }, this.scene);
-        slab.position = new Vector3(wallX - depth / 2, sillY + offset, z);
+        slab.position = new Vector3(wallX + out * depth / 2, sillY + offset, z);
         slab.material = timber;
         slab.isPickable = false;
         slab.parent = root;
@@ -2112,7 +2144,7 @@ export class FirstPersonScene {
         const cheek = MeshBuilder.CreateBox(`diorama-cheek-${id}-${side}`, {
           width: depth, height, depth: 0.09,
         }, this.scene);
-        cheek.position = new Vector3(wallX - depth / 2, sillY + height / 2, z + side * (width / 2));
+        cheek.position = new Vector3(wallX + out * depth / 2, sillY + height / 2, z + side * (width / 2));
         cheek.material = timber;
         cheek.isPickable = false;
         cheek.parent = root;
@@ -2122,8 +2154,8 @@ export class FirstPersonScene {
       const plate = MeshBuilder.CreatePlane(`diorama-board-${id}`, {
         width: 0.86, height: 0.3, sideOrientation: Mesh.DOUBLESIDE,
       }, this.scene);
-      plate.position = new Vector3(wallX - 0.02, sillY - 0.22, z);
-      plate.rotation.y = -Math.PI / 2;
+      plate.position = new Vector3(wallX + out * 0.02, sillY - 0.22, z);
+      plate.rotation.y = at.facing > 0 ? -Math.PI / 2 : Math.PI / 2;
       plate.material = buildDioramaBoard(
         this.scene,
         `diorama-board-${id}`,
@@ -2133,7 +2165,7 @@ export class FirstPersonScene {
       plate.isPickable = false;
       plate.parent = root;
 
-      if (!diorama.pose) continue;
+      if (!diorama.pose) return;
 
       // Him, in the posture that tape ended in. Archival rather than live: this
       // is a record being kept, not a replay running.
@@ -2156,11 +2188,12 @@ export class FirstPersonScene {
       // not lit from inside, and including it put a white hotspot at the waist
       // that undid the whole point of the desaturated skin.
       if (live) this.glow.addIncludedOnlyMesh(rig.parts[0] as Mesh);
-      const place = (at: ActorState): void => {
+      const facing = at.facing;
+      const place = (frame: ActorState): void => {
         // Into the set, facing the window. The recorded position is that room's
         // and means nothing here; the posture is the whole point.
-        rig.root.position = new Vector3(wallX - depth * 0.58, sillY + 0.02, z);
-        rig.root.rotation.y = Math.PI / 2 + (at.yawUnits / 4096) * Math.PI * 2 * 0.08;
+        rig.root.position = new Vector3(wallX + out * depth * 0.58, sillY + 0.02, z);
+        rig.root.rotation.y = (facing > 0 ? Math.PI / 2 : -Math.PI / 2) + (frame.yawUnits / 4096) * Math.PI * 2 * 0.08;
       };
       place(diorama.pose);
       poseHumanoid(rig, { speed: 0, phase: 0, grounded: true, clock: 0 });

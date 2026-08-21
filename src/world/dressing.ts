@@ -42,6 +42,8 @@ export interface StandardDressingOptions {
   warmBand?: ChamberDressing["warmBand"];
   /** Sets behind the west windows. Only the ending corridor has them. */
   dioramas?: boolean;
+  /** Windows looking into another room. 04's gallery looks at 01. */
+  views?: ChamberDressing["views"];
   /**
    * The pair of full-length runs down the long walls. On by default, because
    * every room is a stack room — except the ending corridor, which is a gallery:
@@ -151,6 +153,7 @@ export function standardDressing(shell: RoomShell, options: StandardDressingOpti
     balustrades: options.balustrades ?? [],
     warmBand: options.warmBand ?? null,
     dioramas: options.dioramas ?? false,
+    views: options.views ?? [],
     routes: options.routes ?? [],
   };
 }

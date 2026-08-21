@@ -35,6 +35,28 @@ export interface ResolvedDiorama {
  * player made in that room and falls back to the room's own golden without
  * saying which one you are looking at.
  */
+/**
+ * One window, for a room that has a view rather than a gallery.
+ *
+ * 04's gallery looks through a lattice at 01 — the first room you left someone
+ * in — and that is the same object as a corridor window: a set, a board, and
+ * the posture that room's tape ended in. Same resolver, one entry.
+ */
+export function resolveView(archive: TapeArchive, chamberId: string, windowId: string): ResolvedDiorama | null {
+  const chamber: Chamber | null = ROSTER.byIdOrNull(chamberId);
+  const room = chamber?.sim ?? null;
+  if (!room) return null;
+  const tape = archive.tapeFor(room, goldenTape(room));
+  if (!tape) return null;
+  return {
+    spec: { chamberId, centreZ: 0, windowId },
+    room,
+    pose: finalPose(room, tape),
+    loop: [],
+    isPlayers: archive.isPlayers(room),
+  };
+}
+
 export function resolveDioramas(archive: TapeArchive): ResolvedDiorama[] {
   return DIORAMAS.map((spec): ResolvedDiorama => {
     const chamber: Chamber | null = ROSTER.byIdOrNull(spec.chamberId);

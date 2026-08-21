@@ -401,7 +401,9 @@ export function buildDioramaBoard(
 
   const surface = new StandardMaterial(name, scene);
   surface.diffuseColor = Color3.Black();
-  surface.emissiveColor = new Color3(0.72, 0.68, 0.6);
+  // Dim: a museum label is read when you look for it, not the brightest
+  // thing on the wall. At full strength it out-shone the set it labels.
+  surface.emissiveColor = new Color3(0.4, 0.37, 0.32);
   surface.emissiveTexture = texture;
   surface.specularColor = Color3.Black();
   surface.disableLighting = true;

@@ -192,8 +192,10 @@ export const TWO_OF_US_CHAMBER: Chamber = {
           id: "gallery-east",
           x: FOUR_HALF,
           facing: -1,
-          fromZ: 11.4,
-          toZ: FOUR_DEPTH - 0.5,
+          fromZ: 11.3,
+          // Stops short of the view: the deck's own wall carries cases up to
+          // the lattice and then gives way to it.
+          toZ: 12.1,
           height: 2.3,
           seed: 4400 + 771,
           baseY: DECK_Y,
@@ -215,32 +217,41 @@ export const TWO_OF_US_CHAMBER: Chamber = {
           id: "gallery-east-band",
           x: FOUR_HALF,
           facing: -1,
-          centreZ: 13.6,
+          centreZ: 11.7,
           width: 2.8,
           sillY: DECK_Y + 2.54,
           height: 0.78,
           seed: 4400 + 880,
           castsBands: false,
         },
-        // The one you lean on the rail and look through: 01 is on the other
-        // side of it. West, because west is the sun side and the diorama has to
-        // be the brightest thing on that wall.
+        // The one you walk up to on the gallery and look through: 01 is on the
+        // other side of it. On the deck's own wall, because a window across the
+        // room is a window nobody reaches — the first placement put it on the
+        // west wall nine metres from the only floor you can stand on up here.
         {
           id: "gallery-view",
-          x: -FOUR_HALF,
-          facing: 1,
-          centreZ: 12.8,
-          width: 3.2,
-          sillY: DECK_Y + 0.55,
-          height: 1.6,
+          x: FOUR_HALF,
+          facing: -1,
+          centreZ: 13.9,
+          width: 3.0,
+          sillY: DECK_Y + 0.5,
+          height: 1.7,
           seed: 4400 + 881,
           castsBands: false,
+          // No pane: there is a room behind this one, not daylight.
+          open: true,
         },
       ],
       blocks: blocksOf(fourSolids).filter(
         (block) =>
           !block.id.startsWith("floor")
           && !block.id.startsWith("ceiling")
+          // The long walls are the shell builder's, which cuts them into bands
+          // around the openings. Drawn as solid blocks too, they board over the
+          // gallery's view from behind — the same way they boarded over the
+          // corridor's ten windows.
+          && block.id !== "wall-east"
+          && block.id !== "wall-west"
           // The rail is drawn as a balustrade rather than a slab. Its brush
           // stays exactly as authored; only the picture of it changes.
           && block.id !== "deck-rail",
@@ -252,6 +263,10 @@ export const TWO_OF_US_CHAMBER: Chamber = {
       // down rather than across. Both authored rather than guessed: the room
       // knows which window is over its own grip.
       warmBand: { windowId: "west-8", aboveY: DECK_Y - 0.4 },
+      // Lean on the rail, look left, and 01 is through the lattice: the first
+      // room you ever left someone standing in, with him still on the plate.
+      // The same object as a corridor window, one entry instead of ten.
+      views: [{ chamberId: "second-self", windowId: "gallery-view" }],
       // Two legs: the grip on the floor, then the stair the second pass frees.
       // The upper leg is fainter — you only walk it once you have understood
       // the room, and a bright line to it would answer the room's own question.

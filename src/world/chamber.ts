@@ -141,6 +141,14 @@ export interface ChamberDressing {
    */
   dioramas: boolean;
   /**
+   * Windows that look into another room rather than out of this one.
+   *
+   * The corridor's ten are resolved from its own roster; these are one-offs a
+   * room asks for by name — 04's gallery looks through at 01, the first room
+   * you ever left someone standing in.
+   */
+  views: { chamberId: string; windowId: string }[];
+  /**
    * Brass inlay worn into the floor. Empty in the early rooms, which are one
    * space with one thing in it and need no help being read.
    */

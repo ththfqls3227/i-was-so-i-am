@@ -63,6 +63,16 @@ const SHOTS = [
     pitch: 0.44,
   },
 
+  {
+    chamber: "two-of-us",
+    name: "04-view-of-01",
+    play: true,
+    via: [{ x: 4.75, z: 4.4 }, { x: 4.75, z: 10.8 }, { x: 4.0, z: 12.4 }],
+    to: { x: 3.1, z: 13.9 },
+    yaw: 1.55,
+    pitch: 0.03,
+  },
+
   { chamber: "long-standing", name: "05-entry", to: { x: 0, z: 2.4 }, yaw: 0, pitch: 0 },
   { chamber: "long-standing", name: "05-plates", to: { x: 0, z: 4.0 }, yaw: -0.85, pitch: 0.2 },
   { chamber: "long-standing", name: "05-passage", to: { x: 0, z: 6.6 }, yaw: 0, pitch: 0.02 },
