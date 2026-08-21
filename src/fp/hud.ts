@@ -74,6 +74,16 @@ export class Hud {
   private readonly resultHint = element("p", "hint");
   private readonly again = element("button", undefined, "R · 다시 기록");
   private readonly onward = element("button", undefined, "다음 방");
+  /**
+   * Frame rate, for whoever is working on the thing.
+   *
+   * Gated on the same condition as the test API rather than left on: it was
+   * shipping. A production build served the game with "121 fps" in the corner,
+   * which on a judge's screen is a debug overlay sitting on top of the art —
+   * and it survived all the way onto the last card of the ending before
+   * showEnding started hiding it by hand.
+   */
+  private readonly showDiagnostic = import.meta.env.DEV || import.meta.env.VITE_E2E === "true";
   private readonly diagnostic = element("div", "diagnostic");
   private readonly notice = element("p", "notice");
 
@@ -136,7 +146,7 @@ export class Hud {
       this.seal,
       this.blackout,
       this.finale,
-      this.diagnostic,
+      ...(this.showDiagnostic ? [this.diagnostic] : []),
       this.title,
       this.result,
     );
@@ -198,8 +208,10 @@ export class Hud {
     this.renderSubtitle(view, now);
     this.renderResult(view);
 
-    const diagnostic = `${Math.round(view.fps)} fps`;
-    if (this.diagnostic.textContent !== diagnostic) this.diagnostic.textContent = diagnostic;
+    if (this.showDiagnostic) {
+      const diagnostic = `${Math.round(view.fps)} fps`;
+      if (this.diagnostic.textContent !== diagnostic) this.diagnostic.textContent = diagnostic;
+    }
   }
 
   /**
