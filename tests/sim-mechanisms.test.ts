@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Simulation } from "../src/sim/simulation";
-import { MIN_TAPE_TICKS } from "../src/sim/constants";
+import { MIN_TAPE_TICKS, PLAYER_RADIUS, STEP_HEIGHT } from "../src/sim/constants";
+import type { RoomDefinition } from "../src/sim/types";
 import { solidsFor } from "../src/sim/mechanisms";
 import { AWAKENING, DOOR_OPEN_DELAY_TICKS } from "../src/world/room";
 import { actorOf, doorOpen, drive, framesFor, WALK_TO_PLATE } from "./support/fp-drive";
@@ -224,6 +225,101 @@ describe("a door that waits before it moves", () => {
     expect(simulation.state.doors[0]?.open).toBe(false);
     drive(simulation, framesFor([{ back: true, ticks: 30 }]));
     expect(simulation.state.doors[0]?.heldTicks).toBe(0);
+  });
+});
+
+describe("stairs", () => {
+  /**
+   * A flight rising in `rise` steps, each 0.6 m deep, with a landing on top —
+   * without the landing the body climbs the flight and then walks straight off
+   * the end of it, which is a fall, not a failure to climb.
+   */
+  const flight = (rise: number, steps: number, fromZ = 4): RoomDefinition["brushes"] => {
+    const treads: RoomDefinition["brushes"] = [];
+    for (let index = 0; index < steps; index += 1) {
+      treads.push({
+        id: `tread-${index}`,
+        min: { x: -3, y: -0.6, z: fromZ + index * 0.6 },
+        max: { x: 3, y: rise * (index + 1), z: fromZ + (index + 1) * 0.6 },
+      });
+    }
+    const topZ = fromZ + steps * 0.6;
+    treads.push({
+      id: "landing",
+      min: { x: -3, y: -0.6, z: topZ },
+      max: { x: 3, y: rise * steps, z: topZ + 3 },
+    });
+    // A wall at the end of the landing, so a body that climbed successfully
+    // stays up there instead of strolling off and reporting a fall as a failure
+    // to climb.
+    treads.push({
+      id: "landing-end",
+      min: { x: -3, y: -0.6, z: topZ + 3 },
+      max: { x: 3, y: rise * steps + 3, z: topZ + 3.6 },
+    });
+    return treads;
+  };
+
+  const stairRoom = (rise: number, steps = 6) =>
+    roomWith({
+      holds: [],
+      plates: [],
+      doors: [],
+      brushes: [...AWAKENING.brushes, ...flight(rise, steps)],
+    });
+
+  it("walks up a flight at the step height without jumping", () => {
+    const simulation = new Simulation(stairRoom(STEP_HEIGHT));
+    drive(simulation, framesFor([{ forward: true, ticks: 90 }]));
+    const actor = actorOf(simulation.state, "present");
+    // Six treads at 0.35 puts the landing at 2.1 m, and nothing here ever jumped.
+    expect(actor.y).toBeCloseTo(STEP_HEIGHT * 6, 2);
+    expect(actor.z).toBeGreaterThan(7.6);
+  });
+
+  it("climbs at walking pace rather than one step per jump", () => {
+    // Six steps inside two seconds is the difference between a staircase and an
+    // obstacle course.
+    const simulation = new Simulation(stairRoom(STEP_HEIGHT));
+    drive(simulation, framesFor([{ forward: true, ticks: 60 }]));
+    expect(actorOf(simulation.state, "present").y).toBeCloseTo(STEP_HEIGHT * 6, 2);
+  });
+
+  it("walks back down again", () => {
+    const simulation = new Simulation(stairRoom(STEP_HEIGHT));
+    drive(simulation, framesFor([{ forward: true, ticks: 90 }]));
+    expect(actorOf(simulation.state, "present").y).toBeCloseTo(STEP_HEIGHT * 6, 2);
+    drive(simulation, framesFor([{ back: true, ticks: 150 }]));
+    const actor = actorOf(simulation.state, "present");
+    expect(actor.y).toBeCloseTo(0, 2);
+    expect(actor.z).toBeLessThan(4);
+  });
+
+  it("refuses a step taller than the step height", () => {
+    // A hair over, and it is a wall again.
+    const simulation = new Simulation(stairRoom(STEP_HEIGHT + 0.02));
+    drive(simulation, framesFor([{ forward: true, ticks: 90 }]));
+    const actor = actorOf(simulation.state, "present");
+    expect(actor.y).toBeCloseTo(0, 3);
+    expect(actor.z).toBeLessThan(4);
+  });
+
+  it("does not let a body climb in mid-air", () => {
+    // Jumping at a too-tall step must not convert into a climb on the way past.
+    const simulation = new Simulation(stairRoom(1.2, 2));
+    drive(simulation, framesFor([{ forward: true, jump: true, ticks: 90 }]));
+    const actor = actorOf(simulation.state, "present");
+    expect(actor.y).toBeLessThan(1.2);
+    expect(actor.z).toBeLessThan(4.4);
+  });
+
+  it("leaves a plain wall exactly as impassable as it was", () => {
+    // Into the side wall, which has no doorway in it to walk through.
+    const simulation = new Simulation(roomWith({ holds: [], plates: [], doors: [] }));
+    drive(simulation, framesFor([{ forward: true, yawUnits: 1024, ticks: 200 }]));
+    const actor = actorOf(simulation.state, "present");
+    expect(actor.y).toBeCloseTo(0, 6);
+    expect(actor.x).toBeCloseTo(6 - PLAYER_RADIUS, 2);
   });
 });
 

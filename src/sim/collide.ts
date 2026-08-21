@@ -1,4 +1,4 @@
-import { COLLISION_PASSES, PLAYER_HEIGHT, PLAYER_RADIUS } from "./constants";
+import { COLLISION_PASSES, PLAYER_HEIGHT, PLAYER_RADIUS, STEP_HEIGHT } from "./constants";
 import type { Brush } from "./types";
 
 const EPSILON = 1e-4;
@@ -13,8 +13,17 @@ export interface Body {
   grounded: boolean;
 }
 
-/** Feet-anchored box: PLAYER_RADIUS either side, PLAYER_HEIGHT tall. */
+/**
+ * Whether this brush is a wall to this body, rather than something under it.
+ *
+ * A surface whose top is within a step of the feet is not a wall at all — it is
+ * a stair. Letting the body walk into its footprint is what lets the vertical
+ * pass lift it onto the top, which is how a staircase becomes walkable without
+ * anything anywhere having to know it is a staircase. Anything taller stays a
+ * wall, and that boundary is exactly STEP_HEIGHT.
+ */
 function spansVertically(body: Body, brush: Brush): boolean {
+  if (brush.max.y <= body.y + STEP_HEIGHT + EPSILON) return false;
   return body.y < brush.max.y - EPSILON && body.y + PLAYER_HEIGHT > brush.min.y + EPSILON;
 }
 

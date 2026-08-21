@@ -43,5 +43,14 @@ export const MIN_TAPE_TICKS = 30;
 /** Hard ceiling shared by tape validation, independent of any one room. */
 export const MAX_TAPE_TICKS = TICK_RATE * 30;
 
+/**
+ * How high a ledge the body walks up without jumping.
+ *
+ * Stairs, not slopes. Every brush is axis-aligned, so a ramp cannot be expressed
+ * at all — a staircase of boxes can, and this is what stops each box being a
+ * wall you have to jump. 0.35 m gives ten steps to a 3.4 m storey.
+ */
+export const STEP_HEIGHT = 0.35;
+
 /** Collision solver passes. Three is enough to seat a box in an inside corner. */
 export const COLLISION_PASSES = 4;
