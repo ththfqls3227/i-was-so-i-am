@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Simulation } from "../src/sim/simulation";
+import type { RoomDefinition } from "../src/sim/types";
 import { TapeArchive, finalPose, replayPath } from "../src/sim/archive";
 import { MIN_TAPE_TICKS } from "../src/sim/constants";
 import { createTape } from "../src/sim/tape";
@@ -136,6 +137,33 @@ describe("09 — the last hold", () => {
     expect(LAST_HOLD.spawn.z).toBe(HOLDING_HAND.spawn.z);
     // The walk to the grip is identical; only the walk away from it grew.
     expect(LAST_HOLD.exit.min.z).toBeGreaterThan(HOLDING_HAND.exit.min.z + 8);
+  });
+
+  it("walks to the grip exactly as 02 did, step for step", () => {
+    // Measured rather than inferred. Equal room data would still let a change
+    // to the shell move the spawn or the floor and quietly reshape the
+    // approach, and the finale only lands if your hands do what they did on
+    // minute three. Compared tick by tick, not by where you end up: two walks
+    // that arrive at the same place by different routes are not the same walk.
+    const approach = (room: RoomDefinition): string[] => {
+      const simulation = new Simulation(room);
+      const forward = framesFor([{ forward: true, ticks: 1 }])[0] as number;
+      const path: string[] = [];
+      // Long enough to reach the pillar and stand at it, short enough that the
+      // far wall — the one thing these two rooms do not share — is still metres
+      // away in both.
+      for (let tick = 0; tick < 40; tick += 1) {
+        simulation.step(forward);
+        const actor = actorOf(simulation.state, "present");
+        const grip = simulation.state.holds[0];
+        path.push(`${actor.x.toFixed(6)},${actor.z.toFixed(6)},${actor.targetId ?? "-"},${grip?.active === true}`);
+      }
+      return path;
+    };
+    const finale = approach(LAST_HOLD);
+    expect(finale).toEqual(approach(HOLDING_HAND));
+    // And the walk is a walk, not a step onto the pillar from where you stand.
+    expect(new Set(finale).size).toBeGreaterThan(20);
   });
 
   it("does not latch, and is the only room he is never taken back from", () => {
