@@ -6,6 +6,11 @@
 // about geometry. These stand still at pinned camera poses instead, which makes
 // the only moving thing in frame the plate ring's pulse.
 //
+// The HUD is hidden for the shot. It turned out to be most of what was left:
+// the subtitle cross-fades on a wall clock, so two runs of the same build caught
+// it at different opacities and the diff blamed the scene. A regression harness
+// for ten rooms cannot spend its signal on a fading caption.
+//
 // Pair with scripts/image-diff.mjs: shoot before a change, shoot after, diff.
 // Usage: node scripts/fp-stills.mjs [outputDirectory]
 import { chromium } from "@playwright/test";
@@ -15,16 +20,22 @@ const gameUrl = process.env.GAME_URL ?? "http://127.0.0.1:4173/";
 const outputDirectory = process.argv[2] ?? "captures/stills";
 const viewport = { width: 1280, height: 720 };
 
-/** Each pose is a place to stand and a direction to face. */
+/**
+ * Each pose is a place to stand and a direction to face.
+ *
+ * `atZ` is a position, not a duration. Walking for a fixed number of
+ * milliseconds lands somewhere slightly different every run, and that difference
+ * was the entire remaining noise floor once the HUD stopped moving.
+ */
 const POSES = [
-  { name: "01-spawn-forward", walk: 0, yaw: 0, pitch: 0 },
-  { name: "02-spawn-left", walk: 0, yaw: -1.2, pitch: 0.05 },
-  { name: "03-spawn-right", walk: 0, yaw: 1.2, pitch: 0.05 },
-  { name: "04-spawn-up", walk: 0, yaw: 0, pitch: -0.55 },
-  { name: "05-midroom-forward", walk: 1200, yaw: 0, pitch: 0 },
-  { name: "06-midroom-back", walk: 1200, yaw: Math.PI, pitch: 0.05 },
-  { name: "07-plate-door", walk: 2000, yaw: 0, pitch: 0.1 },
-  { name: "08-plate-down", walk: 2000, yaw: 0, pitch: 0.8 },
+  { name: "01-spawn-forward", atZ: 0, yaw: 0, pitch: 0 },
+  { name: "02-spawn-left", atZ: 0, yaw: -1.2, pitch: 0.05 },
+  { name: "03-spawn-right", atZ: 0, yaw: 1.2, pitch: 0.05 },
+  { name: "04-spawn-up", atZ: 0, yaw: 0, pitch: -0.55 },
+  { name: "05-midroom-forward", atZ: 5.4, yaw: 0, pitch: 0 },
+  { name: "06-midroom-back", atZ: 5.4, yaw: Math.PI, pitch: 0.05 },
+  { name: "07-plate-door", atZ: 7.4, yaw: 0, pitch: 0.1 },
+  { name: "08-plate-down", atZ: 7.4, yaw: 0, pitch: 0.8 },
 ];
 
 const browser = await chromium.launch({
@@ -36,6 +47,13 @@ await page.addInitScript(() => {
   Object.defineProperty(globalThis.navigator, "webdriver", { configurable: true, get: () => false });
 });
 
+/** The room is the subject; the interface is not. */
+const setHudVisible = (visible) =>
+  page.evaluate((show) => {
+    const hud = globalThis.document.querySelector(".hud");
+    if (hud instanceof globalThis.HTMLElement) hud.style.visibility = show ? "" : "hidden";
+  }, visible);
+
 await mkdir(outputDirectory, { recursive: true });
 try {
   await page.goto(gameUrl, { waitUntil: "networkidle" });
@@ -43,23 +61,33 @@ try {
   await page.evaluate(() => globalThis.__I_WAS_SO_I_AM_FP__.start());
   await page.waitForTimeout(400);
 
-  let walked = 0;
+  const standingZ = () =>
+    page.evaluate(
+      () => globalThis.__I_WAS_SO_I_AM_FP__.state.actors.find((a) => a.id === "present")?.z ?? 0,
+    );
+
+  let reached = 0;
   for (const pose of POSES) {
-    if (pose.walk > walked) {
+    if (pose.atZ > reached) {
       await page.evaluate(() => globalThis.__I_WAS_SO_I_AM_FP__.setLook(0, 0));
       await page.evaluate(() => globalThis.__I_WAS_SO_I_AM_FP__.press("KeyW"));
-      await page.waitForTimeout(pose.walk - walked);
+      for (let guard = 0; guard < 400; guard += 1) {
+        if ((await standingZ()) >= pose.atZ) break;
+        await page.waitForTimeout(16);
+      }
       await page.evaluate(() => globalThis.__I_WAS_SO_I_AM_FP__.release("KeyW"));
-      walked = pose.walk;
+      reached = pose.atZ;
       // Let the walk speed bleed off so head bob is not in the frame.
-      await page.waitForTimeout(700);
+      await page.waitForTimeout(900);
     }
     await page.evaluate(
       ([yaw, pitch]) => globalThis.__I_WAS_SO_I_AM_FP__.setLook(yaw, pitch),
       [pose.yaw, pose.pitch],
     );
     await page.waitForTimeout(320);
+    await setHudVisible(false);
     await page.screenshot({ path: `${outputDirectory}/${pose.name}.png` });
+    await setHudVisible(true);
     console.log(`${outputDirectory}/${pose.name}.png`);
   }
 } finally {
