@@ -83,6 +83,13 @@ const SHOTS = [
   { chamber: "giving-back", name: "06-long-hall", to: { x: 0, z: 14 }, yaw: 0, pitch: 0 },
   { chamber: "giving-back", name: "06-partition", to: { x: 0, z: 25.5 }, yaw: 0, pitch: 0.02 },
 
+  // The board each room wears. 05, 06 and 07 have no corridor, so they can all
+  // repeat 03's problem: a sign on the far wall behind a partition, on the side
+  // away from the exit, that play never puts in frame.
+  { chamber: "long-standing", name: "05-sign", via: [{ x: -3, z: 8 }], to: { x: -3, z: 15.4 }, yaw: 0, pitch: -0.05 },
+  { chamber: "giving-back", name: "06-sign", via: [{ x: 4.6, z: 26 }, { x: 4.6, z: 31 }], to: { x: 1.6, z: 31.4 }, yaw: -0.55, pitch: -0.05 },
+  { chamber: "unkept", name: "07-sign", via: [{ x: 4.4, z: 5.5 }, { x: 4.4, z: 13 }], to: { x: 3.4, z: 15.2 }, yaw: -0.2, pitch: -0.06 },
+
   { chamber: "unkept", name: "07-entry", to: { x: 0, z: 2.4 }, yaw: 0, pitch: 0 },
   { chamber: "unkept", name: "07-lean", to: { x: -3.2, z: 5.6 }, yaw: -1.3, pitch: -0.08 },
   { chamber: "unkept", name: "07-torn-door", to: { x: 0, z: 7.2 }, yaw: 0, pitch: 0.03 },

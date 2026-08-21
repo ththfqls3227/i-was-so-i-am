@@ -453,6 +453,11 @@ export const GIVING_BACK_CHAMBER: Chamber = {
     seedBase: 6600,
     corridor: false,
     windows: [4, 10, 16, 22, 27],
+    // East, with the way out. The default hangs it west of the doorway, which
+    // in a room that leaves through its east corner is the one wall the player
+    // has no reason to walk to — 03 shipped that way and its board was never
+    // once in frame.
+    sign: { x: 2.6, z: SIX_DEPTH },
     blocks: blocksOf(sixSolids).filter((block) => !block.id.startsWith("floor") && !block.id.startsWith("ceiling")),
     // Thirty-four metres of identical shelving. Without a line on the floor the
     // far end is not a destination, it is just where the room stops being
@@ -545,6 +550,8 @@ export const UNKEPT_CHAMBER: Chamber = {
   dressing: standardDressing(sevenShell, {
     seedBase: 7700,
     corridor: false,
+    // East, with the way out. Same reason as 06.
+    sign: { x: 2.6, z: SEVEN_DEPTH },
     // Wrong on purpose: the spacing nobody maintained.
     windows: [2.2, 5.1, 6.4, 12.9],
     tiltRadians: 0.06,
