@@ -80,6 +80,11 @@ export interface ViewModel {
   hasNextChamber: boolean;
   /** What the fold key offers at the last door, or null anywhere else. */
   finalBeat: string | null;
+  /**
+   * The closing lines have started. Wayfinding prompts stop: "빛으로 나가세요"
+   * under the last thing the game says is the game talking over itself.
+   */
+  closing: boolean;
   /** What the facility says on the way into this chamber. */
   entryLine: string;
   /** The browser refused pointer lock, so looking around means dragging. */
@@ -93,7 +98,9 @@ export interface SceneEvents {
   /** The finale's fold has begun and will land in this many seconds. */
   onSealing: (seconds: number) => void;
   /** The last door was closed. The game is over; nothing follows this. */
-  onEnding: (beat: { prompt: string; line: string }) => void;
+  onEnding: () => void;
+  /** A line the world wants said, outside the usual entry subtitle. */
+  onLine: (line: string) => void;
 }
 
 /**
@@ -109,6 +116,12 @@ export interface RoomEchoes {
   live: StandardMaterial | null;
   archival: StandardMaterial | null;
 }
+
+/** The last echo's two colours, and the two rims that go with them. */
+const ECHO_CYAN = new Color3(0.42, 0.86, 1);
+const ECHO_WARM = new Color3(1, 0.72, 0.36);
+const ECHO_RIM_COOL = new Color3(0.26, 0.3, 0.34);
+const ECHO_RIM_WARM = new Color3(0.4, 0.26, 0.12);
 
 interface PlateVisual {
   id: string;
@@ -209,7 +222,17 @@ export class FirstPersonScene {
    * The one corridor window still moving: 00's tape, on a loop, and the closure
    * that puts the rig where the set is rather than where the room was.
    */
-  private dioramaLoop: { rig: Humanoid; path: readonly ActorState[]; place: (at: ActorState) => void } | null = null;
+  private dioramaLoop: {
+    rig: Humanoid;
+    path: readonly ActorState[];
+    place: (at: ActorState) => void;
+    skin: StandardMaterial;
+  } | null = null;
+  /** Progress of the last echo's turn from his colour to mine, or null before it. */
+  private warmingEcho: number | null = null;
+  /** How many of the corridor's closing lines have been said, and the gap left. */
+  private approachSpoken = 0;
+  private approachWait = 1.2;
   /** Sync-beat state: how much of the swell is left, and whether it has fired. */
   private warmBandLeft = 0;
   private warmBandSpent = false;
@@ -837,6 +860,9 @@ export class FirstPersonScene {
 
     this.doorOffset = 0;
     this.dioramaLoop = null;
+    this.warmingEcho = null;
+    this.approachSpoken = 0;
+    this.approachWait = 1.2;
     this.stride.clear();
     this.pressed.clear();
     this.setLook(radiansFromYawUnits(chamber.sim.spawn.yawUnits), 0);
@@ -1736,7 +1762,11 @@ export class FirstPersonScene {
     if (beat && this.simulation.state.success) {
       if (this.ended) return false;
       this.ended = true;
-      this.events?.onEnding(beat);
+      // He takes my colour. The last window is the first tape, and for the
+      // length of the ending the light on him warms from his cyan to the amber
+      // that has meant "present" all game — the only time the two are the same.
+      this.warmingEcho = 0;
+      this.events?.onEnding();
       return true;
     }
     if (!this.simulation.canFold) return false;
@@ -1935,6 +1965,18 @@ export class FirstPersonScene {
     this.doorSlab.position.x = this.doorHome + this.doorOffset;
 
     this.driveWarmBand(state, deltaSeconds);
+    this.driveFinalApproach(deltaSeconds);
+
+    // Cyan to amber, once, over the ending's own length. Driven here rather
+    // than in CSS because it is a material in the world, not a panel.
+    if (this.warmingEcho !== null && this.dioramaLoop) {
+      this.warmingEcho = Math.min(1, this.warmingEcho + deltaSeconds / 2.4);
+      const turn = this.warmingEcho * this.warmingEcho * (3 - 2 * this.warmingEcho);
+      const skin = this.dioramaLoop.skin;
+      skin.emissiveColor = Color3.Lerp(ECHO_CYAN, ECHO_WARM, turn);
+      const edge = skin.emissiveFresnelParameters;
+      if (edge) edge.rightColor = Color3.Lerp(ECHO_RIM_COOL, ECHO_RIM_WARM, turn);
+    }
 
     // The one window that has not stopped. It runs on the wall clock rather
     // than on the tick, because the corridor's simulation is not replaying
@@ -2095,16 +2137,25 @@ export class FirstPersonScene {
 
       // Him, in the posture that tape ended in. Archival rather than live: this
       // is a record being kept, not a replay running.
-      const skin = archivalEchoMaterial(this.scene, `diorama-skin-${id}`);
+      // Nine of these are records the archive is keeping. One is not: 00's tape
+      // is still running, and it has to be a live echo in the live echo's cyan
+      // or the turn to amber at the end has nothing to turn. The data already
+      // said which — loop is non-empty for exactly one window — and the first
+      // version ignored it and made all ten archival.
+      const live = diorama.loop.length > 0;
+      const skin = live
+        ? echoMaterial(this.scene, `diorama-skin-${id}`)
+        : archivalEchoMaterial(this.scene, `diorama-skin-${id}`);
       const rig = createHumanoid(this.scene, `diorama-figure-${id}`, skin);
       rig.root.parent = root;
       for (const limb of rig.parts) {
         limb.receiveShadows = false;
         limb.applyFog = false;
       }
-      // No glow layer. A live echo is lit from inside and this one is not —
-      // adding it put a white hotspot at his waist and undid the whole point of
-      // the archival skin.
+      // Only the live one goes through the glow layer. An archival figure is
+      // not lit from inside, and including it put a white hotspot at the waist
+      // that undid the whole point of the desaturated skin.
+      if (live) this.glow.addIncludedOnlyMesh(rig.parts[0] as Mesh);
       const place = (at: ActorState): void => {
         // Into the set, facing the window. The recorded position is that room's
         // and means nothing here; the posture is the whole point.
@@ -2114,13 +2165,36 @@ export class FirstPersonScene {
       place(diorama.pose);
       poseHumanoid(rig, { speed: 0, phase: 0, grounded: true, clock: 0 });
 
-      if (diorama.loop.length > 0) this.dioramaLoop = { rig, path: diorama.loop, place };
+      if (live) this.dioramaLoop = { rig, path: diorama.loop, place, skin };
     }
   }
 
   /** The two-digit number a chamber wears, for a board that is not its own. */
   private numberOf(chamberId: string): string {
     return ROSTER.byIdOrNull(chamberId)?.number ?? "";
+  }
+
+  /**
+   * The last three lines, at the last window.
+   *
+   * Paced on the wall clock rather than on the tick, because the corridor is
+   * not simulating anything — and spaced far enough apart to be read rather
+   * than skimmed. Once each: walking back past the window does not replay them.
+   */
+  private driveFinalApproach(deltaSeconds: number): void {
+    const approach = this.chamber.finalApproach;
+    if (!approach || this.approachSpoken >= approach.lines.length) return;
+    const at = this.interpolated("present", 1);
+    if (!at || at.z < approach.atZ) return;
+
+    this.approachWait -= deltaSeconds;
+    if (this.approachWait > 0) return;
+    const line = approach.lines[this.approachSpoken];
+    if (line !== undefined) this.events?.onLine(line);
+    this.approachSpoken += 1;
+    // Long enough that the next one does not land on top of the last. The
+    // final sentence is the longest and gets the same room as the others.
+    this.approachWait = 5.4;
   }
 
   /**
@@ -2197,6 +2271,7 @@ export class FirstPersonScene {
       chamberName: this.chamber.sim.name,
       entryLine: this.chamber.subtitleOnEntry,
       hasNextChamber: ROSTER.after(this.chamber.sim.id) !== null,
+      closing: this.approachSpoken > 0,
       // Offered only once you are actually standing at the last door.
       finalBeat: this.chamber.finalBeat && state.success && !this.ended
         ? this.chamber.finalBeat.prompt

@@ -234,7 +234,16 @@ export interface Chamber {
    * room simply stopping. The corridor takes no recording, so nothing in the
    * simulation changes: this is a flow hook, and the sim never hears about it.
    */
-  finalBeat?: { prompt: string; line: string };
+  finalBeat?: { prompt: string };
+  /**
+   * The three lines at the end of the corridor, and where you have to be
+   * standing to hear the first.
+   *
+   * Not subtitleOnEntry: said on the way in they land forty seconds before the
+   * thing they are about, over a player who is still walking. They belong at
+   * the last window, which is 00 — the first tape you ever made, still running.
+   */
+  finalApproach?: { atZ: number; lines: string[] };
   dressing: ChamberDressing;
 }
 

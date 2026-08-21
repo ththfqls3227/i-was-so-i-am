@@ -63,6 +63,12 @@ export class Hud {
   private readonly seal = element("div", "seal");
   private readonly title = element("div", "overlay title");
   private readonly result = element("div", "overlay result");
+  /** The fall to black after the seal, and the two words that come out of it. */
+  private readonly blackout = element("div", "blackout");
+  private readonly finale = element("div", "finale");
+  private readonly finaleTitle = element("h1", undefined, "I WAS, SO I AM.");
+  private readonly finaleSeal = element("div", "finale-seal", "封");
+  private endingTimers: number[] = [];
   private readonly resultHeading = element("h2");
   private readonly resultBody = element("p");
   private readonly resultHint = element("p", "hint");
@@ -112,6 +118,9 @@ export class Hud {
     this.onward.addEventListener("click", () => this.callbacks.onAdvance());
     this.result.append(this.onward, this.again, this.resultHint);
     this.result.hidden = true;
+    this.finale.append(this.finaleSeal, this.finaleTitle);
+    this.blackout.hidden = true;
+    this.finale.hidden = true;
 
     this.notice.textContent = "마우스 왼쪽 버튼을 누른 채 움직여 시점을 돌리세요";
     this.notice.hidden = true;
@@ -125,6 +134,8 @@ export class Hud {
       this.prompts,
       this.flash,
       this.seal,
+      this.blackout,
+      this.finale,
       this.diagnostic,
       this.title,
       this.result,
@@ -181,7 +192,9 @@ export class Hud {
     const rightLabel = `${remaining.toFixed(1)}s`;
     if (this.tapeRight.textContent !== rightLabel) this.tapeRight.textContent = rightLabel;
 
-    this.renderPrompts(this.promptsFor(view));
+    // Nothing to point at once the corridor has started closing: a wayfinding
+    // hint under the last thing the game says is the game talking over itself.
+    this.renderPrompts(view.closing ? [] : this.promptsFor(view));
     this.renderSubtitle(view, now);
     this.renderResult(view);
 
@@ -286,9 +299,12 @@ export class Hud {
       this.onward.hidden = !view.hasNextChamber;
       this.resultHint.textContent = view.hasNextChamber ? "" : "여기까지가 지금 열려 있는 구역입니다";
       if (view.finalBeat) {
-        // Not a room you have run out of. The last door, with the key you have
-        // been pressing since the first minute, and nothing else on offer.
-        this.resultHeading.textContent = "회랑 끝";
+        // Not a room you have run out of, so not a room card. The last door
+        // gets the key and nothing else — no heading, no buttons, no summary.
+        // Naming it ("회랑 끝") turned the last moment of the game into a
+        // chapter marker, and the corridor has already said what it has to say.
+        this.result.dataset.kind = "final";
+        this.resultHeading.textContent = "";
         this.resultBody.textContent = "";
         this.again.hidden = true;
         this.onward.hidden = true;
@@ -316,24 +332,45 @@ export class Hud {
    * No buttons, because there is nothing after this and offering one would turn
    * an ending into a menu.
    */
-  showEnding(line: string): void {
+  showEnding(): void {
     this.ended = true;
-    // The room's own closing line is still on screen from a moment ago. One
-    // sentence at the end, not two.
+    // Everything the game was still saying goes quiet first. The lines that
+    // belong here have already been said on the walk down; this is the silence
+    // after them, not another caption.
     this.subtitle.textContent = "";
     this.subtitleUntil = 0;
     this.notice.hidden = true;
-    this.result.hidden = false;
-    this.result.dataset.kind = "ending";
-    this.resultHeading.textContent = "";
-    this.resultBody.textContent = line;
-    this.again.hidden = true;
-    this.onward.hidden = true;
-    this.resultHint.textContent = "";
+    this.result.hidden = true;
+    this.prompts.textContent = "";
+    // The frame counter is a development read-out and it was surviving onto the
+    // last card in the game.
+    this.diagnostic.hidden = true;
+    this.crosshair.dataset.sealing = "true";
+
+    // The seal comes down, and this one is allowed to linger — everywhere else
+    // it is an impact and here it is the last thing that happens in the world.
     this.seal.dataset.on = "false";
     void this.seal.offsetWidth;
     this.seal.textContent = "封";
+    this.seal.dataset.wet = "true";
     this.seal.dataset.on = "true";
+
+    for (const timer of this.endingTimers) clearTimeout(timer);
+    // Stamp, fall, silence, title. The 1500 in the middle is the point of the
+    // whole sequence: nothing on screen, nothing to press, long enough to be
+    // uncomfortable if you are waiting for a menu.
+    this.endingTimers = [
+      window.setTimeout(() => {
+        this.blackout.hidden = false;
+        void this.blackout.offsetWidth;
+        this.blackout.dataset.on = "true";
+      }, 1150),
+      window.setTimeout(() => {
+        this.finale.hidden = false;
+        void this.finale.offsetWidth;
+        this.finale.dataset.on = "true";
+      }, 1150 + 900 + 1500),
+    ];
   }
 
   /** Fade the crosshair out ahead of the freeze, then let the flash land. */

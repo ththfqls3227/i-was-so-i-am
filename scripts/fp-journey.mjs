@@ -76,6 +76,13 @@ const read = () => withHandle(() => page.evaluate(() => {
     canFold: fp.view.canFold === true,
     finalBeat: fp.view.finalBeat ?? null,
     resultKind: globalThis.document.querySelector(".result")?.dataset.kind ?? "",
+    // The ending is a sequence, not a card: black comes down, holds, and only
+    // then does the title arrive. Read all three so a test can tell the silence
+    // from a title that never came.
+    blackout: globalThis.document.querySelector(".blackout")?.dataset.on ?? "",
+    finaleOn: globalThis.document.querySelector(".finale")?.dataset.on ?? "",
+    finaleTitle: globalThis.document.querySelector(".finale h1")?.textContent ?? "",
+    promptCount: globalThis.document.querySelectorAll(".prompts *").length,
     resultBody: globalThis.document.querySelector(".result p")?.textContent ?? "",
     resultHint: globalThis.document.querySelector(".result .hint")?.textContent ?? "",
     seal: (() => {
@@ -377,13 +384,25 @@ try {
   check("and does not offer a next room that is not there", atDoor.resultHint === atDoor.finalBeat, atDoor.resultHint);
   await act("fold");
   await page.waitForTimeout(500);
-  const ended = await read();
-  check("pressing it ends the game", ended.resultKind === "ending", ended.resultKind);
-  check("and the last line is the title", ended.resultBody.includes("그래서 지금의 나"), ended.resultBody);
+  const sealed = await read();
+  check("pressing it stamps the seal and clears the HUD", sealed.promptCount === 0, `prompts ${sealed.promptCount}`);
+
+  // The silence is a design requirement, not an accident of timing: black is
+  // down and the title is not up yet. Sampled inside the gap on purpose — if
+  // the title ever arrives early this is the assertion that catches it.
+  await page.waitForTimeout(1800);
+  const quiet = await read();
+  check("the room goes black and holds", quiet.blackout === "true", quiet.blackout);
+  check("and nothing is on screen during the hold", quiet.finaleOn !== "true", `finale ${quiet.finaleOn}`);
+
+  await page.waitForTimeout(2200);
+  const titled = await read();
+  check("then the title, and only the title", titled.finaleOn === "true", titled.finaleOn);
+  check("which is the English typography", titled.finaleTitle === "I WAS, SO I AM.", titled.finaleTitle);
   // Pressing again must not restart anything.
   await act("fold");
   await page.waitForTimeout(300);
-  check("pressing it again does nothing", (await read()).resultKind === "ending");
+  check("pressing it again does nothing", (await read()).finaleOn === "true");
 } finally {
   await browser.close();
   await server.stop();

@@ -127,11 +127,21 @@ export const ENDING_CHAMBER: Chamber = {
   sim: ENDING_CORRIDOR,
   shell: ENDING_SHELL,
   number: "—",
-  subtitleOnEntry: "모든 기록의 서명이 동일합니다. — 기록자: 나",
+  // Nothing on the way in. The corridor is a walk, and what it has to say it
+  // says at the far end, in front of the first tape you ever made.
+  subtitleOnEntry: "",
   // The same key, one last time.
-  finalBeat: {
-    prompt: "⏎ · 기록을 닫습니다",
-    line: "나는 그랬고, 그래서 지금의 나다.",
+  finalBeat: { prompt: "⏎ · 기록을 닫습니다" },
+  // Read at the last window, in order, with room between them. The last one is
+  // the game's sentence; nothing after it is in Korean, because the title says
+  // the same thing and saying it twice makes the second one a translation.
+  finalApproach: {
+    atZ: 42.5,
+    lines: [
+      "모든 기록의 서명이 동일합니다. — 기록자: 나",
+      "과거는 문을 붙들고 남았다.",
+      "그 흔적이 사라진 것은 아니다. 나는 그것을 지나왔기에, 지금 여기에 있다.",
+    ],
   },
   dressing: standardDressing(ENDING_SHELL, {
     seedBase: 10000,

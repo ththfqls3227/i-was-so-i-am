@@ -60,11 +60,17 @@ const hud = new Hud(app, {
 scene.attach({
   onFrame: (view) => hud.update(view, performance.now()),
   onPhaseChange: (phase) => {
-    if (phase === "success") hud.say("보관 완료.", performance.now(), 4200);
+    // Not in the corridor. There is nothing stored at the end of it and the
+    // facility has already said everything it is going to say; a filing
+    // confirmation on top of the closing lines turns them into a receipt.
+    if (phase === "success" && !scene.currentChamber.finalBeat) {
+      hud.say("보관 완료.", performance.now(), 4200);
+    }
   },
   onFold: () => hud.playFoldFlash(),
   onSealing: (seconds) => hud.beginSeal(seconds),
-  onEnding: (beat) => hud.showEnding(beat.line),
+  onEnding: () => hud.showEnding(),
+  onLine: (line) => hud.say(line, performance.now(), 5200),
 });
 
 scene.start();

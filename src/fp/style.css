@@ -332,3 +332,118 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
   color: #56626f;
   text-align: right;
 }
+
+/*
+ * The ending.
+ *
+ * Four beats with nothing to press in any of them: the seal lands and stays
+ * wet, the room falls away, a second and a half of nothing, and then two words
+ * in the title's own face. The pause is not dead air — it is the only place in
+ * the game where the screen asks for nothing at all.
+ */
+.seal[data-wet="true"] {
+  width: 108px;
+  height: 108px;
+  margin-left: -54px;
+  font-size: 54px;
+  /* Ink that has just been pressed: darker at the edges where it pooled, and
+     never quite flat. */
+  background:
+    radial-gradient(ellipse at 38% 32%, #d5513d 0%, #b83b2e 46%, #8f2a20 100%);
+  box-shadow:
+    inset 0 0 0 4px rgba(243, 230, 200, 0.4),
+    0 0 26px rgba(184, 59, 46, 0.5);
+}
+.seal[data-wet="true"][data-on="true"] {
+  animation: seal-wet 1250ms cubic-bezier(0.16, 0.9, 0.24, 1) forwards;
+}
+@keyframes seal-wet {
+  0% { opacity: 0; transform: scale(2.4) rotate(-11deg); }
+  26% { opacity: 1; transform: scale(1) rotate(-3deg); }
+  100% { opacity: 1; transform: scale(1) rotate(-3deg); }
+}
+
+.blackout {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 900ms ease-in;
+}
+.blackout[data-on="true"] { opacity: 1; }
+
+.finale {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 30px;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1400ms ease-out;
+}
+.finale[data-on="true"] { opacity: 1; }
+/* The title's own face, because this is the title — arrived at rather than
+   announced. No translation and no subtitle: the sentence has already been
+   said in the corridor, in Korean, and repeating it here in two languages
+   would turn a closing line into a caption. */
+.finale h1 {
+  margin: 0;
+  font: 300 clamp(1.6rem, 4.4vw, 2.9rem)/1.05 Georgia, "Times New Roman", serif;
+  letter-spacing: 0.42em;
+  text-indent: 0.42em;
+  color: #f4f7fa;
+  white-space: nowrap;
+}
+/* One red, and it is the seal you have been pressing all game. */
+.finale-seal {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-content: center;
+  font-family: "Apple SD Gothic Neo", "Noto Sans KR", serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: #f3e6c8;
+  background: #b83b2e;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 2px rgba(243, 230, 200, 0.36);
+}
+
+/* The card the corridor's own lines land on: ink on paper, not glass on black. */
+.result[data-kind="ending"] {
+  background: radial-gradient(ellipse at 50% 46%, #efe4c8 0%, #e4d7b6 60%, #d8c9a4 100%);
+}
+.result[data-kind="ending"] p { color: #2b2119; }
+.result[data-kind="ending"] h2 { color: #2b2119; }
+
+@media (prefers-reduced-motion: reduce) {
+  .blackout, .finale { transition-duration: 240ms; }
+  .seal[data-wet="true"][data-on="true"] { animation: seal-wet-hold 1250ms steps(1, end) forwards; }
+  @keyframes seal-wet-hold {
+    0% { opacity: 0; transform: none; }
+    26%, 100% { opacity: 1; transform: none; }
+  }
+}
+
+/*
+ * The last door. You are standing against a papered leaf that fills the screen,
+ * so the prompt needs its own dark to sit in — but only enough to read against,
+ * because the door is the picture and this is one line over it.
+ */
+.result[data-kind="final"] {
+  /* Heavier than the room cards, because what is behind it is a lit paper door
+     at arm's length rather than a dark room — at the between-rooms weight the
+     prompt and the corridor's last line both washed out to nothing against it.
+     It also reads as the light going out of the place, which is where the
+     scene is going anyway. */
+  background: radial-gradient(ellipse at 50% 58%, #04070b9c 0%, #020407cf 52%, #010305ea 100%);
+}
+.result[data-kind="final"] .hint {
+  font-size: 0.82rem;
+  letter-spacing: 0.22em;
+  color: #f4e8cc;
+}

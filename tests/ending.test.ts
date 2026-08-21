@@ -85,7 +85,11 @@ describe("the ending corridor", () => {
     expect(withBeats).toEqual(["ending-corridor"]);
     const beat = ROSTER.byIdOrNull(ENDING_CORRIDOR.id)?.finalBeat;
     expect(beat?.prompt.length).toBeGreaterThan(0);
-    expect(beat?.line.length).toBeGreaterThan(0);
+    // The corridor's closing lines live on finalApproach, said at the last
+    // window rather than handed to the ending card — the card is typography.
+    const approach = ROSTER.byIdOrNull(ENDING_CORRIDOR.id)?.finalApproach;
+    expect(approach?.lines).toHaveLength(3);
+    expect(approach?.atZ).toBeGreaterThan(0);
     // And the simulation never hears about it: this is flow, not a recording.
     expect(new Simulation(ENDING_CORRIDOR).canFold).toBe(false);
   });
