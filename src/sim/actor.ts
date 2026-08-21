@@ -34,6 +34,8 @@ export function spawnActor(
     actHeld: false,
     buttonsPrev: 0,
     focusId: null,
+    targetId: null,
+    lockedOutTargetId: null,
   };
 }
 

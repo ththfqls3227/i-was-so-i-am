@@ -73,11 +73,11 @@ export const AWAKENING: RoomDefinition = {
         { x: -DOORWAY_HALF_WIDTH, y: 0, z: ROOM_DEPTH + 0.05 },
         { x: DOORWAY_HALF_WIDTH, y: DOORWAY_HEIGHT, z: ROOM_DEPTH + WALL - 0.05 },
       ),
-      gatedBy: "entry-plate",
+      gatedBy: { kind: "plate", id: "entry-plate" },
       latchOnOpen: true,
     },
   ],
-  interactables: [{ id: "entry-plate", kind: "plate", focus: { x: 0, y: 0.12, z: PLATE_CENTRE_Z } }],
+  holds: [],
   exit: {
     id: "exit",
     min: { x: -CORRIDOR_HALF_WIDTH, y: 0, z: 17.2 },

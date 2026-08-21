@@ -129,9 +129,12 @@ export class Hud {
     const playing = view.started && !view.paused;
     this.title.hidden = view.started;
     this.crosshair.hidden = !playing;
-    this.tape.hidden = !playing;
+    // A room that takes no recording has no tape to show and no pass to be on.
+    // Hiding these is the honesty rule again: a gauge that cannot move and a
+    // badge that cannot change are two more things that would be lying.
+    this.tape.hidden = !playing || !view.recordingEnabled;
+    this.pass.hidden = !playing || !view.recordingEnabled;
     this.prompts.hidden = !playing;
-    this.pass.hidden = !playing;
 
     this.crosshair.dataset.focus = String(view.focus !== null);
     // Only say this when it is true. If the browser gave us pointer lock, the
@@ -168,6 +171,11 @@ export class Hud {
    * unplayable.
    */
   private promptsFor(view: ViewModel): Prompt[] {
+    if (!view.recordingEnabled) {
+      // No fold, no rerecord — neither key does anything here, so neither is
+      // offered. The room is walked, and that is the whole of it.
+      return view.phase === "success" ? [] : [{ key: null, label: "빛으로 나가세요", tone: "echo" }];
+    }
     if (view.phase === "recording") {
       const prompts: Prompt[] = [];
       if (!view.plateActive && !view.canFold) {
@@ -233,19 +241,21 @@ export class Hud {
   }
 
   private renderResult(view: ViewModel): void {
-    const finished = view.phase === "success" || view.phase === "rerecord";
+    const finished = view.phase === "success" || (view.phase === "rerecord" && view.recordingEnabled);
     if (this.result.hidden !== !finished) this.result.hidden = !finished;
     if (!finished) return;
     if (view.phase === "success") {
       this.result.dataset.kind = "success";
       this.resultHeading.textContent = "보관 완료";
       this.resultBody.textContent = "당신이 지나간 자리를, 당신이 다시 지나갔습니다.";
+      this.again.hidden = !view.recordingEnabled;
       this.again.textContent = "R · 다시 해보기";
       this.resultHint.textContent = "다음 방은 아직 준비 중입니다";
     } else {
       this.result.dataset.kind = "fail";
       this.resultHeading.textContent = "다시 기록";
       this.resultBody.textContent = view.lastError ? FAILURE_COPY[view.lastError] : "이번 재생은 끝났습니다.";
+      this.again.hidden = false;
       this.again.textContent = "R · 다시 기록";
       this.resultHint.textContent = "";
     }

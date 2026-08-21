@@ -2,7 +2,16 @@ export { Simulation, simConstants, type StepResult } from "./simulation";
 export { forwardOf, spawnActor, stepActor, focusFor } from "./actor";
 export { checksumState, checksumValue, stableStringify } from "./checksum";
 export { insideBox, resolveHorizontal, resolveVertical, standingOn, type Body } from "./collide";
-export { solidsFor } from "./mechanisms";
+export {
+  evaluateDoors,
+  evaluateExit,
+  evaluateHolds,
+  evaluatePlates,
+  gateActive,
+  interactablesFor,
+  solidsFor,
+  updateGrip,
+} from "./mechanisms";
 export { createTape, replayFrame, validateTape } from "./tape";
 export {
   assertValidFrame,

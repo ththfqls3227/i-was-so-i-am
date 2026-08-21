@@ -60,6 +60,8 @@ export interface ViewModel {
   fps: number;
   paused: boolean;
   started: boolean;
+  /** False in a room that takes no recording; the HUD drops the whole apparatus. */
+  recordingEnabled: boolean;
   /** The browser refused pointer lock, so looking around means dragging. */
   pointerLockDenied: boolean;
 }
@@ -1293,6 +1295,7 @@ export class FirstPersonScene {
       fps: this.fps,
       paused: this.paused,
       started: this.started,
+      recordingEnabled: this.simulation.recordingEnabled,
       pointerLockDenied: this.pointerLockDenied && !this.pointerLocked,
     };
   }

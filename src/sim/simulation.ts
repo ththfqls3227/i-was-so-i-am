@@ -18,9 +18,20 @@ import {
   YAW_UNITS,
 } from "./constants";
 import { assertValidFrame, NEUTRAL_FRAME, type Frame } from "./input";
-import { evaluateDoors, evaluatePlates, initialDoors, initialPlates, solidsFor } from "./mechanisms";
+import {
+  evaluateDoors,
+  evaluateExit,
+  evaluateHolds,
+  evaluatePlates,
+  initialDoors,
+  initialHolds,
+  initialPlates,
+  interactablesFor,
+  solidsFor,
+  updateGrip,
+} from "./mechanisms";
 import { createTape, replayFrame, validateTape } from "./tape";
-import type { RoomDefinition, SimState, Tape } from "./types";
+import type { InteractableSpec, RoomDefinition, SimState, Tape } from "./types";
 
 export interface StepResult {
   state: SimState;
@@ -56,10 +67,21 @@ export class Simulation {
   private current: SimState;
   private frames: Frame[] = [];
   private tape: Tape | null = null;
+  /** Derived once: the room's mechanisms never move. */
+  private readonly interactables: InteractableSpec[];
 
   constructor(room: RoomDefinition) {
     this.room = room;
-    this.current = this.freshState("recording");
+    this.interactables = interactablesFor(room);
+    this.current = this.freshState(this.openingPhase());
+  }
+
+  /**
+   * A room that takes no recording opens straight into its only pass. There is
+   * no tape to record and no echo to wait for — the player just walks it.
+   */
+  private openingPhase(): SimState["phase"] {
+    return this.room.recordingDisabled === true ? "replay" : "recording";
   }
 
   get state(): Readonly<SimState> {
@@ -88,6 +110,11 @@ export class Simulation {
     return this.current.phase === "recording" && this.frames.length >= MIN_TAPE_TICKS;
   }
 
+  /** False in a room that takes no recording, so the HUD can drop the whole apparatus. */
+  get recordingEnabled(): boolean {
+    return this.room.recordingDisabled !== true;
+  }
+
   checksum(): string {
     return checksumState(this.current);
   }
@@ -101,8 +128,9 @@ export class Simulation {
       tapeTick: 0,
       actors: [spawnActor("present", this.room.spawn)],
       plates: initialPlates(this.room),
+      holds: initialHolds(this.room),
       doors: initialDoors(this.room),
-      exitOpen: true,
+      exitOpen: this.room.exitGatedBy === undefined,
       success: false,
       lastError: null,
       foldedAtTick: null,
@@ -114,7 +142,7 @@ export class Simulation {
     const carriedError = this.current.lastError;
     this.frames = [];
     this.tape = null;
-    this.current = this.freshState("recording");
+    this.current = this.freshState(this.openingPhase());
     this.current.lastError = carriedError;
   }
 
@@ -181,16 +209,20 @@ export class Simulation {
       this.frames.push(frame);
     } else if (past && this.tape) {
       stepActor(past, replayFrame(this.tape, state.tapeTick), solids);
-      past.focusId = focusFor(past, this.room.interactables);
+      past.focusId = focusFor(past, this.interactables);
+      updateGrip(past, this.room);
     }
 
     if (present) {
       stepActor(present, frame, solids);
-      present.focusId = focusFor(present, this.room.interactables);
+      present.focusId = focusFor(present, this.interactables);
+      updateGrip(present, this.room);
     }
 
     evaluatePlates(this.room, state);
+    evaluateHolds(this.room, state);
     evaluateDoors(this.room, state);
+    evaluateExit(this.room, state);
 
     state.tapeTick += 1;
 
@@ -201,7 +233,14 @@ export class Simulation {
         state.phase = "success";
         state.success = true;
         state.lastError = null;
-      } else if (state.tapeTick >= this.room.tapeDurationTicks + this.room.replayGraceTicks) {
+      } else if (
+        this.tape !== null &&
+        this.room.echoPersists !== true &&
+        state.tapeTick >= this.room.tapeDurationTicks + this.room.replayGraceTicks
+      ) {
+        // No tape means no clock: a room that takes no recording cannot run out
+        // of one. And where the echo persists, the second pass simply does not
+        // end — it keeps holding what it was folded holding.
         state.phase = "rerecord";
         state.lastError = state.doors.every((door) => door.open) ? "out-of-time" : "door-closed";
       }

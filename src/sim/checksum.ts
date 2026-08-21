@@ -39,6 +39,7 @@ export function canonicalState(state: SimState): unknown {
     tapeTick: state.tapeTick,
     actors: [...state.actors].sort((a, b) => a.id.localeCompare(b.id)),
     plates: state.plates,
+    holds: state.holds,
     doors: state.doors,
     exitOpen: state.exitOpen,
     success: state.success,
