@@ -44,7 +44,10 @@ export const CORPUS_REPLAY: readonly CorpusStep[] = [
   { ticks: 40, intent: { right: true, yawUnits: 900 } },
   { ticks: 20, intent: { jump: true, yawUnits: 900 } },
   { ticks: 300, intent: { act: true, yawUnits: 2048 } },
-  { ticks: 150, intent: { forward: true, act: true, yawUnits: 2048 } },
+  // Long enough to run past tapeDuration + replayGrace (690 since the grace
+  // went to eight seconds), because the ticks after the tape ends are the ones
+  // this corpus exists to pin down.
+  { ticks: 250, intent: { forward: true, act: true, yawUnits: 2048 } },
 ];
 
 export function runCorpus(room: RoomDefinition): string[] {

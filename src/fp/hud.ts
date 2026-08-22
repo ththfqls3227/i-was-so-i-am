@@ -272,13 +272,19 @@ export class Hud {
       const prompts: Prompt[] = [];
       // A grip under the crosshair is the one moment the player needs the key
       // named — and how to use it. A judge tapped E, got nothing, and lost two
-      // loops before discovering it has to be held.
-      if (view.focus !== null && !view.holding) {
+      // loops before discovering it has to be held. Only a grip: plates take
+      // focus too, and the same prompt over a plate sent two judges hunting
+      // for something to hold in rooms that have nothing to grab.
+      if (view.focusIsHold && !view.holding) {
         prompts.push({ key: "E", label: "누르고 있어 잡기", tone: "go" });
       }
       if (view.hasPlate) {
         if (!view.plateActive && !view.canFold) {
-          prompts.push({ key: null, label: "앞의 발판으로 걸어가세요", tone: "plain" });
+          // "Stand still on it", not "walk to it": two judges walked straight
+          // across the disc, saw nothing latch, and concluded the plate was
+          // broken — crossing presses it for half a second, which is less than
+          // the door asks for.
+          prompts.push({ key: null, label: "앞의 발판 위에 멈춰 서세요", tone: "plain" });
         }
         if (view.plateActive && view.canFold) {
           prompts.push({ key: "⏎", label: "기록 끝내기", tone: "go" });
@@ -312,7 +318,10 @@ export class Hud {
       // is holding it open with their foot. "Walk into the light" at that
       // moment sends them off the plate and shuts the door on the echo.
       if (view.doorOpen && !view.exitOpen && view.plateActive) {
-        return [{ key: null, label: "그대로 계세요 — 메아리가 지나갈 때까지", tone: "echo" }];
+        // Say why the standing matters, or it reads as a goal in itself — a
+        // judge who was not on the plate obeyed this line for a whole cycle,
+        // standing in the middle of the room waiting for permission to move.
+        return [{ key: null, label: "발판을 계속 밟고 계세요 — 메아리가 지나가면 출구가 열립니다", tone: "echo" }];
       }
       return [{ key: null, label: view.doorOpen && view.exitOpen ? "빛으로 나가세요" : waiting, tone: "echo" }];
     }
@@ -378,17 +387,18 @@ export class Hud {
   }
 
   /**
-   * Count identical failures and hand back the line the room is willing to
+   * Count failures in this room and hand back the line the room is willing to
    * offer, if it has reached one.
    *
-   * Counted per room and per failure code, so failing two different ways twice
-   * each is not treated as being stuck — being stuck is the same wall four
-   * times.
+   * Counted per room, not per failure code. It used to be both, on the theory
+   * that two different mistakes are not "stuck" — but a hard room hands out
+   * door-closed and out-of-time in alternation, the counter reset on every
+   * swap, and a hint tuned for the third failure arrived on the fifth.
    */
   private hintFor(view: ViewModel): string {
     const room = view.chamberNumber;
     const error = view.lastError ?? "";
-    if (this.repeated.room !== room || this.repeated.error !== error) {
+    if (this.repeated.room !== room) {
       this.repeated = { room, error, count: 1 };
     } else if (!this.countedThisFailure) {
       this.repeated.count += 1;
@@ -438,10 +448,18 @@ export class Hud {
       this.resultHeading.textContent = "다시 기록";
       // "step on the plate" is the cure in a plate room. In a grip room it
       // sends the player hunting for a plate that does not exist.
+      // "Be faster" is only the cure when the way out was actually open. In a
+      // room whose exit waits on the echo, a judge followed that advice through
+      // six cycles with no way to learn what had really gone wrong — the copy
+      // has to say which half failed: the opening of the way, or the taking of it.
       this.resultBody.textContent = view.lastError
         ? (view.lastError === "door-closed" && !view.hasPlate
           ? "문이 닫힌 채였습니다. 잡은 손이 문을 엽니다."
-          : FAILURE_COPY[view.lastError])
+          : view.lastError === "out-of-time"
+            ? (view.exitOpen
+              ? "시간이 지났습니다. 출구는 열려 있었습니다 — 다음에는 길이 열리면, 당신이 빛으로 나가세요."
+              : "시간이 지났습니다 — 출구가 끝내 열리지 않았습니다.")
+            : FAILURE_COPY[view.lastError])
         : "이번 재생은 끝났습니다.";
       this.offer(this.again, true);
       this.again.textContent = "R · 다시 기록";

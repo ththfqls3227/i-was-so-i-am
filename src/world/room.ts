@@ -48,15 +48,18 @@ export const ROOM_SHELL: RoomShell = {
  */
 export const AWAKENING: RoomDefinition = {
   id: "awakening",
-  version: 1,
+  version: 2,
   name: "깨어남",
   subtitle: "Awakening",
-  // Fifteen seconds of recording, twenty of replay. Ten was enough to walk the
-  // route and not enough for a player who stops to look at the room, and having
-  // the tape end on its own is a confusing way to meet the second pass.
-  // Folding early does not shorten it: the span is the room's, not the tape's.
+  // Fifteen seconds of recording, twenty-three of replay. Ten was enough to
+  // walk the route and not enough for a player who stops to look at the room,
+  // and having the tape end on its own is a confusing way to meet the second
+  // pass. Folding early does not shorten it: the span is the room's, not the
+  // tape's. The grace is eight seconds, not five: a judge who fumbled the
+  // mount lost five attempts one to three seconds short of the doorway, and a
+  // teaching room has nothing to gain from a fail that close.
   tapeDurationTicks: 450,
-  replayGraceTicks: 150,
+  replayGraceTicks: 240,
   spawn: { x: 0, y: 0, z: SPAWN_Z, yawUnits: 0 },
   brushes: hallBrushes(ROOM_SHELL),
   plates: [
@@ -150,9 +153,12 @@ export const AWAKENING_CHAMBER: Chamber = {
   sim: AWAKENING,
   shell: ROOM_SHELL,
   number: "00",
+  // The first line is the core rule, and it comes with the first failure: a
+  // judge in a hurry skips the title card, and this card is the only other
+  // place the loop is ever explained.
   hints: [
-    { after: 3, line: "메아리가 발판에 도착해야 문이 열립니다." },
-    { after: 5, line: "발판 위에 멈춰 서서 ⏎." },
+    { after: 1, line: "메아리가 발판에 도착해야 문이 열립니다." },
+    { after: 2, line: "발판 위에 멈춰 서서 ⏎." },
   ],
   subtitleOnEntry: "기억 보관소에 오신 것을 환영합니다. 이 방에서의 모든 행동은 기록됩니다.",
   dressing: AWAKENING_DRESSING,

@@ -62,6 +62,8 @@ export interface ViewModel {
   replaySpan: number;
   canFold: boolean;
   focus: string | null;
+  /** The focused thing is a grip — the only kind of focus E can act on. */
+  focusIsHold: boolean;
   /** The player is holding a grip right now. */
   holding: boolean;
   /** This room has plates at all — rooms without them must not talk about them. */
@@ -1966,7 +1968,19 @@ export class FirstPersonScene {
       this.events?.onEnding();
       return true;
     }
-    if (!this.simulation.canFold) return false;
+    if (!this.simulation.canFold) {
+      // Enter before the tape holds enough is the one key that does nothing —
+      // and a playtest judge read that silence as a broken key, then spent an
+      // attempt believing the record had been closed.
+      if (this.simulation.state.phase === "recording" && this.simulation.recordingEnabled) {
+        this.events?.onLine(
+          this.simulation.recordedFrames.length === 0
+            ? "아직 기록이 없습니다 — 움직이면 기록이 시작됩니다"
+            : "아직 기록이 짧습니다 — 조금 더 담은 뒤 ⏎",
+        );
+      }
+      return false;
+    }
     const hold = this.chamber.sealHoldSeconds ?? 0;
     if (hold <= 0) return this.completeFold();
     this.sealingTicks = Math.round(hold * simConstants.tickRate);
@@ -2583,13 +2597,18 @@ export class FirstPersonScene {
   viewModel(): ViewModel {
     const state = this.simulation.state;
     const present = state.actors.find((actor) => actor.id === "present");
+    const focusId = present?.focusId ?? null;
     return {
       phase: state.phase,
       tapeTick: state.tapeTick,
       tapeDuration: this.chamber.sim.tapeDurationTicks,
       replaySpan: this.chamber.sim.tapeDurationTicks + this.chamber.sim.replayGraceTicks,
       canFold: this.simulation.canFold,
-      focus: present?.focusId ?? null,
+      focus: focusId,
+      // Plates take focus too (the crosshair acknowledges them), but E only
+      // ever acts on a grip — a playtest judge read the grab prompt over a
+      // plate and went hunting for something to hold in a room that has none.
+      focusIsHold: focusId !== null && this.chamber.sim.holds.some((hold) => hold.id === focusId),
       holding: state.holds.some((hold) => hold.heldBy.includes("present")),
       hasPlate: state.plates.length > 0,
       plateForEchoOnly: this.chamber.sim.plates[0]?.requiredActor === "past",

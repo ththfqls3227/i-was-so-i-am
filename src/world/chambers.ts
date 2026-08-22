@@ -20,11 +20,14 @@ const GRACE_TICKS = 150;
  */
 export const SECOND_SELF: RoomDefinition = {
   id: "second-self",
-  version: 1,
+  version: 2,
   name: "두 번째 나",
   subtitle: "Second Self",
   tapeDurationTicks: TAPE_TICKS,
-  replayGraceTicks: GRACE_TICKS,
+  // Eight seconds of grace, like 00: this room's lesson is whose plate it is,
+  // not how fast you can cross a corridor, and the judge who learned the
+  // lesson still failed five times a doorway short on the standard five.
+  replayGraceTicks: 240,
   spawn: { x: 0, y: 0, z: ROOM_SHELL.spawnZ, yawUnits: 0 },
   brushes: hallBrushes(ROOM_SHELL),
   plates: [
@@ -231,8 +234,8 @@ export const HAND_NOT_BODY_CHAMBER: Chamber = {
   // Both playtest judges quit here: the sign teaches the twist but not the
   // move, and nothing else in the room does either. The hints carry the move.
   hints: [
-    { after: 3, line: "재생 중에는 당신의 발이 자유롭습니다. 오른쪽의 발판을 직접 밟으세요." },
-    { after: 5, line: "발판을 밟은 채 기다리면, 메아리가 열린 문을 지나 막다른 방까지 걸어갑니다." },
+    { after: 2, line: "재생 중에는 당신의 발이 자유롭습니다. 오른쪽의 발판을 직접 밟으세요." },
+    { after: 3, line: "발판을 밟은 채 기다리면, 메아리가 열린 문을 지나 막다른 방까지 걸어갑니다. 출구가 열리면 당신도 나가야 합니다." },
   ],
   subtitleOnEntry: "안내: 기록되는 것은 위치가 아니라 행동입니다. 막힌 곳에서도 걸음은 기록됩니다.",
   dressing: standardDressing(HAND_SHELL, {
