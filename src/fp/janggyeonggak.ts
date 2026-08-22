@@ -504,10 +504,19 @@ export function buildShelfWall(
       // of what went missing is lying on the floor below.
       if (decay > 0 && random() < decay) {
         if (random() < 0.16) {
-          const fallen = Matrix.RotationYawPitchRoll(random() * 3.14, 0, 1.57 + (random() - 0.5) * 0.5).multiply(
+          // Lying on its face, resting on the floor.
+          //
+          // Two mistakes here, both worth naming. The first version dropped
+          // every case to one fixed height whatever angle it had landed at, so
+          // some hovered and some sank. The second rolled them a quarter turn —
+          // but roll is rotation about Z, which stands a case on its 0.36 m
+          // width and buries most of it. Pitch is the axis that lays the thin
+          // dimension down, and the resting height is half of that dimension.
+          const lyingHalfHeight = (pitch - 0.016) / 2;
+          const fallen = Matrix.RotationYawPitchRoll(random() * Math.PI * 2, Math.PI / 2, 0).multiply(
             Matrix.Translation(
-              facing * (depth * 0.5 + 0.12 + random() * 0.5),
-              0.055,
+              facing * (depth * 0.5 + 0.14 + random() * 0.42),
+              lyingHalfHeight + 0.004,
               z - centreZ + (random() - 0.5) * 0.3,
             ),
           );

@@ -13,6 +13,9 @@ export function route(
 /** Shelving stops here; salchang and plaster carry the wall above it. */
 export const SHELF_HEIGHT = 2.72;
 
+/** How wide a standard-row window is, and so how far apart two of them must be. */
+const WINDOW_WIDTH = 2.6;
+
 export interface StandardDressingOptions {
   /** Extra structure this room has beyond the shell. */
   blocks?: ChamberDressing["blocks"];
@@ -71,6 +74,19 @@ export interface StandardDressingOptions {
  */
 export function standardDressing(shell: RoomShell, options: StandardDressingOptions): ChamberDressing {
   const windows = options.windows ?? [2.6, 6, 9.4];
+  // Two openings closer together than one is wide are not two windows, they are
+  // one hole with two sets of slats and two frames intersecting inside it. It
+  // shipped that way in 07 and was only found by photographing the wall, so it
+  // is an authoring error now rather than something to notice later.
+  for (let index = 1; index < windows.length; index += 1) {
+    const gap = (windows[index] ?? 0) - (windows[index - 1] ?? 0);
+    if (gap < WINDOW_WIDTH) {
+      throw new Error(
+        `windows ${windows[index - 1]} and ${windows[index]} are ${gap.toFixed(2)} m apart `
+        + `on a ${WINDOW_WIDTH} m opening — they would overlap`,
+      );
+    }
+  }
   const seed = options.seedBase;
 
   const corridor = options.corridor ?? true;
@@ -120,7 +136,7 @@ export function standardDressing(shell: RoomShell, options: StandardDressingOpti
         x: side * shell.halfWidth,
         facing: (side < 0 ? 1 : -1) as 1 | -1,
         centreZ,
-        width: 2.6,
+        width: WINDOW_WIDTH,
         sillY: SHELF_HEIGHT + 0.24,
         height: options.salchangHeight ?? shell.height - SHELF_HEIGHT - 0.52,
         seed: seed + 100 + centreZ,

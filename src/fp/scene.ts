@@ -2188,7 +2188,12 @@ export class FirstPersonScene {
       const plate = MeshBuilder.CreatePlane(`diorama-board-${id}`, {
         width: 0.32, height: 0.62, sideOrientation: Mesh.DOUBLESIDE,
       }, this.scene);
-      plate.position = new Vector3(wallX + out * 0.02, sillY - 0.38, z);
+      // On the room side of the wall, with a standoff you can actually see.
+      // This read `wallX + out * 0.02` — the opposite sign from the reveal
+      // strips two lines below — which buried every board two centimetres
+      // inside the wall it hangs on. Ten corridor boards and 04's, all of them
+      // present in the scene graph and none of them visible.
+      plate.position = new Vector3(wallX + at.facing * 0.05, sillY - 0.38, z);
       plate.rotation.y = at.facing > 0 ? -Math.PI / 2 : Math.PI / 2;
       plate.material = buildDioramaBoard(
         this.scene,

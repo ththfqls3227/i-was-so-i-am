@@ -570,8 +570,12 @@ export const UNKEPT_CHAMBER: Chamber = {
     corridor: false,
     // East, with the way out. Same reason as 06.
     sign: { x: 2.6, z: SEVEN_DEPTH },
-    // Wrong on purpose: the spacing nobody maintained.
-    windows: [2.2, 5.1, 6.4, 12.9],
+    // Wrong on purpose: the spacing nobody maintained. Irregular, but never
+    // closer together than a window is wide — 5.1 and 6.4 were 1.3 m apart on a
+    // 2.6 m opening, which is not irregular spacing, it is two windows in one
+    // hole: doubled slats and each frame's post standing inside the other's
+    // opening.
+    windows: [2.4, 5.3, 9.4, 13.0],
     tiltRadians: 0.06,
     // Nearly a fifth of the shelf is gone, and some of it is on the floor.
     decay: 0.18,
