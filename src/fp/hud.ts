@@ -196,9 +196,22 @@ export class Hud {
     }
     // Only say this when it is true. If the browser gave us pointer lock, the
     // player never needs to know there was another way.
+    //
+    // And only until it has been done once. This line sits in the middle of the
+    // screen, 42 px under the crosshair, and it was staying there for the whole
+    // game — an instruction that outlives being followed is not help, it is a
+    // caption on the art. Once a drag has turned the view a quarter turn the
+    // player has plainly worked it out, and it fades.
+    //
     // Nothing left to aim at once the last door is closed.
-    const showNotice = playing && view.pointerLockDenied && !this.ended;
-    if (this.notice.hidden === showNotice) this.notice.hidden = !showNotice;
+    const showNotice = playing && view.pointerLockDenied && !view.dragLookLearned && !this.ended;
+    // Never taken out of the layout again once it has appeared: hidden cuts a
+    // fade off mid-way, and an element at zero opacity with no pointer events
+    // is not in anybody's way.
+    if (showNotice) this.notice.hidden = false;
+    if (this.notice.dataset.shown !== String(showNotice)) {
+      this.notice.dataset.shown = String(showNotice);
+    }
 
     const pass = view.phase === "recording" ? "1회차 · 기록" : view.phase === "replay" ? "2회차 · 재생" : view.phase === "success" ? "보관 완료" : "다시 기록";
     const phaseName = `${view.chamberNumber} ${view.chamberName} · ${pass}`;

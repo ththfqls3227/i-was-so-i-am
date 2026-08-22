@@ -49,6 +49,11 @@ const SHELF_HEIGHT = 2.72;
 
 export const DEFAULT_MOUSE_SENSITIVITY = 0.0022;
 const PITCH_LIMIT = 1.5;
+/**
+ * A quarter turn, dragged. Enough that it cannot be a stray click on the canvas
+ * and is unmistakably someone looking around on purpose.
+ */
+const DRAG_LOOK_LEARNED = Math.PI / 2;
 
 export interface ViewModel {
   phase: SimState["phase"];
@@ -89,6 +94,8 @@ export interface ViewModel {
   entryLine: string;
   /** The browser refused pointer lock, so looking around means dragging. */
   pointerLockDenied: boolean;
+  /** A drag has turned the view far enough that the fallback notice has done its job. */
+  dragLookLearned: boolean;
 }
 
 export interface SceneEvents {
@@ -208,6 +215,15 @@ export class FirstPersonScene {
   private pointerLocked = false;
   private dragging = false;
   private pointerLockDenied = false;
+  /**
+   * How far the view has been turned by dragging, in radians, ever.
+   *
+   * The fallback notice is an instruction, and an instruction that stays on
+   * screen after it has been followed stops being help and becomes furniture —
+   * it sits in the middle of the frame for the rest of the game. This is the
+   * evidence that it worked.
+   */
+  private dragTurned = 0;
   private lastPointerX = 0;
   private lastPointerY = 0;
 
@@ -1754,6 +1770,9 @@ export class FirstPersonScene {
       if (!this.dragging) return;
       // movementX is only dependable under pointer lock, so the drag path
       // measures the delta itself.
+      if (this.started && !this.paused) {
+        this.dragTurned += Math.abs((event.clientX - this.lastPointerX) * this.sensitivity);
+      }
       this.look(event.clientX - this.lastPointerX, event.clientY - this.lastPointerY);
       this.lastPointerX = event.clientX;
       this.lastPointerY = event.clientY;
@@ -2466,6 +2485,7 @@ export class FirstPersonScene {
         ? this.chamber.finalBeat.prompt
         : null,
       pointerLockDenied: this.pointerLockDenied && !this.pointerLocked,
+      dragLookLearned: this.dragTurned >= DRAG_LOOK_LEARNED,
     };
   }
 
