@@ -85,6 +85,12 @@ export class Hud {
    */
   private readonly showDiagnostic = import.meta.env.DEV || import.meta.env.VITE_E2E === "true";
   private readonly diagnostic = element("div", "diagnostic");
+  /**
+   * 默 — shown only while the archive is silenced, and nothing at all otherwise.
+   * A speaker icon that is always there, crossed out or not, is a control panel;
+   * this is a mark that appears when something is off.
+   */
+  private readonly mutedMark = element("div", "muted-mark", "默");
   private readonly notice = element("p", "notice");
 
   private promptSignature = "";
@@ -118,7 +124,7 @@ export class Hud {
     startButton.addEventListener("click", () => this.callbacks.onStart());
     this.title.append(
       startButton,
-      element("p", "hint", "W A S D 이동 · 마우스 시점 · Space 점프\n⏎ 기록 끝내기 · R 다시 기록 · Esc 멈춤"),
+      element("p", "hint", "W A S D 이동 · 마우스 시점 · Space 점프\n⏎ 기록 끝내기 · R 다시 기록 · Esc 멈춤 · M 음소거"),
     );
 
     this.result.append(this.resultHeading, this.resultBody);
@@ -134,6 +140,7 @@ export class Hud {
 
     this.notice.textContent = "마우스 왼쪽 버튼을 누른 채 움직여 시점을 돌리세요";
     this.notice.hidden = true;
+    this.mutedMark.hidden = true;
 
     this.root.append(
       this.crosshair,
@@ -147,10 +154,17 @@ export class Hud {
       this.blackout,
       this.finale,
       ...(this.showDiagnostic ? [this.diagnostic] : []),
+      this.mutedMark,
       this.title,
       this.result,
     );
     parent.append(this.root);
+  }
+
+  /** The archive has been silenced, or has not. */
+  setMuted(muted: boolean): void {
+    if (this.mutedMark.hidden !== muted) return;
+    this.mutedMark.hidden = !muted;
   }
 
   /** Called once per rendered frame; everything below diffs before it touches the DOM. */

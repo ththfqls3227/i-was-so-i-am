@@ -108,6 +108,24 @@ scene.attach({
   onLine: (line) => hud.say(line, performance.now(), 5200),
 });
 
+// One way in, so the engine, the storage and the mark on screen cannot
+// disagree about whether the archive is silent.
+function applyMute(muted: boolean): void {
+  audio.setMuted(muted);
+  hud.setMuted(muted);
+  try {
+    localStorage.setItem(MUTE_KEY, String(muted));
+  } catch {
+    // Storage refused. Silence is still silence for this run.
+  }
+}
+
+applyMute(audio.engine.isMuted);
+window.addEventListener("keydown", (event) => {
+  if (event.code !== "KeyM" || event.repeat) return;
+  applyMute(!audio.engine.isMuted);
+});
+
 scene.start();
 
 // Clicking the canvas after Escape puts you straight back in. Pointerdown for the
@@ -141,10 +159,7 @@ if (EXPOSE_TEST_API) {
         masterGain: audio.engine.masterGain,
       };
     },
-    setMuted: (muted: boolean) => {
-      audio.setMuted(muted);
-      localStorage.setItem(MUTE_KEY, String(muted));
-    },
+    setMuted: (muted: boolean) => applyMute(muted),
     get view() {
       return scene.viewModel();
     },

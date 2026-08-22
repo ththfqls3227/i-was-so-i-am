@@ -323,10 +323,28 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
 }
 .result[data-kind="fail"] h2 { color: #ffcf9c; }
 
+/*
+ * The silence mark. Top right, small, and absent unless it has something to
+ * say. The diagnostic sits below it so the two never share the corner — and
+ * the diagnostic only exists in a dev build, so nothing moves in the shipped one.
+ */
+.muted-mark {
+  position: absolute;
+  right: 20px;
+  top: 20px;
+  font-size: 0.86rem;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  color: #7c8794;
+  opacity: 0.8;
+  text-shadow: 0 1px 10px #000a;
+  pointer-events: none;
+}
+
 .diagnostic {
   position: absolute;
   right: 20px;
-  top: 22px;
+  top: 46px;
   font: 400 0.66rem/1.7 ui-monospace, "SF Mono", monospace;
   letter-spacing: 0.08em;
   color: #56626f;
