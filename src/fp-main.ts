@@ -120,6 +120,11 @@ scene.attach({
   },
   onFootstep: (actor, y, speed) => audio.onFootstep(actor, y, speed),
   onPhaseChange: (phase) => {
+    // A fresh recording clears whatever the last attempt was saying. The
+    // button path already did this; the R key goes straight through the scene,
+    // and a judge watched "this tape never reached the plate" caption a
+    // recording that was, at that moment, reaching it.
+    if (phase === "recording") hud.clearTransient();
     // Not in the corridor. There is nothing stored at the end of it and the
     // facility has already said everything it is going to say; a filing
     // confirmation on top of the closing lines turns them into a receipt.
