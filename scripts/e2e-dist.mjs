@@ -17,7 +17,20 @@ import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const outDir = "dist-e2e";
-const testOnlyApis = ["runGolden", "loadGolden", "runTape"];
+/**
+ * What the gate build must expose, and what the shipped build must not.
+ *
+ * These were one list, and it held the 2D build's names. That broke both jobs
+ * at once: the shipped-build guard stopped watching the surface we actually
+ * ship, and the gate-build check demanded three names that are no longer in any
+ * bundle — so this script threw before it ran a single test.
+ *
+ * The handle is what VITE_E2E controls today, so it is what proves the flag
+ * took effect. The old names stay on the forbidden list only: the legacy entry
+ * is still built, and nothing should reintroduce them into what ships.
+ */
+const REQUIRED_IN_GATE_BUILD = ["__I_WAS_SO_I_AM_FP__"];
+const FORBIDDEN_IN_SHIPPED = ["runGolden", "loadGolden", "runTape", "__I_WAS_SO_I_AM_FP__"];
 
 const args = process.argv.slice(2);
 const everyBrowser = args.includes("--all");
@@ -41,7 +54,7 @@ const build = run("npx", ["--no-install", "vite", "build", "--outDir", outDir], 
 if (build !== 0) process.exit(build);
 
 const served = await entryScript(join(root, outDir));
-const absent = testOnlyApis.filter((api) => !served.includes(api));
+const absent = REQUIRED_IN_GATE_BUILD.filter((api) => !served.includes(api));
 if (absent.length > 0) throw new Error(`${outDir}/ was built without the test API (${absent.join(", ")}); VITE_E2E did not take effect`);
 
 const status = run("npx", [
@@ -54,7 +67,7 @@ const status = run("npx", [
 const shipped = join(root, "dist");
 if (existsSync(join(shipped, "index.html"))) {
   const script = await entryScript(shipped);
-  const exposed = testOnlyApis.filter((api) => script.includes(api));
+  const exposed = FORBIDDEN_IN_SHIPPED.filter((api) => script.includes(api));
   if (exposed.length > 0) throw new Error(`dist/ exposes test-only APIs (${exposed.join(", ")}); the shipped build must come from a plain "npm run build"`);
   console.log(`e2e dist: PASS-GUARD (served ${outDir}/ with the test API; dist/ still ships without it)`);
 } else {
