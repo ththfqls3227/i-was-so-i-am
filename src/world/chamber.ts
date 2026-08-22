@@ -223,6 +223,20 @@ export interface Chamber {
    */
   subtitleOnEntry: string;
   /**
+   * Said each time this room's replay begins. The entry budget above stands —
+   * this is 00's one exception, because three rounds of judges learned the
+   * loop's causality (echo reaches plate → door opens → you leave) only from
+   * failure cards, after the failing.
+   */
+  subtitleOnReplay?: string;
+  /**
+   * Said once per replay when the echo is walking at this room's first door
+   * while it is still shut. 03 sets it: a judge watched the echo tread against
+   * the closed partition, read it as a desync bug, and quit — when it is the
+   * room's whole idea, one sentence short of being understood.
+   */
+  echoAtDoorLine?: string;
+  /**
    * Seconds the fold is held before it takes, with everything frozen.
    *
    * Only the finale sets it. You watch your own hand stop being yours before

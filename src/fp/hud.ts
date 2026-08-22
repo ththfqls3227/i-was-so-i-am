@@ -3,6 +3,8 @@ import type { FailureCode } from "../sim/types";
 
 export interface HudCallbacks {
   onStart: () => void;
+  /** Pick the campaign back up at the saved chamber. Offered only when one exists. */
+  onContinue: () => void;
   onRerecord: () => void;
   onAdvance: () => void;
 }
@@ -58,10 +60,6 @@ export class Hud {
   private readonly flash = element("div", "flash");
   /** The last door has been closed; the result panel is frozen on the ending. */
   private ended = false;
-  /** Failures in the same room, counted whatever shape each one took. */
-  private repeated = { room: "", count: 0 };
-  /** The card renders every frame; one failure must only be counted once. */
-  private countedThisFailure = false;
 
   /** 봉인 낙관 — the seal that comes down when a recording is closed. */
   private readonly seal = element("div", "seal");
@@ -78,6 +76,14 @@ export class Hud {
   private readonly resultHint = element("p", "hint");
   private readonly again = element("button", undefined, "R · 다시 기록");
   private readonly onward = element("button", undefined, "다음 방");
+  /** Picks the campaign back up mid-roster. Only ever shown when a save exists. */
+  private readonly continueButton = element("button");
+  /**
+   * Says the game is paused. Without it, a pause empties the whole interface —
+   * a judge lost pointer lock, watched every gauge vanish, and reported the
+   * HUD as broken rather than the game as waiting.
+   */
+  private readonly pauseNote = element("div", "pause-note", "일시 정지 — 클릭해서 계속");
   /**
    * Frame rate, for whoever is working on the thing.
    *
@@ -126,8 +132,12 @@ export class Hud {
     const startButton = element("button", undefined, "클릭해서 시작");
     startButton.id = "start-button";
     startButton.addEventListener("click", () => this.callbacks.onStart());
+    this.continueButton.id = "continue-button";
+    this.continueButton.hidden = true;
+    this.continueButton.addEventListener("click", () => this.callbacks.onContinue());
     this.title.append(
       startButton,
+      this.continueButton,
       element("p", "hint", "W A S D 이동 · 마우스 시점 · Space 점프 · E 잡기\n⏎ 기록 끝내기 · R 다시 기록 · Esc 멈춤 · M 음소거"),
     );
 
@@ -146,12 +156,14 @@ export class Hud {
     this.notice.hidden = true;
     this.mutedMark.hidden = true;
 
+    this.pauseNote.hidden = true;
     this.root.append(
       this.crosshair,
       this.pass,
       this.tape,
       this.subtitle,
       this.notice,
+      this.pauseNote,
       this.prompts,
       this.flash,
       this.seal,
@@ -165,6 +177,12 @@ export class Hud {
     parent.append(this.root);
   }
 
+  /** A saved chamber exists; put the way back on the title card. */
+  offerContinue(label: string): void {
+    this.continueButton.textContent = label;
+    this.continueButton.hidden = false;
+  }
+
   /** The archive has been silenced, or has not. */
   setMuted(muted: boolean): void {
     if (this.mutedMark.hidden !== muted) return;
@@ -176,6 +194,8 @@ export class Hud {
     const playing = view.started && !view.paused;
     this.title.hidden = view.started;
     this.crosshair.hidden = !playing;
+    const pausedShown = view.started && view.paused && !this.ended;
+    if (this.pauseNote.hidden !== !pausedShown) this.pauseNote.hidden = !pausedShown;
     // A room that takes no recording has no tape to show and no pass to be on.
     // Hiding these is the honesty rule again: a gauge that cannot move and a
     // badge that cannot change are two more things that would be lying.
@@ -240,7 +260,12 @@ export class Hud {
     // so a player who got faster saw it read higher each attempt and took it
     // for the game quietly giving them more. These are the words the copy
     // settled on: docs/voice-and-story.md.
-    const leftLabel = view.phase === "recording" ? "남은 기록 시간" : "메아리 시간";
+    // While the tape is parked the gauge is not counting anything down, and a
+    // full bar labelled "time left" that never moves reads as a stuck timer —
+    // a judge decided the clock ran at two speeds rather than not at all.
+    const leftLabel = view.phase === "recording"
+      ? (view.tapeArmed ? "남은 기록 시간" : "기록 대기 — 움직이면 시작됩니다")
+      : "메아리 시간";
     if (this.tapeLeft.textContent !== leftLabel) this.tapeLeft.textContent = leftLabel;
     const rightLabel = `${remaining.toFixed(1)}s`;
     if (this.tapeRight.textContent !== rightLabel) this.tapeRight.textContent = rightLabel;
@@ -279,12 +304,17 @@ export class Hud {
         prompts.push({ key: "E", label: "누르고 있어 잡기", tone: "go" });
       }
       if (view.hasPlate) {
+        // "Stand still on it", not "walk to it": two judges walked straight
+        // across the disc, saw nothing latch, and concluded the plate was
+        // broken — crossing presses it for half a second, which is less than
+        // the door asks for. And once they are past it, "not on it yet" points
+        // the wrong way: the plate is behind them now, and one judge looped on
+        // that line with no way to learn which way to turn.
+        const approach = view.platePassed
+          ? "발판을 지나쳤습니다 — 한 걸음 뒤로"
+          : "앞의 발판 위에 멈춰 서세요";
         if (!view.plateActive && !view.canFold) {
-          // "Stand still on it", not "walk to it": two judges walked straight
-          // across the disc, saw nothing latch, and concluded the plate was
-          // broken — crossing presses it for half a second, which is less than
-          // the door asks for.
-          prompts.push({ key: null, label: "앞의 발판 위에 멈춰 서세요", tone: "plain" });
+          prompts.push({ key: null, label: approach, tone: "plain" });
         }
         if (view.plateActive && view.canFold) {
           prompts.push({ key: "⏎", label: "기록 끝내기", tone: "go" });
@@ -295,7 +325,7 @@ export class Hud {
           // bottom of the frame while you are still short of it — a judge read
           // the old advisory line as "standing on it", folded, and watched the
           // echo freeze at the rim.
-          prompts.push({ key: null, label: "아직 발판 위가 아닙니다", tone: "plain" });
+          prompts.push({ key: null, label: view.platePassed ? approach : "아직 발판 위가 아닙니다", tone: "plain" });
           prompts.push({ key: "⏎", label: "기록 끝내기", tone: "plain" });
         }
       } else if (view.canFold) {
@@ -387,25 +417,17 @@ export class Hud {
   }
 
   /**
-   * Count failures in this room and hand back the line the room is willing to
-   * offer, if it has reached one.
+   * The line the room is willing to offer at this many spent tries.
    *
-   * Counted per room, not per failure code. It used to be both, on the theory
-   * that two different mistakes are not "stuck" — but a hard room hands out
-   * door-closed and out-of-time in alternation, the counter reset on every
-   * swap, and a hint tuned for the third failure arrived on the fifth.
+   * The count is the simulation's, not this panel's: it includes replays the
+   * player walked out on with R, which never show a failure card. Counting
+   * only the cards made a second-failure hint arrive on the fifth try for a
+   * judge who kept aborting early — the exact player the hint was for.
    */
   private hintFor(view: ViewModel): string {
-    const room = view.chamberNumber;
-    if (this.repeated.room !== room) {
-      this.repeated = { room, count: 1 };
-    } else if (!this.countedThisFailure) {
-      this.repeated.count += 1;
-    }
-    this.countedThisFailure = true;
     let offered = "";
     for (const hint of view.hints) {
-      if (this.repeated.count >= hint.after) offered = hint.line;
+      if (view.attempts >= hint.after) offered = hint.line;
     }
     return offered;
   }
@@ -417,11 +439,7 @@ export class Hud {
     if (this.ended) return;
     const finished = view.phase === "success" || (view.phase === "rerecord" && view.recordingEnabled);
     if (this.result.hidden !== !finished) this.result.hidden = !finished;
-    if (!finished) {
-      // Back in play, so the next failure is a new one to count.
-      this.countedThisFailure = false;
-      return;
-    }
+    if (!finished) return;
     if (view.phase === "success") {
       this.result.dataset.kind = "success";
       this.resultHeading.textContent = "보관 완료";

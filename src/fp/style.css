@@ -217,6 +217,25 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
   }
 }
 
+/* The game is waiting, and says so — a pause that empties the screen instead
+   reads as the interface dying. */
+.pause-note {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  padding: 10px 20px;
+  border-radius: 8px;
+  background: #0b0f16d0;
+  border: 1px solid #2a3648;
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+  color: #d8e1ec;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 /* ---- fold flash ---- */
 .flash {
   position: absolute;

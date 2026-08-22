@@ -61,6 +61,17 @@ export interface ViewModel {
   tapeDuration: number;
   replaySpan: number;
   canFold: boolean;
+  /**
+   * Tries this room has eaten: natural failures plus replays the player gave
+   * up on with R. The hint ladder climbs on this, because a judge who aborts
+   * two replays mid-way has failed twice in every sense that matters — and
+   * counting only the failure cards made a second-failure hint arrive fifth.
+   */
+  attempts: number;
+  /** False until the first act lands — while parked, the tape gauge would lie. */
+  tapeArmed: boolean;
+  /** Walked over and past the plate: "stand still on it" becomes "step back". */
+  platePassed: boolean;
   focus: string | null;
   /** The focused thing is a grip — the only kind of focus E can act on. */
   focusIsHold: boolean;
@@ -275,6 +286,10 @@ export class FirstPersonScene {
   } | null = null;
   /** Progress of the last echo's turn from his colour to mine, or null before it. */
   private warmingEcho: number | null = null;
+  /** Tries this room has eaten — natural failures plus replays aborted with R. */
+  private attemptsInRoom = 0;
+  /** The echo-at-the-shut-door line has been said this replay. */
+  private echoDoorSpoken = false;
   /** How many of the corridor's closing lines have been said, and the gap left. */
   private approachSpoken = 0;
   private approachWait = 1.2;
@@ -964,6 +979,8 @@ export class FirstPersonScene {
     this.doorOffset = 0;
     this.dioramaLoop = null;
     this.warmingEcho = null;
+    this.attemptsInRoom = 0;
+    this.echoDoorSpoken = false;
     this.approachSpoken = 0;
     this.approachWait = 1.2;
     this.stride.clear();
@@ -2005,14 +2022,76 @@ export class FirstPersonScene {
       this.captureSnapshots();
       this.previous = new Map(this.current);
       this.events?.onFold();
+      this.announceReplay(true);
       this.events?.onPhaseChange("replay", "recording");
     }
     return folded;
   }
 
+  /**
+   * The second pass has begun — say what that means. A tape that fills on its
+   * own gets the line the fold key would have earned, because from the
+   * player's side "the timer ran out" and "the phase silently changed" were
+   * the same unexplained jump.
+   */
+  private announceReplay(manual: boolean): void {
+    this.echoDoorSpoken = false;
+    const line = this.chamber.subtitleOnReplay;
+    if (line) {
+      this.events?.onLine(line);
+    } else if (!manual) {
+      this.events?.onLine("기록이 가득 차 봉인되었습니다 — 메아리가 걷기 시작합니다.");
+    }
+  }
+
+  /**
+   * Walked over the plate and out the far side, while recording, in a room
+   * whose plate answers the living player. Only for plates on the room's own
+   * axis — an off-axis plate has no "past it" a z test can honestly claim.
+   * "Stand still on it" is the wrong coaching from back there; a judge got
+   * "아직 발판 위가 아닙니다" on loop with the plate behind them and no way
+   * to learn which way to turn.
+   */
+  private platePassed(state: Readonly<SimState>, present: SimState["actors"][number] | undefined): boolean {
+    if (state.phase !== "recording" || !present) return false;
+    const plate = this.chamber.sim.plates[0];
+    if (!plate || plate.requiredActor === "past") return false;
+    if (Math.abs(plate.centre.x) > 0.6) return false;
+    if (state.plates[0]?.pressedBy.includes("present")) return false;
+    return present.z > plate.centre.z + plate.half.z + simConstants.playerRadius + 0.15;
+  }
+
+  /**
+   * The echo walking at a shut door looks like a broken game until somebody
+   * says it is the point. Rooms opt in with a line; it is said once per replay,
+   * when the tread is actually happening in front of the player.
+   */
+  private watchEchoAtDoor(state: Readonly<SimState>): void {
+    const line = this.chamber.echoAtDoorLine;
+    if (!line || this.echoDoorSpoken || state.phase !== "replay") return;
+    const door = this.simulation.definition.doors[0];
+    if (!door || (state.doors[0]?.open ?? false)) return;
+    const past = state.actors.find((actor) => actor.id === "past");
+    if (!past) return;
+    const centreX = (door.brush.min.x + door.brush.max.x) / 2;
+    const halfX = (door.brush.max.x - door.brush.min.x) / 2;
+    const nearDoor =
+      past.z >= door.brush.min.z - 0.9 &&
+      past.z <= door.brush.max.z + 0.9 &&
+      Math.abs(past.x - centreX) <= halfX + 0.6;
+    if (!nearDoor) return;
+    this.echoDoorSpoken = true;
+    this.events?.onLine(line);
+  }
+
   rerecord(): void {
     if (this.simulation.state.phase === "recording") return;
     const previousPhase = this.simulation.state.phase;
+    // A replay walked out on is a try spent, even though no failure card will
+    // ever say so. The hint ladder has to see these, or a player who aborts
+    // early keeps being treated as if they had barely started.
+    if (previousPhase === "replay") this.attemptsInRoom += 1;
+    this.echoDoorSpoken = false;
     // Every attempt starts from a standstill. Players who fail reach for R with
     // a hand still on W, and the recording that began walking on its own was
     // the one they then failed with — which is how eight attempts became ten.
@@ -2121,7 +2200,19 @@ export class FirstPersonScene {
     this.lastFrame = frame;
     const result = this.simulation.step(frame);
     this.captureSnapshots();
-    if (result.phaseChanged) this.events?.onPhaseChange(result.state.phase, phaseBefore);
+    if (result.phaseChanged) {
+      if (result.state.phase === "rerecord") this.attemptsInRoom += 1;
+      // A replay arriving through here means the tape filled on its own —
+      // manual folds go through completeFold and have already changed phase
+      // by the time this step runs. Same seal, same announcement: the player
+      // cannot tell the two apart, so the game must not either.
+      if (result.state.phase === "replay" && phaseBefore === "recording") {
+        this.events?.onFold();
+        this.announceReplay(false);
+      }
+      this.events?.onPhaseChange(result.state.phase, phaseBefore);
+    }
+    this.watchEchoAtDoor(result.state);
   }
 
   private captureSnapshots(): void {
@@ -2604,6 +2695,9 @@ export class FirstPersonScene {
       tapeDuration: this.chamber.sim.tapeDurationTicks,
       replaySpan: this.chamber.sim.tapeDurationTicks + this.chamber.sim.replayGraceTicks,
       canFold: this.simulation.canFold,
+      attempts: this.attemptsInRoom,
+      tapeArmed: this.simulation.recordedFrames.length > 0 || state.phase !== "recording",
+      platePassed: this.platePassed(state, present),
       focus: focusId,
       // Plates take focus too (the crosshair acknowledges them), but E only
       // ever acts on a grip — a playtest judge read the grab prompt over a

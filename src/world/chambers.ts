@@ -232,12 +232,18 @@ export const HAND_NOT_BODY_CHAMBER: Chamber = {
   shell: HAND_SHELL,
   number: "03",
   // Both playtest judges quit here: the sign teaches the twist but not the
-  // move, and nothing else in the room does either. The hints carry the move.
+  // move, and nothing else in the room does either. The hints carry the move,
+  // from the very first failure — two more rounds of judges ran out of
+  // patience one hint short of the answer, so the ladder starts at one and
+  // the first rung points at the golden floor line the room already draws.
   hints: [
-    { after: 2, line: "재생 중에는 당신의 발이 자유롭습니다. 오른쪽의 발판을 직접 밟으세요." },
-    { after: 3, line: "발판을 밟은 채 기다리면, 메아리가 열린 문을 지나 막다른 방까지 걸어갑니다. 출구가 열리면 당신도 나가야 합니다." },
+    { after: 1, line: "재생 중에는 당신의 발이 자유롭습니다. 바닥의 금색 선을 따라가, 오른쪽의 발판을 직접 밟으세요." },
+    { after: 2, line: "발판을 밟은 채 기다리면, 메아리가 열린 문을 지나 막다른 방까지 걸어갑니다. 출구가 열리면 당신도 나가야 합니다." },
   ],
   subtitleOnEntry: "안내: 기록되는 것은 위치가 아니라 행동입니다. 막힌 곳에서도 걸음은 기록됩니다.",
+  // The echo treading against the shut partition is the room's whole idea —
+  // and it reads as a bug until this sentence lands.
+  echoAtDoorLine: "메아리가 닫힌 문 앞에서 걷고 있습니다 — 오른쪽 발판이 그 문을 엽니다.",
   dressing: standardDressing(HAND_SHELL, {
     seedBase: 3300,
     windows: [3, 7, 11],

@@ -66,8 +66,27 @@ const audio = new FpAudioAdapter({
   muted: localStorage.getItem(MUTE_KEY) === "true",
 });
 
+// Where the campaign was left. A judge's browser died mid-room and the only
+// way back in was the title and four rooms of replays — a save is written on
+// every room change and spent from the title card.
+const CHAMBER_KEY = "i-was-so-i-am:chamber:v1";
+const saveChamber = (): void => {
+  try {
+    localStorage.setItem(CHAMBER_KEY, scene.currentChamber.sim.id);
+  } catch {
+    // Storage refused is a session without a bookmark, nothing worse.
+  }
+};
+
 const hud = new Hud(app, {
   onStart: () => {
+    audio.start();
+    scene.resume();
+    scene.requestPointerLock();
+  },
+  onContinue: () => {
+    const target = ROSTER.byIdOrNull(localStorage.getItem(CHAMBER_KEY) ?? "");
+    if (target) scene.switchChamber(target);
     audio.start();
     scene.resume();
     scene.requestPointerLock();
@@ -78,9 +97,19 @@ const hud = new Hud(app, {
   },
   onAdvance: () => {
     scene.advanceChamber();
+    saveChamber();
     scene.requestPointerLock();
   },
 });
+
+{
+  const saved = ROSTER.byIdOrNull(localStorage.getItem(CHAMBER_KEY) ?? "");
+  // Not the first room (nothing to skip) and not the corridor (an ending is
+  // not a place to be dropped back into cold).
+  if (saved && saved.sim.id !== ROSTER.first.sim.id && ROSTER.after(saved.sim.id) !== null) {
+    hud.offerContinue(`이어하기 — ${saved.number} ${saved.sim.name}`);
+  }
+}
 
 scene.attach({
   onFrame: (view) => {
