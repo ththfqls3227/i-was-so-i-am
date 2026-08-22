@@ -86,6 +86,7 @@ const SHOTS = [
   // The board each room wears. 05, 06 and 07 have no corridor, so they can all
   // repeat 03's problem: a sign on the far wall behind a partition, on the side
   // away from the exit, that play never puts in frame.
+  { chamber: "long-standing", name: "05-inside", play: true, via: [{ x: 0, z: 9.0 }], to: { x: 0, z: 12.4 }, yaw: -1.15, pitch: 0.02 },
   { chamber: "long-standing", name: "05-sign", via: [{ x: -3, z: 8 }], to: { x: -3, z: 15.4 }, yaw: 0, pitch: -0.05 },
   { chamber: "giving-back", name: "06-sign", via: [{ x: 4.6, z: 26 }, { x: 4.6, z: 31 }], to: { x: 1.6, z: 31.4 }, yaw: -0.55, pitch: -0.05 },
   { chamber: "unkept", name: "07-sign", via: [{ x: 4.4, z: 5.5 }, { x: 4.4, z: 13 }], to: { x: 3.4, z: 15.2 }, yaw: -0.2, pitch: -0.06 },
@@ -168,6 +169,21 @@ const until = async (predicate, budgetMs = 12000) => {
  * is no pose that reaches it without playing the room first.
  */
 const PLAYS = {
+  // 05's passage is shut until he is standing on the first plate, so the inside
+  // of it — which is the whole room — cannot be photographed from any pose.
+  // Record the long stand, fold, and walk in while he holds the door for you.
+  "long-standing": async () => {
+    await walkTo({ x: -4, z: 6 });
+    // The stand is the recording. Four seconds of nothing is the point of it.
+    await page.waitForTimeout(4600);
+    await walkTo({ x: 4, z: 6 });
+    await page.waitForTimeout(400);
+    await act("fold");
+    await until((s) => s.phase === "replay");
+    await until(() => true, 200);
+    await page.waitForTimeout(1600);
+  },
+
   "two-of-us": async () => {
     await walkTo({ x: 0, z: 5.6 });
     await act("press", "KeyE");

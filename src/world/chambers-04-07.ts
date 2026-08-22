@@ -362,6 +362,32 @@ export const LONG_STANDING_CHAMBER: Chamber = {
     seedBase: 5500,
     corridor: false,
     windows: [3, 7.5, 16],
+    // The passage is the room. You are shut into it and you wait there for the
+    // far door, and until now that wait happened inside a plain plaster box —
+    // the one stretch of this building with nothing on its walls. Lined like an
+    // aisle, being sealed in is being sealed in somewhere.
+    extraShelves: [
+      {
+        id: "passage-west-run",
+        x: -PASSAGE_HALF,
+        facing: 1,
+        fromZ: PASSAGE_FROM + 0.7,
+        toZ: PASSAGE_TO - 0.1,
+        height: 1.94,
+        seed: 5500 + 771,
+        depth: 0.26,
+      },
+      {
+        id: "passage-east-run",
+        x: PASSAGE_HALF,
+        facing: -1,
+        fromZ: PASSAGE_FROM + 0.7,
+        toZ: PASSAGE_TO - 0.1,
+        height: 1.94,
+        seed: 5500 + 772,
+        depth: 0.26,
+      },
+    ],
     blocks: blocksOf(fiveSolids).filter((block) => !block.id.startsWith("floor") && !block.id.startsWith("ceiling")),
     // Both plates are worn the same amount, because the room is the same walk
     // twice and neither leg is the clever one.
