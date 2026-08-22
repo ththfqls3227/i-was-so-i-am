@@ -48,6 +48,15 @@ interface Graph {
   ui: ToneVoice;
 }
 
+/**
+ * The musical half of the archive — drones, the cyan hum, the sync chord, the
+ * corridor's arriving notes — held out of the mix by owner decision (2026-08-23,
+ * "일단 음악은 빼고"). The event sounds stay: feet, doors, plates, the seal.
+ * Every musical voice still runs and still takes its automation, so flipping
+ * this back on is the whole undo.
+ */
+const MUSIC_ENABLED = false;
+
 const noteFor = (chamberId: string): (typeof ROOM_NOTES)[number] | undefined =>
   ROOM_NOTES.find((entry) => entry.chamberId === chamberId);
 
@@ -302,6 +311,12 @@ export class FpAudioEngine {
     compressor.release.value = release;
     master.connect(compressor).connect(context.destination);
 
+    // Every musical voice reaches the master through this one gain, so the
+    // owner's "no music" is a single wire and not a dozen scattered zeros.
+    const music = context.createGain();
+    music.gain.value = MUSIC_ENABLED ? 1 : 0;
+    music.connect(master);
+
     const white = noiseBuffer(context, false);
     const brown = noiseBuffer(context, true);
 
@@ -338,21 +353,21 @@ export class FpAudioEngine {
     };
 
     // The building: a drone that is always on, and the air in the room.
-    const droneRoot = tone("sine", this.roomHz);
+    const droneRoot = tone("sine", this.roomHz, music);
     droneRoot.gain.gain.value = FP_SCORE.ambient.timberGain;
-    const droneDetuned = tone("sine", this.roomHz);
+    const droneDetuned = tone("sine", this.roomHz, music);
     droneDetuned.osc.detune.value = FP_SCORE.ambient.detuneCents;
     droneDetuned.gain.gain.value = FP_SCORE.ambient.timberGain;
-    const droneFifth = tone("sine", this.roomHz * FP_SCORE.ambient.fifthRatio);
+    const droneFifth = tone("sine", this.roomHz * FP_SCORE.ambient.fifthRatio, music);
     droneFifth.gain.gain.value = FP_SCORE.ambient.fifthGain;
-    const droneBed = noise(brown, "lowpass", FP_SCORE.ambient.noiseFilterHz, 0.7);
+    const droneBed = noise(brown, "lowpass", FP_SCORE.ambient.noiseFilterHz, 0.7, music);
     droneBed.gain.gain.value = FP_SCORE.ambient.noiseGain;
 
     // The time technology. Under every room from 00, so that 08 can take it
     // away from an ear that had stopped noticing it was there.
     const cyanGain = context.createGain();
     cyanGain.gain.value = FP_SCORE.ambient.cyanGain;
-    cyanGain.connect(master);
+    cyanGain.connect(music);
     const cyanVoices = FP_SCORE.ambient.cyanPartials.map((hz, index) => {
       const voice = tone("sine", hz, cyanGain);
       voice.gain.gain.value = 1 / (index + 2);
@@ -403,7 +418,7 @@ export class FpAudioEngine {
     const corridor = new Map<string, ToneVoice>();
     for (const note of ROOM_NOTES) {
       if (!note.joinsChord) continue;
-      corridor.set(note.chamberId, tone("sine", note.corridorHz));
+      corridor.set(note.chamberId, tone("sine", note.corridorHz, music));
     }
 
     return {
@@ -432,7 +447,7 @@ export class FpAudioEngine {
         plate: tone("triangle", FP_SCORE.contact.plateHz),
         hold: tone("triangle", FP_SCORE.contact.holdHz),
       },
-      attune: [tone("sine", this.roomHz * 4), tone("sine", this.roomHz * 6)],
+      attune: [tone("sine", this.roomHz * 4, music), tone("sine", this.roomHz * 6, music)],
       corridor,
       creak: { osc: creakOsc, lfo: creakLfo, filter: creakFilter, gain: creakGain },
       ui: tone("square", FP_SCORE.ui.hz),
