@@ -279,7 +279,11 @@ export class FirstPersonScene {
     this.scene.ambientColor = new Color3(0.111, 0.105, 0.093);
     this.scene.fogMode = Scene.FOGMODE_EXP2;
     this.scene.fogDensity = 0.008;
-    this.scene.fogColor = new Color3(0.66, 0.69, 0.74);
+    // Warm-neutral haze. This was (0.66, 0.69, 0.74), a bright blue-grey, and
+    // at EXP2 0.008 it is only 1.6% of the picture at 16 m — but 15% at the far
+    // end of the 51 m corridor, which is the one space in the game where
+    // distance is the subject. Same luminance, plaster hue.
+    this.scene.fogColor = new Color3(0.724, 0.682, 0.605);
 
     this.camera = new UniversalCamera("fp-camera", new Vector3(0, simConstants.eyeHeight, chamber.sim.spawn.z), this.scene);
     this.camera.inputs.clear();
@@ -898,7 +902,14 @@ export class FirstPersonScene {
     const shell = this.chamber.shell;
     // Sky is the cool bounce off plaster; ground is the warm one off brick.
     const sky = new HemisphericLight("sky", new Vector3(0, 1, 0), this.scene);
-    sky.diffuse = new Color3(0.62, 0.66, 0.76);
+    // Cool, but not blue. The split is deliberate — sky is the bounce off
+    // plaster and ground the bounce off brick — and it is what gives a surface
+    // its form. But (0.62, 0.66, 0.76) is sky blue, and a hemispheric gives an
+    // up-facing surface its diffuse at full strength: every horizontal plaster
+    // face in the building came out blue-grey, which is where 04's west wall
+    // panel was coming from. Same luminance, cooled off the neutral instead of
+    // toward the sky.
+    sky.diffuse = new Color3(0.64, 0.66, 0.68);
     sky.groundColor = new Color3(0.34, 0.28, 0.21);
     sky.intensity = 0.52;
 
