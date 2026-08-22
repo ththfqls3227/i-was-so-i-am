@@ -552,7 +552,12 @@ export class Hud {
       this.resultBody.textContent = view.lastError
         ? (view.lastError === "door-closed" && !view.hasPlate
           ? "문이 닫힌 채였습니다. 잡은 손이 문을 엽니다."
-          : view.lastError === "out-of-time"
+          : view.lastError === "door-closed" && view.plateDutyInReplay
+            // The generic line says "press the plate and leave" — in the
+            // role-reversal room that reads as one move when it is two, and a
+            // judge took the two halves for a contradiction.
+            ? "문이 닫힌 채였습니다 — 재생 중 오른쪽 발판을 밟고 있어야 메아리가 지나갑니다. 출구는 발판 너머, 동쪽 통로 끝입니다."
+            : view.lastError === "out-of-time"
             ? (view.exitOpen
               ? "시간이 지났습니다. 출구는 열려 있었습니다 — 다음에는 길이 열리면, 당신이 빛으로 나가세요."
               : "시간이 지났습니다 — 출구가 끝내 열리지 않았습니다.")

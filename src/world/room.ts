@@ -160,7 +160,10 @@ export const AWAKENING_CHAMBER: Chamber = {
     { after: 1, line: "메아리가 발판에 도착해야 문이 열립니다." },
     { after: 2, line: "발판 위에 멈춰 서서 ⏎." },
   ],
-  subtitleOnEntry: "기억 보관소에 오신 것을 환영합니다. 이 방에서의 모든 행동은 기록됩니다.",
+  // The whole loop, before the first tape rolls: judges kept meeting the
+  // second half of the contract on a failure card. One breath longer than the
+  // old welcome, and the only room that gets the full sentence.
+  subtitleOnEntry: "기억 보관소에 오신 것을 환영합니다. 이 방에서의 행동은 기록되고 — 기록이 끝나면 메아리가 그 길을 다시 걷습니다. 메아리가 발판을 밟는 동안, 당신은 빛으로 나가세요.",
   // The loop's causality, said the moment it starts mattering. Three rounds of
   // judges pieced it together from failure cards instead — after the failing.
   subtitleOnReplay: "메아리가 당신의 길을 다시 걷습니다. 메아리가 발판을 밟으면 문이 열립니다 — 그때 빛으로 나가세요.",
