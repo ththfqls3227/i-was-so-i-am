@@ -392,12 +392,19 @@ export function buildDioramaBoard(
   context.fillStyle = "#cbb894";
   context.textAlign = "center";
   context.textBaseline = "middle";
+  // Centred in the column above the seal, not stacked from the top down. The
+  // first version started every name at y=70 with a pitch sized off the glyph
+  // count, so a two-glyph name sat in the top eighth of a tall board with the
+  // rest of it empty — the board read as blank with a mark on it. Centre the
+  // run and let the pitch open up when there is room.
   const glyphs = [...title].filter((glyph) => glyph.trim() !== "");
-  const pitch = Math.min(46, 300 / Math.max(1, glyphs.length));
-  const size = Math.min(40, pitch - 6);
+  const columnMid = 232;
+  const pitch = Math.min(64, 264 / Math.max(1, glyphs.length - 1));
+  const size = Math.min(56, pitch - 8);
+  const startY = columnMid - ((glyphs.length - 1) * pitch) / 2;
   context.font = `600 ${size}px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif`;
   for (const [index, glyph] of glyphs.entries()) {
-    context.fillText(glyph, width / 2, 70 + index * pitch);
+    context.fillText(glyph, width / 2, startY + index * pitch);
   }
 
   const sealSize = 40;
