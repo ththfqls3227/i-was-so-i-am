@@ -306,13 +306,6 @@ export class FirstPersonScene {
   private attemptsInRoom = 0;
   /** The echo-at-the-shut-door line has been said this replay. */
   private echoDoorSpoken = false;
-  /**
-   * The first door opened at some point while this tape was being recorded.
-   * A recording that never opened it cannot open it on replay either — the
-   * echo walks the same feet — and a judge sat through twenty seconds of
-   * doomed replay before the room would say so.
-   */
-  private doorOpenedWhileRecording = false;
   /** How many of the corridor's closing lines have been said, and the gap left. */
   private approachSpoken = 0;
   private approachWait = 1.2;
@@ -1004,7 +997,6 @@ export class FirstPersonScene {
     this.warmingEcho = null;
     this.attemptsInRoom = 0;
     this.echoDoorSpoken = false;
-    this.doorOpenedWhileRecording = false;
     this.approachSpoken = 0;
     this.approachWait = 1.2;
     this.stride.clear();
@@ -2060,20 +2052,11 @@ export class FirstPersonScene {
    */
   private announceReplay(manual: boolean): void {
     this.echoDoorSpoken = false;
-    // A tape that never opened the door is announced as what it is, instead
-    // of replayed to its certain end. Only where the living foot could have:
-    // rooms whose plate ignores it, or saves it for the second pass, fold
-    // doorless tapes on purpose.
-    const doomed =
-      this.chamber.sim.plates.length > 0 &&
-      this.chamber.sim.plates[0]?.requiredActor !== "past" &&
-      this.chamber.plateDutyInReplay !== true &&
-      !this.doorOpenedWhileRecording;
-    this.doorOpenedWhileRecording = false;
-    if (doomed) {
-      this.events?.onLine("메아리는 당신이 걸은 길만 걷습니다 — 이 기록은 발판에 닿지 못했습니다. R로 다시 기록할 수 있습니다.");
-      return;
-    }
+    // No "this tape is doomed" warning here, though one was tried: a predicate
+    // for it turned out to be true in no room of the roster and to fire only
+    // in the rooms it wronged — 00's plate answers the living foot on replay
+    // (latched, by design), and 06/07's correct tapes never open the door at
+    // all. The hint ladder and the failure cards already carry that duty.
     const line = this.chamber.subtitleOnReplay;
     if (line) {
       this.events?.onLine(line);
@@ -2158,7 +2141,6 @@ export class FirstPersonScene {
     // early keeps being treated as if they had barely started.
     if (previousPhase === "replay") this.attemptsInRoom += 1;
     this.echoDoorSpoken = false;
-    this.doorOpenedWhileRecording = false;
     // Every attempt starts from a standstill. Players who fail reach for R with
     // a hand still on W, and the recording that began walking on its own was
     // the one they then failed with — which is how eight attempts became ten.
@@ -2267,9 +2249,6 @@ export class FirstPersonScene {
     this.lastFrame = frame;
     const result = this.simulation.step(frame);
     this.captureSnapshots();
-    if (phaseBefore === "recording" && (result.state.doors[0]?.open ?? false)) {
-      this.doorOpenedWhileRecording = true;
-    }
     if (result.phaseChanged) {
       if (result.state.phase === "rerecord") this.attemptsInRoom += 1;
       // A replay arriving through here means the tape filled on its own —
