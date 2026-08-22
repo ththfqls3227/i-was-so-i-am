@@ -15,6 +15,7 @@
 - **A안 (구조를 말한다)**: 과거의 나를 기록하고, 그 메아리와 함께 기억 보관소를 빠져나가는 1인칭 협동 퍼즐. ⏎로 기록을 끝내면 과거의 당신이 그 자세 그대로 남아 발판을 누르고, 문을 붙들어 줍니다. 열 개의 방, 그리고 두고 떠나야 하는 것.
 - **B안 (경험을 말한다)**: 혼자인데 협동 퍼즐입니다. 먼저 행동을 기록하고, 다음엔 그 기록과 함께 풉니다. 문을 붙들어 주는 청록빛 메아리는 전부 조금 전의 당신 — 마지막 방에서 당신은 자신을 두고 나옵니다. I WAS, SO I AM.
 - **EN (폼이 영문을 받을 경우, A안 대응)**: A first-person co-op puzzle where your partner is your own past. Record what you do; end the record with ⏎ and the you of a moment ago stays behind — holding plates, holding doors. Ten rooms in a Korean memory archive, and one thing you must leave behind.
+- 페이지 메타(`index.html`의 description·og:description)와 `public/og-image.jpg`(썸네일 후보 1 축소판)는 **A안 기준으로 배선**되어 있다. 오너가 B안이나 썸네일 후보 2를 고르면 그 두 곳을 함께 바꾼다.
 
 ## 썸네일 후보 (전부 인게임, 3200×1800=16:9)
 1. **회랑 마지막 창** — `captures/g2-d3b/e5-last-window-00.png`: 살창 너머 역광 속 정지한 그. 정적·미스터리·오리지널리티(장경각)가 한 장에.

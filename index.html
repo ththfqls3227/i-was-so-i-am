@@ -4,17 +4,85 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#06080c" />
-    <meta name="description" content="Record what you did. Then watch yourself do it, and walk out together." />
+    <meta
+      name="description"
+      content="과거의 나를 기록하고, 그 메아리와 함께 기억 보관소를 빠져나가는 1인칭 협동 퍼즐. ⏎로 기록을 끝내면 과거의 당신이 그 자세 그대로 남아 발판을 누르고, 문을 붙들어 줍니다. 열 개의 방, 그리고 두고 떠나야 하는 것."
+    />
     <meta property="og:title" content="I WAS, SO I AM" />
-    <meta property="og:description" content="Record what you did. Then watch yourself do it, and walk out together." />
+    <meta
+      property="og:description"
+      content="과거의 나를 기록하고, 그 메아리와 함께 기억 보관소를 빠져나가는 1인칭 협동 퍼즐. ⏎로 기록을 끝내면 과거의 당신이 그 자세 그대로 남아 발판을 누르고, 문을 붙들어 줍니다. 열 개의 방, 그리고 두고 떠나야 하는 것."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="./og-image.jpg" />
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23080b14'/%3E%3Ccircle cx='25' cy='32' r='12' fill='none' stroke='%235fd8e8' stroke-width='5'/%3E%3Ccircle cx='39' cy='32' r='12' fill='none' stroke='%23e8a44f' stroke-width='5'/%3E%3C/svg%3E"
     />
     <title>I WAS, SO I AM — A Past-Self Cooperation Game</title>
+    <style>
+      /* Inline so the archive is never a black rectangle while the bundle is
+         still on the wire — everything below exists before any script runs. */
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #06080c;
+      }
+      #boot-loading {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 22px;
+        background: #06080c;
+        color: #b8b2a4;
+        font-family: "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+      }
+      #boot-loading .rings {
+        position: relative;
+        width: 72px;
+        height: 44px;
+        animation: boot-breathe 2.4s ease-in-out infinite;
+      }
+      #boot-loading .rings span {
+        position: absolute;
+        top: 0;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        border: 5px solid #5fd8e8;
+        box-sizing: border-box;
+      }
+      #boot-loading .rings span + span {
+        left: 28px;
+        border-color: #e8a44f;
+      }
+      #boot-loading p {
+        margin: 0;
+        font-size: 14px;
+        letter-spacing: 0.24em;
+      }
+      @keyframes boot-breathe {
+        0%,
+        100% {
+          opacity: 0.45;
+        }
+        50% {
+          opacity: 1;
+        }
+      }
+    </style>
   </head>
   <body>
-    <main id="app"></main>
-    <script type="module" src="/src/fp-main.ts"></script>
+    <main id="app">
+      <div id="boot-loading" aria-hidden="true">
+        <div class="rings"><span></span><span></span></div>
+        <p>기억 보관소를 여는 중</p>
+      </div>
+    </main>
+    <script type="module" src="/src/boot.ts"></script>
   </body>
 </html>
