@@ -1,8 +1,13 @@
 import { resolve } from "node:path";
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   base: "./",
+  test: {
+    // The sim suites replay hundreds of ticks; under full-suite load the
+    // default 5s tripped on machines that pass every test in isolation.
+    testTimeout: 15000,
+  },
   build: {
     target: "es2022",
     sourcemap: false,
