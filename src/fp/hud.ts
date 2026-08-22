@@ -271,9 +271,10 @@ export class Hud {
     if (view.phase === "recording") {
       const prompts: Prompt[] = [];
       // A grip under the crosshair is the one moment the player needs the key
-      // named. Eight tries at an unnamed input is how a judge left room 02.
+      // named — and how to use it. A judge tapped E, got nothing, and lost two
+      // loops before discovering it has to be held.
       if (view.focus !== null && !view.holding) {
-        prompts.push({ key: "E", label: "잡기", tone: "go" });
+        prompts.push({ key: "E", label: "누르고 있어 잡기", tone: "go" });
       }
       if (view.hasPlate) {
         if (!view.plateActive && !view.canFold) {
@@ -284,7 +285,11 @@ export class Hud {
         } else if (view.plateActive) {
           prompts.push({ key: null, label: "발판 위에서 잠시 그대로", tone: "plain" });
         } else if (view.canFold) {
-          prompts.push({ key: null, label: "발판을 밟은 채로 기록을 끝내면 좋습니다", tone: "plain" });
+          // Say where the player is NOT. From first person the disc fills the
+          // bottom of the frame while you are still short of it — a judge read
+          // the old advisory line as "standing on it", folded, and watched the
+          // echo freeze at the rim.
+          prompts.push({ key: null, label: "아직 발판 위가 아닙니다", tone: "plain" });
           prompts.push({ key: "⏎", label: "기록 끝내기", tone: "plain" });
         }
       } else if (view.canFold) {
@@ -295,7 +300,14 @@ export class Hud {
       return prompts;
     }
     if (view.phase === "replay") {
-      const waiting = view.hasPlate ? "문이 열리기를 기다리거나, 직접 발판을 밟으세요" : "문이 열리기를 기다리세요";
+      // "step on it yourself" is a lie in a room whose plate only answers the
+      // echo — a judge stood on 01's plate, read that line, and concluded the
+      // game was broken when nothing happened.
+      const waiting = !view.hasPlate
+        ? "문이 열리기를 기다리세요"
+        : view.plateForEchoOnly
+          ? "문이 열리기를 기다리세요 — 이 발판은 메아리의 것입니다"
+          : "문이 열리기를 기다리거나, 직접 발판을 밟으세요";
       return [{ key: null, label: view.doorOpen ? "빛으로 나가세요" : waiting, tone: "echo" }];
     }
     if (view.phase === "rerecord") {
@@ -418,7 +430,13 @@ export class Hud {
     } else {
       this.result.dataset.kind = "fail";
       this.resultHeading.textContent = "다시 기록";
-      this.resultBody.textContent = view.lastError ? FAILURE_COPY[view.lastError] : "이번 재생은 끝났습니다.";
+      // "step on the plate" is the cure in a plate room. In a grip room it
+      // sends the player hunting for a plate that does not exist.
+      this.resultBody.textContent = view.lastError
+        ? (view.lastError === "door-closed" && !view.hasPlate
+          ? "문이 닫힌 채였습니다. 잡은 손이 문을 엽니다."
+          : FAILURE_COPY[view.lastError])
+        : "이번 재생은 끝났습니다.";
       this.offer(this.again, true);
       this.again.textContent = "R · 다시 기록";
       this.offer(this.onward, false);

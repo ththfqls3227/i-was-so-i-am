@@ -66,6 +66,8 @@ export interface ViewModel {
   holding: boolean;
   /** This room has plates at all — rooms without them must not talk about them. */
   hasPlate: boolean;
+  /** The first plate only answers the echo; the living player's foot is ignored. */
+  plateForEchoOnly: boolean;
   plateActive: boolean;
   doorOpen: boolean;
   echoPresent: boolean;
@@ -2587,6 +2589,7 @@ export class FirstPersonScene {
       focus: present?.focusId ?? null,
       holding: state.holds.some((hold) => hold.heldBy.includes("present")),
       hasPlate: state.plates.length > 0,
+      plateForEchoOnly: this.chamber.sim.plates[0]?.requiredActor === "past",
       // The HUD wants "am I standing on it", not "did the mechanism fire" —
       // on echo-only plates the two answers differ for the whole first pass.
       plateActive: state.plates[0]?.pressedBy.includes("present") ?? false,
