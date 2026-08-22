@@ -106,7 +106,6 @@ export class Hud {
   private promptSignature = "";
   private subtitleText = "";
   private subtitleUntil = 0;
-  private lastPhase: ViewModel["phase"] | null = null;
   private lastEntryLine: string | null = null;
 
   constructor(parent: HTMLElement, private readonly callbacks: HudCallbacks) {
@@ -464,14 +463,8 @@ export class Hud {
     // chamber's line is swallowed by the title screen and never said.
     if (view.started && view.entryLine !== this.lastEntryLine) {
       this.lastEntryLine = view.entryLine;
-      this.lastPhase = view.phase;
       this.say(view.entryLine, now, 6400);
       return;
-    }
-    if (view.phase !== this.lastPhase) {
-      const previous = this.lastPhase;
-      this.lastPhase = view.phase;
-      void previous;
     }
     const shown = this.subtitleText !== "" && now < this.subtitleUntil && !view.paused;
     if (this.subtitle.dataset.shown !== String(shown)) this.subtitle.dataset.shown = String(shown);
