@@ -270,7 +270,13 @@ export class FirstPersonScene {
     this.scene.clearColor = new Color4(0.06, 0.07, 0.08, 1);
     // Low, so the lights have somewhere to go. A high flat ambient is what
     // flattens a white room into a single value with no light in it.
-    this.scene.ambientColor = new Color3(0.1, 0.105, 0.12);
+    // Warm-neutral, not blue. This was (0.1, 0.105, 0.12) — more blue than red —
+    // and scene ambient is what every unlit surface in the building falls back
+    // to, so any plaster no light reached came out blue-grey. That is a colour
+    // this building does not contain, and it is why 04's gallery piers read as
+    // cold slabs. Same luminance as before (0.105 by Rec. 601), turned onto the
+    // plaster's own hue so unlit stone reads as stone in shadow.
+    this.scene.ambientColor = new Color3(0.111, 0.105, 0.093);
     this.scene.fogMode = Scene.FOGMODE_EXP2;
     this.scene.fogDensity = 0.008;
     this.scene.fogColor = new Color3(0.66, 0.69, 0.74);
