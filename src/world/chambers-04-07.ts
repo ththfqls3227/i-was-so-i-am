@@ -253,7 +253,12 @@ export const TWO_OF_US_CHAMBER: Chamber = {
       // the room, and a bright line to it would answer the room's own question.
       routes: [
         route("to-grip", [{ x: 0, z: 2.4 }, { x: 0, z: 6 }]),
-        route("to-stair", [{ x: 0, z: 6 }, { x: -3.4, z: STAIR_FROM_Z }], 0.5),
+        // To the stair mouth, which is at positive x. This ran to -3.4 — the
+        // opposite wall — so the one worn line in a room about finding the way
+        // up pointed away from the only way up. It also stops short of the
+        // first tread: the strip lies a centimetre off the floor and would be
+        // buried inside the tread it ran onto.
+        route("to-stair", [{ x: 0, z: 6 }, { x: 4.2, z: STAIR_FROM_Z - 0.3 }], 0.5),
       ],
     },
   ),
