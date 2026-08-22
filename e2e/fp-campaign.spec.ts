@@ -85,7 +85,9 @@ test("the opening four rooms can be played through in order", async ({ page }) =
   await waitInPage(page, "s.doors[0].open === true", 10000); // standing on it opens it for him
   await waitInPage(page, "s.exitOpen === true", 20000);
   const through = await read(page);
-  expect(through.pastZ ?? 0, "he reaches the alcove and opens the way out").toBeGreaterThan(9.6);
+  // 9.2, not 9.6: plates count the body's edge now, so the alcove answers
+  // 0.36 m of walking earlier than when only the centre point counted.
+  expect(through.pastZ ?? 0, "he reaches the alcove and opens the way out").toBeGreaterThan(9.2);
   // Aimed at the middle of the way out rather than straight ahead. Leaving the
   // plate puts the player about ten centimetres inside the near edge of the
   // exit's footprint, so walking forward from there either just makes it or

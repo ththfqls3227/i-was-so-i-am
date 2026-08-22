@@ -1,4 +1,4 @@
-import { EYE_HEIGHT } from "./constants";
+import { EYE_HEIGHT, PLAYER_RADIUS } from "./constants";
 import type {
   ActorState,
   Brush,
@@ -65,10 +65,16 @@ export function solidsFor(room: RoomDefinition, doors: readonly DoorState[]): Br
 }
 
 function standsOn(actor: ActorState, plate: RoomDefinition["plates"][number]): boolean {
+  // Measured to the edge of the body, not its centre. A foot visibly touching
+  // the plate has to count — judged by centre point, a figure standing on the
+  // front rim reads as "on the plate" on screen and as "not on it" in here,
+  // and that gap cost real players eight failed cycles in room 01.
   const dx = actor.x - plate.centre.x;
   const dz = actor.z - plate.centre.z;
-  if (dx < -plate.half.x || dx > plate.half.x) return false;
-  if (dz < -plate.half.z || dz > plate.half.z) return false;
+  const spanX = plate.half.x + PLAYER_RADIUS;
+  const spanZ = plate.half.z + PLAYER_RADIUS;
+  if (dx < -spanX || dx > spanX) return false;
+  if (dz < -spanZ || dz > spanZ) return false;
   return actor.y >= -plate.reach && actor.y <= plate.reach;
 }
 

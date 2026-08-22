@@ -228,7 +228,10 @@ try {
   await walkUntil(["KeyW"], (s) => s.plates[0] === true);
   check("03 amber plate opens the doorway for him", (await read()).doors[0] === true);
   const through = await until((s) => s.exitOpen === true, 15000);
-  check("03 he reaches the alcove and opens the way out", through.pastZ !== null && through.pastZ > 9.6);
+  // 9.2, not 9.6: the way out answers when his body reaches the alcove, and
+  // plates now count the body's edge (PLAYER_RADIUS), so the moment arrives
+  // 0.36 m of walking earlier than it did when only the centre counted.
+  check("03 he reaches the alcove and opens the way out", through.pastZ !== null && through.pastZ > 9.2);
   await walkUntil(["KeyW"], (s) => s.phase === "success", 20000);
   const done = await read();
   check("03 can be finished", true);

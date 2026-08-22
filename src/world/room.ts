@@ -7,13 +7,19 @@ const PLATE_CENTRE_Z = 7.6;
 const SPAWN_Z = 1.6;
 
 /**
- * Six tenths of a second between standing on the plate and the door moving.
+ * About three quarters of a second between standing on the plate and the door
+ * moving.
  *
  * Long enough that a player looks back at what they just did, and that glance
  * lands on the first tape anyone records. The ending replays that tape and the
  * same idle movement reads as someone saying goodbye.
+ *
+ * Also longer than a straight walk across the plate now spends on it (18 ticks
+ * since the press span grew to the body's edge) — the door still opens for
+ * that walk-over because the delay counts from the first press, but the pause
+ * has to stay something a crossing cannot simply outlast.
  */
-export const DOOR_OPEN_DELAY_TICKS = 18;
+export const DOOR_OPEN_DELAY_TICKS = 22;
 
 /**
  * The hall, in metres: 12 wide, 4 high, with a 6.6 m corridor past the door.
