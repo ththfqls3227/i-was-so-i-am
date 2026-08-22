@@ -128,7 +128,7 @@ export class Hud {
     startButton.addEventListener("click", () => this.callbacks.onStart());
     this.title.append(
       startButton,
-      element("p", "hint", "W A S D 이동 · 마우스 시점 · Space 점프\n⏎ 기록 끝내기 · R 다시 기록 · Esc 멈춤 · M 음소거"),
+      element("p", "hint", "W A S D 이동 · 마우스 시점 · Space 점프 · E 잡기\n⏎ 기록 끝내기 · R 다시 기록 · Esc 멈춤 · M 음소거"),
     );
 
     this.result.append(this.resultHeading, this.resultBody);
@@ -270,23 +270,33 @@ export class Hud {
     }
     if (view.phase === "recording") {
       const prompts: Prompt[] = [];
-      if (!view.plateActive && !view.canFold) {
-        prompts.push({ key: null, label: "앞의 발판으로 걸어가세요", tone: "plain" });
+      // A grip under the crosshair is the one moment the player needs the key
+      // named. Eight tries at an unnamed input is how a judge left room 02.
+      if (view.focus !== null && !view.holding) {
+        prompts.push({ key: "E", label: "잡기", tone: "go" });
       }
-      if (view.plateActive && view.canFold) {
-        prompts.push({ key: "⏎", label: "기록 끝내기", tone: "go" });
-      } else if (view.plateActive) {
-        prompts.push({ key: null, label: "발판 위에서 잠시 그대로", tone: "plain" });
+      if (view.hasPlate) {
+        if (!view.plateActive && !view.canFold) {
+          prompts.push({ key: null, label: "앞의 발판으로 걸어가세요", tone: "plain" });
+        }
+        if (view.plateActive && view.canFold) {
+          prompts.push({ key: "⏎", label: "기록 끝내기", tone: "go" });
+        } else if (view.plateActive) {
+          prompts.push({ key: null, label: "발판 위에서 잠시 그대로", tone: "plain" });
+        } else if (view.canFold) {
+          prompts.push({ key: null, label: "발판을 밟은 채로 기록을 끝내면 좋습니다", tone: "plain" });
+          prompts.push({ key: "⏎", label: "기록 끝내기", tone: "plain" });
+        }
       } else if (view.canFold) {
-        prompts.push({ key: null, label: "발판을 밟은 채로 기록을 끝내면 좋습니다", tone: "plain" });
-        prompts.push({ key: "⏎", label: "기록 끝내기", tone: "plain" });
+        // No plates here — the room is about what the hands are doing, and a
+        // line about plates would send the player hunting for one.
+        prompts.push({ key: "⏎", label: view.holding ? "잡은 채로 기록 끝내기" : "기록 끝내기", tone: view.holding ? "go" : "plain" });
       }
       return prompts;
     }
     if (view.phase === "replay") {
-      return [
-        { key: null, label: view.doorOpen ? "빛으로 나가세요" : "문이 열리기를 기다리거나, 직접 발판을 밟으세요", tone: "echo" },
-      ];
+      const waiting = view.hasPlate ? "문이 열리기를 기다리거나, 직접 발판을 밟으세요" : "문이 열리기를 기다리세요";
+      return [{ key: null, label: view.doorOpen ? "빛으로 나가세요" : waiting, tone: "echo" }];
     }
     if (view.phase === "rerecord") {
       return [{ key: "R", label: "다시 기록", tone: "go" }];

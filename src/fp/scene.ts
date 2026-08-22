@@ -62,6 +62,10 @@ export interface ViewModel {
   replaySpan: number;
   canFold: boolean;
   focus: string | null;
+  /** The player is holding a grip right now. */
+  holding: boolean;
+  /** This room has plates at all — rooms without them must not talk about them. */
+  hasPlate: boolean;
   plateActive: boolean;
   doorOpen: boolean;
   echoPresent: boolean;
@@ -1805,11 +1809,15 @@ export class FirstPersonScene {
   // ---------------------------------------------------------------- input
 
   private installInput(): void {
-    this.canvas.addEventListener("keydown", (event) => this.onKey(event, true));
-    this.canvas.addEventListener("keyup", (event) => this.onKey(event, false));
+    // On the window, not the canvas. Clicking the fail card's button moves
+    // focus off the canvas, and a judge whose R key then went dead had no way
+    // to know why — the page has no other keyboard surface, so the window is
+    // the right owner. (Removed again in dispose.)
+    window.addEventListener("keydown", this.onWindowKeyDown);
+    window.addEventListener("keyup", this.onWindowKeyUp);
     // Held keys must not survive losing focus, or the echo records a walk the
     // player never took.
-    this.canvas.addEventListener("blur", () => this.pressed.clear());
+    window.addEventListener("blur", this.onWindowBlur);
     // The promise rejection is the modern signal and pointerlockerror is the one
     // every browser sends. Chromium also refuses the lock outright while the
     // browser is under automation, which is why this path has to be real.
@@ -1859,6 +1867,10 @@ export class FirstPersonScene {
       this.lastPointerY = event.clientY;
     });
   }
+
+  private readonly onWindowKeyDown = (event: KeyboardEvent): void => this.onKey(event, true);
+  private readonly onWindowKeyUp = (event: KeyboardEvent): void => this.onKey(event, false);
+  private readonly onWindowBlur = (): void => this.pressed.clear();
 
   private onKey(event: KeyboardEvent, down: boolean): void {
     const code = event.code;
@@ -2206,7 +2218,11 @@ export class FirstPersonScene {
       // comparing two brightnesses from memory.
       visual.travel.position.y = -press * visual.depth;
 
-      const idle = 0.62 + Math.sin(this.clock * 1.5) * 0.06;
+      // Dormant is dim. At 0.62 the resting ring read as "already lit" — a
+      // judge took 01's untouched plate for an activated one — so the resting
+      // glow drops to a marker of colour, and being stood on becomes the only
+      // bright state.
+      const idle = 0.28 + Math.sin(this.clock * 1.5) * 0.05;
       const held = 1.55 + Math.sin(this.clock * 5.2) * 0.18;
       const pulse = idle + (held - idle) * press;
       // Brass still answers when you stand on it — a plate that gave no feedback
@@ -2569,6 +2585,8 @@ export class FirstPersonScene {
       replaySpan: this.chamber.sim.tapeDurationTicks + this.chamber.sim.replayGraceTicks,
       canFold: this.simulation.canFold,
       focus: present?.focusId ?? null,
+      holding: state.holds.some((hold) => hold.heldBy.includes("present")),
+      hasPlate: state.plates.length > 0,
       // The HUD wants "am I standing on it", not "did the mechanism fire" —
       // on echo-only plates the two answers differ for the whole first pass.
       plateActive: state.plates[0]?.pressedBy.includes("present") ?? false,
@@ -2601,6 +2619,9 @@ export class FirstPersonScene {
 
   dispose(): void {
     this.running = false;
+    window.removeEventListener("keydown", this.onWindowKeyDown);
+    window.removeEventListener("keyup", this.onWindowKeyUp);
+    window.removeEventListener("blur", this.onWindowBlur);
     this.resizeObserver.disconnect();
     this.engine.stopRenderLoop();
     this.scene.dispose();
