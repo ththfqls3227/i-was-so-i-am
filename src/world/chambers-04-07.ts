@@ -213,21 +213,8 @@ export const TWO_OF_US_CHAMBER: Chamber = {
         },
       ],
       extraSalchang: [
-        {
-          id: "gallery-east-band",
-          x: FOUR_HALF,
-          facing: -1,
-          centreZ: 11.7,
-          width: 2.8,
-          sillY: DECK_Y + 2.54,
-          height: 0.78,
-          seed: 4400 + 880,
-          castsBands: false,
-        },
-        // The one you walk up to on the gallery and look through: 01 is on the
-        // other side of it. On the deck's own wall, because a window across the
-        // room is a window nobody reaches — the first placement put it on the
-        // west wall nine metres from the only floor you can stand on up here.
+        // No light band on this wall. It was a third lattice in the one frame
+        // the gallery exists for, and the wall already has a window in it.
         {
           id: "gallery-view",
           x: FOUR_HALF,
@@ -240,6 +227,9 @@ export const TWO_OF_US_CHAMBER: Chamber = {
           castsBands: false,
           // No pane: there is a room behind this one, not daylight.
           open: true,
+          // Wider bars than a light window. At the standard pitch a person
+          // behind this was sliced into eleven pieces.
+          slatPitch: 0.34,
         },
       ],
       blocks: blocksOf(fourSolids).filter(
@@ -257,7 +247,9 @@ export const TWO_OF_US_CHAMBER: Chamber = {
           && block.id !== "deck-rail",
       ),
       balustrades: [
-        { id: "deck", x: 1.7, fromZ: 11, toZ: FOUR_DEPTH, baseY: DECK_Y, height: 1 },
+        // Open across the view, so the one thing this gallery is for is not seen
+        // through pickets. The rails and the brush both carry straight on.
+        { id: "deck", x: 1.7, fromZ: 11, toZ: FOUR_DEPTH, baseY: DECK_Y, height: 1, openFromZ: 12.3, openToZ: 15.5 },
       ],
       // The band he stands in, and the height you have to be at to be looking
       // down rather than across. Both authored rather than guessed: the room

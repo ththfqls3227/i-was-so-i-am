@@ -71,6 +71,11 @@ export interface SalchangSpec {
   castsBands: boolean;
   /** Lattice with no pane, for a window that has a room behind it. */
   open?: boolean;
+  /**
+   * Bar spacing. Light windows want a fine pitch; a window you look at a
+   * person through wants a coarse one, or the body arrives in slices.
+   */
+  slatPitch?: number;
 }
 
 /**
@@ -169,6 +174,14 @@ export interface BalustradeSpec {
   toZ: number;
   baseY: number;
   height: number;
+  /**
+   * A stretch with no balusters, for a rail that stands in the one sightline
+   * the room exists for. The rails still run across it and the brush behind is
+   * untouched — you can lean on it, you just can no longer be looked at
+   * through a picket fence.
+   */
+  openFromZ?: number;
+  openToZ?: number;
 }
 
 /**

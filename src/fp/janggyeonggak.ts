@@ -375,25 +375,41 @@ export function buildDioramaBoard(
   title: string,
   number: string,
 ): StandardMaterial {
-  const width = 512;
-  const height = 180;
+  const width = 256;
+  const height = 512;
   const context = scratchContext(width, height);
-  context.fillStyle = "#1a1512";
+
+  // A hyeonpan, not a museum sticker. The first version was a white glowing box
+  // and in 04's window it was the brightest thing in a frame whose subject is a
+  // person — you read the label before you saw him, which is the wrong way
+  // round. Dark board, ink down the middle, one small seal.
+  context.fillStyle = "#1b1510";
   context.fillRect(0, 0, width, height);
-  context.fillStyle = "#d8cbb0";
-  context.fillRect(10, 10, width - 20, height - 20);
-  context.fillStyle = "#241c14";
+  context.strokeStyle = "rgba(196, 174, 132, 0.5)";
+  context.lineWidth = 3;
+  context.strokeRect(12, 12, width - 24, height - 24);
+
+  context.fillStyle = "#cbb894";
+  context.textAlign = "center";
   context.textBaseline = "middle";
-  context.textAlign = "left";
-  context.font = '600 76px "Helvetica Neue", Helvetica, Arial, sans-serif';
-  context.fillText(number, 34, height / 2);
-  context.font = '500 60px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
-  context.fillText(title, 150, height / 2 + 4);
+  const glyphs = [...title].filter((glyph) => glyph.trim() !== "");
+  const pitch = Math.min(46, 300 / Math.max(1, glyphs.length));
+  const size = Math.min(40, pitch - 6);
+  context.font = `600 ${size}px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif`;
+  for (const [index, glyph] of glyphs.entries()) {
+    context.fillText(glyph, width / 2, 70 + index * pitch);
+  }
+
+  const sealSize = 40;
+  context.fillStyle = "#8f2a20";
+  context.fillRect(width / 2 - sealSize / 2, height - 92, sealSize, sealSize);
+  context.fillStyle = "#e8d6b4";
+  context.font = '700 22px "Helvetica Neue", Helvetica, Arial, sans-serif';
+  context.fillText(number, width / 2, height - 70);
 
   const texture = new DynamicTexture(name, { width, height }, scene, false);
   const target = texture.getContext();
-  // Flipped, because DynamicTexture reads bottom-up and a mirrored label is
-  // worse than no label.
+  // Flipped, because DynamicTexture reads bottom-up.
   target.translate(0, height);
   target.scale(1, -1);
   target.drawImage(context.canvas, 0, 0);
@@ -401,9 +417,9 @@ export function buildDioramaBoard(
 
   const surface = new StandardMaterial(name, scene);
   surface.diffuseColor = Color3.Black();
-  // Dim: a museum label is read when you look for it, not the brightest
-  // thing on the wall. At full strength it out-shone the set it labels.
-  surface.emissiveColor = new Color3(0.4, 0.37, 0.32);
+  // Low, and the board is dark to begin with: nothing here may outshine the
+  // figure the window is for.
+  surface.emissiveColor = new Color3(0.34, 0.31, 0.27);
   surface.emissiveTexture = texture;
   surface.specularColor = Color3.Black();
   surface.disableLighting = true;
@@ -543,6 +559,7 @@ export function buildSalchang(
      * windows are lattices you look through, not windows you look at.
      */
     open?: boolean;
+    slatPitch?: number;
   },
 ): Mesh[] {
   const { x, facing, centreZ, width, sillY, height } = options;
@@ -561,7 +578,7 @@ export function buildSalchang(
   // Vertical slats. The gap has to be wider than the slat, or the window is
   // mostly wall: at 0.1 wide on a 0.135 pitch it was 74% solid and the room got
   // almost no sun at all, which is why the floor bands never appeared.
-  const slatPitch = 0.17;
+  const slatPitch = options.slatPitch ?? 0.17;
   const slatCount = Math.max(3, Math.round(width / slatPitch));
   for (let index = 0; index <= slatCount; index += 1) {
     const z = centreZ - width / 2 + (index / slatCount) * width;

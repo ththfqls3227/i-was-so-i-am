@@ -594,13 +594,17 @@ export class FirstPersonScene {
       }
       const count = Math.max(2, Math.round(span / 0.19));
       for (let index = 0; index <= count; index += 1) {
+        const atZ = rail.fromZ + (index / count) * span;
+        // The open bay. Rails carry across it; the balusters stop.
+        if (rail.openFromZ !== undefined && rail.openToZ !== undefined
+          && atZ > rail.openFromZ && atZ < rail.openToZ) continue;
         const baluster = MeshBuilder.CreateBox(`balustrade-${rail.id}-post-${index}`, {
           width: 0.075, height: rail.height - 0.3, depth: 0.075,
         }, this.scene);
         baluster.position = new Vector3(
           rail.x,
           rail.baseY + rail.height / 2 - 0.01,
-          rail.fromZ + (index / count) * span,
+          atZ,
         );
         baluster.material = timber;
         baluster.isPickable = false;
@@ -2104,6 +2108,7 @@ export class FirstPersonScene {
         height: window.height,
         sillY: window.sillY,
         facing: window.facing,
+        band: 1.1,
       });
     }
   }
@@ -2113,7 +2118,7 @@ export class FirstPersonScene {
     root: TransformNode,
     timber: StandardMaterial,
     diorama: ResolvedDiorama,
-    at: { wallX: number; z: number; width: number; height: number; sillY: number; facing: 1 | -1 },
+    at: { wallX: number; z: number; width: number; height: number; sillY: number; facing: 1 | -1; band?: number },
   ): void {
     const depth = 1.5;
     const { wallX, z, width, height, sillY } = at;
@@ -2164,10 +2169,12 @@ export class FirstPersonScene {
       }
 
       // The board under it, so a window you cannot place still names itself.
+      // Portrait, like every other board in the building: a hyeonpan hangs, it
+      // does not sit on a shelf edge.
       const plate = MeshBuilder.CreatePlane(`diorama-board-${id}`, {
-        width: 0.86, height: 0.3, sideOrientation: Mesh.DOUBLESIDE,
+        width: 0.32, height: 0.62, sideOrientation: Mesh.DOUBLESIDE,
       }, this.scene);
-      plate.position = new Vector3(wallX + out * 0.02, sillY - 0.22, z);
+      plate.position = new Vector3(wallX + out * 0.02, sillY - 0.38, z);
       plate.rotation.y = at.facing > 0 ? -Math.PI / 2 : Math.PI / 2;
       plate.material = buildDioramaBoard(
         this.scene,
@@ -2177,6 +2184,38 @@ export class FirstPersonScene {
       );
       plate.isPickable = false;
       plate.parent = root;
+
+      // A reveal in the palette, because the wall around a gallery opening gets
+      // no light and unlit plaster shows only the scene's ambient — which is
+      // cool, and read as a slab of blue-grey against a building that has no
+      // blue in it. Same value as the set's own backing, so the window sits in
+      // one warm surround rather than on a cold rectangle.
+      const surround = matteMaterial(this.scene, `diorama-reveal-${id}-material`, Color3.Black());
+      surround.emissiveColor = new Color3(0.3, 0.26, 0.2);
+      surround.disableLighting = true;
+      // A border, not a panel: the first attempt was a filled plane and it
+      // covered the window it was supposed to frame. Four strips around the
+      // opening, so what touches the lattice is a palette value instead of
+      // unlit plaster showing the scene's cool ambient.
+      // Wide enough to cover the unlit pier the opening sits in. The corridor's
+      // windows sit in piers barely wider than themselves and want a trim; a
+      // gallery wall is mostly pier, and a thin trim there leaves the cold.
+      const band = at.band ?? 0.3;
+      for (const [part, dz, dy, w, h] of [
+        ["top", 0, height / 2 + band / 2, width + band * 2, band],
+        ["bottom", 0, -height / 2 - band / 2, width + band * 2, band],
+        ["left", -width / 2 - band / 2, 0, band, height],
+        ["right", width / 2 + band / 2, 0, band, height],
+      ] as const) {
+        const strip = MeshBuilder.CreatePlane(`diorama-reveal-${id}-${part}`, {
+          width: w, height: h, sideOrientation: Mesh.DOUBLESIDE,
+        }, this.scene);
+        strip.position = new Vector3(wallX - out * 0.015, sillY + height / 2 + dy, z + dz);
+        strip.rotation.y = at.facing > 0 ? -Math.PI / 2 : Math.PI / 2;
+        strip.material = surround;
+        strip.isPickable = false;
+        strip.parent = root;
+      }
 
       if (!diorama.pose) return;
 
