@@ -55,7 +55,7 @@ test("the opening four rooms can be played through in order", async ({ page }) =
   await waitInPage(page, "v.focus === 'grip-pillar'", 10000);
   await act(page, "press", "KeyE");
   await waitInPage(page, "s.holds[0].active === true", 10000);
-  expect((await read(page)).exitOpen, "the exit opens while the grip is held").toBe(true);
+  await waitInPage(page, "s.exitOpen === true", 10000); // the exit opens while the grip is held
   expect((await read(page)).seal, "a record seals in red").toBe("rgb(200, 64, 47)");
   // Fold on a real recording, not the shortest one the rules allow: at that
   // length the echo reaches the grip only as the tape ends and lets go of it.
@@ -63,8 +63,11 @@ test("the opening four rooms can be played through in order", async ({ page }) =
   await act(page, "fold");
   await act(page, "release", "KeyE");
   await waitInPage(page, 's.phase === "replay"');
-  await waitInPage(page, "s.holds[0].active === true", 10000);
-  expect((await read(page)).exitOpen, "the echo is holding it on the second pass").toBe(true);
+  // Waited for, not sampled. Two evaluates are two different instants, and
+  // reading a state that is still arriving is how this failed intermittently
+  // in chromium — the simulation settles holds and the exit inside one tick,
+  // so the only thing that can disagree is when we look.
+  await waitInPage(page, "s.holds[0].active === true && s.exitOpen === true", 12000);
   await walkInPage(page, ["KeyW"], 's.phase === "success"', 25000);
 
   // ---- 03 The Hand, Not the Body: your feet open the way for him.
@@ -79,7 +82,7 @@ test("the opening four rooms can be played through in order", async ({ page }) =
   await act(page, "setLook", Math.atan2(3.6, 4.9), 0);
   await walkInPage(page, ["KeyW"], "s.plates[0].active === true", 25000);
   await act(page, "setLook", 0, 0);
-  expect((await read(page)).doors[0], "standing on the plate opens it for him").toBe(true);
+  await waitInPage(page, "s.doors[0].open === true", 10000); // standing on it opens it for him
   await waitInPage(page, "s.exitOpen === true", 20000);
   const through = await read(page);
   expect(through.pastZ ?? 0, "he reaches the alcove and opens the way out").toBeGreaterThan(9.6);

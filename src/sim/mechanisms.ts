@@ -161,7 +161,22 @@ export function evaluateDoors(room: RoomDefinition, state: SimState): void {
       door.open = true;
       continue;
     }
-    if (!gateActive(spec.gatedBy, state)) {
+    const satisfied = gateActive(spec.gatedBy, state);
+    // A door that latches is on a timer, not a demand. Once its gate has been
+    // satisfied once, the count keeps running whether or not anything is still
+    // standing there — walking over the plate is enough, and the door opens a
+    // beat later as it always did.
+    //
+    // It used to reset the moment the gate dropped, so the delay meant
+    // *consecutive* ticks of pressure. Walking across 00's plate is about
+    // thirteen ticks and the door wants eighteen, so the room could not be
+    // solved by walking through it — you had to stop and stand, which nothing
+    // says. Two judges failed it eight to ten times each.
+    //
+    // Doors that do not latch keep the old reading: they are open exactly while
+    // the gate is satisfied, which is the whole of what 01 teaches.
+    const counting = spec.latchOnOpen === true ? door.heldTicks > 0 || satisfied : satisfied;
+    if (!counting) {
       door.heldTicks = 0;
       door.open = false;
       continue;

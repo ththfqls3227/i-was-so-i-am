@@ -114,7 +114,14 @@ export interface DoorState {
   id: string;
   open: boolean;
   latched: boolean;
-  /** How long the gate has been satisfied. Reset the moment it stops being. */
+  /**
+   * Ticks since this door's gate was first satisfied.
+   *
+   * A door that latches counts from the first press and never goes back: the
+   * delay is a wait, not a demand to keep standing there. A door that does not
+   * latch still resets the moment the gate stops being satisfied, because for
+   * those the holding is the whole mechanic.
+   */
   heldTicks: number;
 }
 
