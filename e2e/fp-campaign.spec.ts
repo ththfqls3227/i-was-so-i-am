@@ -91,7 +91,18 @@ test("the opening four rooms can be played through in order", async ({ page }) =
   // the renderer drops frames and the catch-up clamp slows simulation time
   // below wall time — the replay window is a sim-time budget, so a wall-clock
   // wait shorter than the slowed window gives up while the room is still fine.
-  await walkInPage(page, ["KeyW"], "s.plates[0].active === true", 40000);
+  //
+  // Stopped at the plate's centre, not its rim. Walking "until active" lets go
+  // of the key one round trip after the rim first answers, and the slide that
+  // follows can carry the body straight off the far side — the door resets its
+  // count against a plate that is no longer pressed, and never opens.
+  await walkInPage(
+    page,
+    ["KeyW"],
+    "Math.hypot(s.actors.find((a) => a.id === 'present').x - 3.6, s.actors.find((a) => a.id === 'present').z - 6.5) < 0.35",
+    40000,
+  );
+  await waitInPage(page, "s.plates[0].active === true", 5000);
   await act(page, "setLook", 0, 0);
   await waitInPage(page, "s.doors[0].open === true", 20000); // standing on it opens it for him
   await waitInPage(page, "s.exitOpen === true", 40000);

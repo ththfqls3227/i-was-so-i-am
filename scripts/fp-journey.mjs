@@ -230,8 +230,14 @@ try {
   await act("setLook", Math.PI / 2, 0);
   await walkUntil(["KeyW"], (s) => s.x >= 3.5);
   await act("setLook", 0, 0);
-  await walkUntil(["KeyW"], (s) => s.plates[0] === true);
-  check("03 amber plate opens the doorway for him", (await read()).doors[0] === true);
+  // To the plate's centre, not its rim: stopping takes a round trip, and a
+  // stop begun at the rim can slide clean off the far side — the door then
+  // counts against an unpressed plate and never opens. And the door is waited
+  // for, not read: it answers a pressed plate most of a second later.
+  await walkUntil(["KeyW"], (s) => Math.hypot(s.x - 3.6, s.z - 6.5) < 0.35);
+  await until((s) => s.plates[0] === true, 5000);
+  const opened = await until((s) => s.doors[0] === true, 5000);
+  check("03 amber plate opens the doorway for him", opened.doors[0] === true);
   const through = await until((s) => s.exitOpen === true, 15000);
   // 9.2, not 9.6: the way out answers when his body reaches the alcove, and
   // plates now count the body's edge (PLAYER_RADIUS), so the moment arrives
