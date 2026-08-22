@@ -11,7 +11,7 @@
 // serves. Extra arguments are forwarded to Playwright (`--grep`, `--repeat-each`).
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { readFile, rm } from "node:fs/promises";
+import { readFile, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -44,18 +44,25 @@ function run(command, commandArgs, env = {}) {
   return result.status ?? 1;
 }
 
-async function entryScript(directory) {
-  const html = await readFile(join(directory, "index.html"), "utf8");
-  const scriptPath = html.match(/src="([^"]+\.js)"/)?.[1];
-  if (!scriptPath) throw new Error(`${directory}/index.html has no built script`);
-  return readFile(join(directory, scriptPath.replace(/^\.?\//, "")), "utf8");
+/**
+ * Every built script, concatenated — not just the entry. The boot gate made
+ * the entry a doorman and moved the game (and its test handle) into a lazy
+ * chunk, so a scan of the entry alone both misses the handle it requires and
+ * misses the handle it forbids.
+ */
+async function allBuiltScripts(directory) {
+  const assets = join(directory, "assets");
+  const files = (await readdir(assets)).filter((file) => file.endsWith(".js"));
+  if (files.length === 0) throw new Error(`${directory}/assets has no built scripts`);
+  const sources = await Promise.all(files.map((file) => readFile(join(assets, file), "utf8")));
+  return sources.join("\n");
 }
 
 await rm(join(root, outDir), { recursive: true, force: true });
 const build = run("npx", ["--no-install", "vite", "build", "--outDir", outDir], { VITE_E2E: "true" });
 if (build !== 0) process.exit(build);
 
-const served = await entryScript(join(root, outDir));
+const served = await allBuiltScripts(join(root, outDir));
 const absent = REQUIRED_IN_GATE_BUILD.filter((api) => !served.includes(api));
 if (absent.length > 0) throw new Error(`${outDir}/ was built without the test API (${absent.join(", ")}); VITE_E2E did not take effect`);
 
@@ -68,7 +75,7 @@ const status = run("npx", [
 
 const shipped = join(root, "dist");
 if (existsSync(join(shipped, "index.html"))) {
-  const script = await entryScript(shipped);
+  const script = await allBuiltScripts(shipped);
   const exposed = FORBIDDEN_IN_SHIPPED.filter((api) => script.includes(api));
   if (exposed.length > 0) throw new Error(`dist/ exposes test-only APIs (${exposed.join(", ")}); the shipped build must come from a plain "npm run build"`);
   console.log(`e2e dist: PASS-GUARD (served ${outDir}/ with the test API; dist/ still ships without it)`);

@@ -1,6 +1,6 @@
 import { chromium } from "@playwright/test";
 import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 
 const dist = new URL("../dist/", import.meta.url).pathname;
@@ -61,8 +61,14 @@ async function inspectEntry(entryUrl) {
   // build exposes it whenever VITE_E2E was set, and the gate builds set it. If a
   // gate build ever lands in dist/ instead of dist-e2e/, this is what says so —
   // and until it was added, nothing did.
+  //
+  // Scanned across every built chunk, not just the entry: the boot gate made
+  // the entry a doorman and the game — where the handle would live — a lazy
+  // chunk an entry-only scan never opens.
+  const chunks = (await readdir(join(dist, "assets"))).filter((file) => file.endsWith(".js"));
+  const everyChunk = (await Promise.all(chunks.map((file) => readFile(join(dist, "assets", file), "utf8")))).join("\n");
   for (const testOnlyApi of ["runGolden", "loadGolden", "runTape", "__I_WAS_SO_I_AM_FP__"]) {
-    if (script.includes(testOnlyApi)) throw new Error(`Production bundle exposes test-only API: ${testOnlyApi}`);
+    if (everyChunk.includes(testOnlyApi)) throw new Error(`Production bundle exposes test-only API: ${testOnlyApi}`);
   }
   return Buffer.byteLength(script);
 }
