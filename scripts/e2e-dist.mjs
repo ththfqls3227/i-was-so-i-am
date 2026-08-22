@@ -16,7 +16,9 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
-const outDir = "dist-e2e";
+// Overridable so a second gate can run beside a first without either rebuilding
+// the directory the other is serving.
+const outDir = process.env.DIST_GATE_OUT_DIR || "dist-e2e";
 /**
  * What the gate build must expose, and what the shipped build must not.
  *
