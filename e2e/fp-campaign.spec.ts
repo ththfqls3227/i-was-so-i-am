@@ -31,7 +31,7 @@ test("the opening four rooms can be played through in order", async ({ page }) =
   await walkInPage(page, ["KeyW"], "s.plates[0].active === true");
   await waitInPage(page, "s.doors[0].open === true");
   expect(await act(page, "fold")).toBe(true);
-  await waitInPage(page, 's.phase === "replay"');
+  await waitInPage(page, 's.phase === "replay" && v.sealing !== true');
   await walkInPage(page, ["KeyW"], 's.phase === "success"', 25000);
 
   // ---- 01 The Second Self: the plate ignores you, and obeys him.
@@ -42,7 +42,7 @@ test("the opening four rooms can be played through in order", async ({ page }) =
   expect(standing.plates[0], "the plate must ignore the living player").toBe(false);
   expect(standing.doors[0]).toBe(false);
   await act(page, "fold");
-  await waitInPage(page, 's.phase === "replay"');
+  await waitInPage(page, 's.phase === "replay" && v.sealing !== true');
   await waitInPage(page, "s.doors[0].open === true", 15000);
   await walkInPage(page, ["KeyW"], 's.phase === "success"', 25000);
 
@@ -62,7 +62,7 @@ test("the opening four rooms can be played through in order", async ({ page }) =
   await heldForARealBeat(page);
   await act(page, "fold");
   await act(page, "release", "KeyE");
-  await waitInPage(page, 's.phase === "replay"');
+  await waitInPage(page, 's.phase === "replay" && v.sealing !== true');
   // Waited for, not sampled. Two evaluates are two different instants, and
   // reading a state that is still arriving is how this failed intermittently
   // in chromium — the simulation settles holds and the exit inside one tick,
@@ -82,7 +82,7 @@ test("the opening four rooms can be played through in order", async ({ page }) =
   expect((await read(page)).doors[0], "nothing in the recording can open this doorway").toBe(false);
   await act(page, "fold");
   await act(page, "release", "KeyW");
-  await waitInPage(page, 's.phase === "replay"');
+  await waitInPage(page, 's.phase === "replay" && v.sealing !== true');
   // Aimed straight at the plate and walked once, rather than out to a corner
   // and forward. Two legs means stopping at a coordinate mid-way, and stopping
   // takes a round trip: overshoot the corner and the plate is no longer ahead.
