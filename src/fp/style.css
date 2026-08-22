@@ -201,14 +201,20 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
   letter-spacing: 0.02em;
   color: #b7c3d0;
   white-space: nowrap;
-  /* Fades out once the drag it describes has been performed. */
+  /* Fades out once the drag it describes has been performed — and then leaves
+     the accessibility tree too. At opacity zero it was still being read by
+     anything walking the tree, and four rounds of judges reported a toast
+     "that never goes away" no human player could still see. */
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
-  transition: opacity 600ms ease;
+  transition: opacity 600ms ease, visibility 0s 600ms;
 }
 
 .notice[data-shown="true"] {
   opacity: 1;
+  visibility: visible;
+  transition: opacity 600ms ease;
 }
 
 @media (prefers-reduced-motion: reduce) {

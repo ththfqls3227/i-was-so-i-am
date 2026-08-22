@@ -332,8 +332,10 @@ export class Hud {
       if (view.hasPlate && view.plateDutyInReplay) {
         // 03: the plate is the second pass's job. "Walk to the plate" here
         // steered a judge onto it with the recording running — the one move
-        // the room is built to refuse. Say whose turn it is instead.
-        prompts.push({ key: null, label: "이 발판은 재생의 몫입니다 — 지금은 걸음을 기록하세요", tone: "plain" });
+        // the room is built to refuse. Say whose turn it is, and what THIS
+        // pass is for: "record your steps" told a judge nothing about which
+        // steps, and cost five tries.
+        prompts.push({ key: null, label: "이 발판은 재생의 몫입니다 — 지금은 닫힌 문을 향해 걸으세요", tone: "plain" });
         if (view.canFold) prompts.push({ key: "⏎", label: "기록 끝내기", tone: "plain" });
       } else if (view.hasPlate) {
         // "Stand still on it", not "walk to it": two judges walked straight
@@ -349,9 +351,13 @@ export class Hud {
           prompts.push({ key: null, label: approach, tone: "plain" });
         }
         if (view.plateActive && view.canFold) {
+          // Said outright, and kept saying: the negative line's absence was
+          // the only "yes" the interface ever gave, and two judges spent
+          // whole tapes unable to tell a press that took from one that missed.
+          prompts.push({ key: null, label: "발판 위입니다", tone: "go" });
           prompts.push({ key: "⏎", label: "기록 끝내기", tone: "go" });
         } else if (view.plateActive) {
-          prompts.push({ key: null, label: "발판 위에서 잠시 그대로", tone: "plain" });
+          prompts.push({ key: null, label: "발판 위입니다 — 잠시 그대로", tone: "go" });
         } else if (view.canFold) {
           // Say where the player is NOT. From first person the disc fills the
           // bottom of the frame while you are still short of it — a judge read
@@ -371,11 +377,16 @@ export class Hud {
       // "step on it yourself" is a lie in a room whose plate only answers the
       // echo — a judge stood on 01's plate, read that line, and concluded the
       // game was broken when nothing happened.
+      // In the role-reversal room the generic line's first half ("wait for
+      // the door") is exactly wrong — waiting is the move that fails. Its
+      // plate room gets the imperative alone.
       const waiting = !view.hasPlate
         ? "문이 열리기를 기다리세요"
-        : view.plateForEchoOnly
-          ? "문이 열리기를 기다리세요 — 이 발판은 메아리의 것입니다"
-          : "문이 열리기를 기다리거나, 직접 발판을 밟으세요";
+        : view.plateDutyInReplay
+          ? "오른쪽 발판을 직접 밟으세요 — 당신의 발이 문을 엽니다"
+          : view.plateForEchoOnly
+            ? "문이 열리기를 기다리세요 — 이 발판은 메아리의 것입니다"
+            : "문이 열리기를 기다리거나, 직접 발판을 밟으세요";
       // In 03 the first door opens while the way out is still shut: the player
       // is holding it open with their foot. "Walk into the light" at that
       // moment sends them off the plate and shuts the door on the echo.

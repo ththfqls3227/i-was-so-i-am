@@ -240,7 +240,9 @@ export const HAND_NOT_BODY_CHAMBER: Chamber = {
     { after: 1, line: "재생 중에는 당신의 발이 자유롭습니다. 바닥의 금색 선을 따라가, 오른쪽의 발판을 직접 밟으세요." },
     { after: 2, line: "발판을 밟은 채 기다리면, 메아리가 열린 문을 지나 막다른 방까지 걸어갑니다. 출구가 열리면 당신도 나가야 합니다." },
   ],
-  subtitleOnEntry: "안내: 기록되는 것은 위치가 아니라 행동입니다. 막힌 곳에서도 걸음은 기록됩니다.",
+  // The rule up front, not four failure cards deep: a judge who met it only
+  // as escalating hints spent five tries re-deriving it and quit one short.
+  subtitleOnEntry: "안내: 이 방의 발판은 재생 중의 당신 몫입니다. 기록에는 — 닫힌 문을 향한 걸음을 담으세요.",
   // The echo treading against the shut partition is the room's whole idea —
   // and it reads as a bug until this sentence lands.
   echoAtDoorLine: "메아리가 닫힌 문 앞에서 걷고 있습니다 — 오른쪽 발판이 그 문을 엽니다.",
