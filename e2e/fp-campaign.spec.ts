@@ -92,17 +92,22 @@ test("the opening four rooms can be played through in order", async ({ page }) =
   // below wall time — the replay window is a sim-time budget, so a wall-clock
   // wait shorter than the slowed window gives up while the room is still fine.
   //
-  // Stopped at the plate's centre, not its rim. Walking "until active" lets go
-  // of the key one round trip after the rim first answers, and the slide that
-  // follows can carry the body straight off the far side — the door resets its
-  // count against a plate that is no longer pressed, and never opens.
-  await walkInPage(
-    page,
-    ["KeyW"],
-    "Math.hypot(s.actors.find((a) => a.id === 'present').x - 3.6, s.actors.find((a) => a.id === 'present').z - 6.5) < 0.35",
-    40000,
-  );
-  await waitInPage(page, "s.plates[0].active === true", 5000);
+  // A monotone threshold first — once crossed it stays crossed, so a polling
+  // loop cannot blink and miss it. Under tracing this replay renders at
+  // single-digit fps, one rAF poll is 0.4 m of walking, and both a fixed
+  // proximity window and the walk across the plate fit between two polls:
+  // one gate run watched the room get quietly *solved* while the wait for a
+  // moment that had already passed timed out.
+  await walkInPage(page, ["KeyW"], "s.actors.find((a) => a.id === 'present').z > 5.2", 40000);
+  // Then creep in short pulses, reading the one durable fact between steps:
+  // a stopped body on the plate stays on the plate between polls.
+  for (let creep = 0; creep < 12 && !(await read(page)).plates[0]; creep += 1) {
+    await act(page, "press", "KeyW");
+    await page.waitForTimeout(150);
+    await act(page, "release", "KeyW");
+    await page.waitForTimeout(250);
+  }
+  await waitInPage(page, "s.plates[0].active === true", 3000);
   await act(page, "setLook", 0, 0);
   await waitInPage(page, "s.doors[0].open === true", 20000); // standing on it opens it for him
   await waitInPage(page, "s.exitOpen === true", 40000);
