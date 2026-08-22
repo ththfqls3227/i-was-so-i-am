@@ -137,6 +137,17 @@ interface PlateVisual {
   accent: Color3;
   /** Whether the ring is a coloured signal or plain brass. See buildPlates. */
   signal: boolean;
+  /**
+   * The parts that sink when weight goes on: the disc, its grooves and its ring.
+   * The timber housing around them does not move, so the travel reads as a
+   * piston going down into its seat rather than as the floor dropping.
+   */
+  travel: TransformNode;
+  /** How far it sinks, in metres. */
+  depth: number;
+  /** Smoothed 0..1 from the simulation's boolean. Fast down, slower back up. */
+  press: number;
+  restIntensity: number;
 }
 
 interface Snapshot {
@@ -1205,6 +1216,14 @@ export class FirstPersonScene {
       // bay with corner brackets so it still reads as one instrument.
       const field = plate.half.x > 1.1 || plate.half.z > 1.1;
 
+      // Everything that goes down under a foot hangs off this. A field is a
+      // floor you walk across and moves a third as far as an instrument does —
+      // three centimetres of travel under a whole alcove reads as the ground
+      // giving way.
+      const travel = new TransformNode(`plate-travel-${plate.id}`, this.scene);
+      travel.parent = root;
+      const depth = field ? 0.009 : 0.026;
+
       if (field) {
         const pad = MeshBuilder.CreateBox(`plate-pad-${plate.id}`, {
           width: plate.half.x * 2,
@@ -1215,7 +1234,7 @@ export class FirstPersonScene {
         pad.material = timber;
         pad.receiveShadows = true;
         pad.isPickable = false;
-        pad.parent = root;
+        pad.parent = travel;
         for (const sx of [-1, 1] as const) {
           for (const sz of [-1, 1] as const) {
             const along = MeshBuilder.CreateBox(`plate-bracket-x-${plate.id}-${sx}-${sz}`, {
@@ -1224,7 +1243,7 @@ export class FirstPersonScene {
             along.position = centre.add(new Vector3(sx * (plate.half.x - plate.half.x * 0.25), 0.032, sz * (plate.half.z - 0.05)));
             along.material = material;
             along.isPickable = false;
-            along.parent = root;
+            along.parent = travel;
             this.glow.addIncludedOnlyMesh(along);
             const across = MeshBuilder.CreateBox(`plate-bracket-z-${plate.id}-${sx}-${sz}`, {
               width: 0.09, height: 0.035, depth: plate.half.z * 0.5,
@@ -1232,7 +1251,7 @@ export class FirstPersonScene {
             across.position = centre.add(new Vector3(sx * (plate.half.x - 0.05), 0.032, sz * (plate.half.z - plate.half.z * 0.25)));
             across.material = material;
             across.isPickable = false;
-            across.parent = root;
+            across.parent = travel;
             this.glow.addIncludedOnlyMesh(across);
           }
         }
@@ -1253,7 +1272,7 @@ export class FirstPersonScene {
         face.material = brass;
         face.receiveShadows = true;
         face.isPickable = false;
-        face.parent = root;
+        face.parent = travel;
 
         for (const [index, scale] of [0.5, 0.9, 1.4].entries()) {
           const groove = MeshBuilder.CreateTorus(`plate-groove-${plate.id}-${index}`, {
@@ -1262,7 +1281,7 @@ export class FirstPersonScene {
           groove.position = centre.add(new Vector3(0, 0.079, 0));
           groove.material = brassMaterial(this.scene, `plate-groove-material-${plate.id}-${index}`, 0.7);
           groove.isPickable = false;
-          groove.parent = root;
+          groove.parent = travel;
         }
       }
 
@@ -1276,17 +1295,29 @@ export class FirstPersonScene {
       ring.position = centre.add(new Vector3(0, field ? 0.038 : 0.082, 0));
       ring.material = material;
       ring.isPickable = false;
-      ring.parent = root;
+      ring.parent = travel;
       if (signal) this.glow.addIncludedOnlyMesh(ring);
 
       // A field is the floor of a whole alcove, and its light is the only light
       // in there — the rig outside cannot reach past the partition.
       const light = new PointLight(`plate-light-${plate.id}`, centre.add(new Vector3(0, field ? 1.1 : 0.6, 0)), this.scene);
       light.diffuse = signal ? accent : new Color3(1, 0.87, 0.66);
-      light.intensity = field ? 1.15 : 0.55;
+      const restIntensity = field ? 1.15 : 0.55;
+      light.intensity = restIntensity;
       light.range = field ? 7 : 5.5;
 
-      visuals.push({ id: plate.id, ring, light, material, accent, signal });
+      visuals.push({
+        id: plate.id,
+        ring,
+        light,
+        material,
+        accent,
+        signal,
+        travel,
+        depth,
+        press: 0,
+        restIntensity,
+      });
     }
     return visuals;
   }
@@ -1521,6 +1552,12 @@ export class FirstPersonScene {
     // spread, clipped and indistinguishable from each other, while 0 reads 200
     // with a twelve-point spread and the mulberry strands come back. From
     // across the room it is still the brightest thing in the wall.
+    //
+    // Do not reach for this as a press signal, either. Brightening the leaf when
+    // its gate is answered was tried and measured: at 0.34 the paper is already
+    // clipped to 172 by the glow layer, and taking it to 0.6 moved the door
+    // panel 0.1% in a frame shot at the moment the plate went down. There is no
+    // headroom left in this surface.
     const paper = hanjiMaterial(this.scene, "door-hanji", 5501, this.chamber.dressing.corridor ? 0.34 : 0);
     const columns = 3;
     const rows = 4;
@@ -2041,15 +2078,46 @@ export class FirstPersonScene {
 
     for (const visual of this.plates) {
       const active = state.plates.find((plate) => plate.id === visual.id)?.active ?? false;
-      const pulse = active ? 1.35 + Math.sin(this.clock * 5.2) * 0.18 : 0.62 + Math.sin(this.clock * 1.5) * 0.06;
+      // Down fast, back up slower. Two judges played this room for fifteen
+      // minutes each and reported no way to tell a plate had been stood on, so
+      // the priority here is that the answer arrives inside the same footfall:
+      // 35 ms to most of the travel going down, 110 ms coming back. An instant
+      // snap would read as a rendering glitch; anything slower than a footfall
+      // is not an answer to the footfall.
+      const settle = 1 - Math.exp(-deltaSeconds / (active ? 0.035 : 0.11));
+      visual.press += ((active ? 1 : 0) - visual.press) * settle;
+      const press = visual.press;
+
+      // The disc goes down into its housing. The housing does not move, so
+      // there is a shadow line at the rim that was not there a moment ago —
+      // which is the part of this that reads at a glance rather than by
+      // comparing two brightnesses from memory.
+      visual.travel.position.y = -press * visual.depth;
+
+      const idle = 0.62 + Math.sin(this.clock * 1.5) * 0.06;
+      const held = 1.55 + Math.sin(this.clock * 5.2) * 0.18;
+      const pulse = idle + (held - idle) * press;
       // Brass still answers when you stand on it — a plate that gave no feedback
       // would be worse than one wearing the wrong colour — but at a quarter of
       // the signal's throw, so it reads as metal catching the room rather than
       // as a fourth thing in the colour language.
       visual.material.emissiveColor = visual.accent.scale(visual.signal ? pulse : pulse * 0.26);
-      visual.light.intensity = active ? 1.5 : 0.55;
-      visual.ring.scaling.y = active ? 0.7 : 1;
+      // The lamp under the disc lifts with the press, and that is all it does.
+      //
+      // It was worth measuring, because none of this reaches the player who is
+      // standing on the plate: at fov 1.05 with an eye 1.63 m up, the floor does
+      // not enter frame until 2.8 m ahead, and the plate's square is 0.95 m — so
+      // the disc and its ring leave the picture at the exact instant a foot
+      // lands on them. Throwing the lamp further does not answer that either;
+      // StandardMaterial takes four lights per mesh and this room has thirteen,
+      // so the plate's lamp never wins a slot on the floor at all. Two shots of
+      // the same pose across this change came out identical to the byte. What
+      // does reach that view is the door, below.
+      visual.light.intensity = visual.restIntensity + press * 0.95;
+      // The ring flattens as it seats, on the same curve as the travel.
+      visual.ring.scaling.y = 1 - press * 0.3;
     }
+
   }
 
   /**
