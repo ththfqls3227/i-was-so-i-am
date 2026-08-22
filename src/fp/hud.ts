@@ -341,12 +341,17 @@ export class Hud {
         // "Stand still on it", not "walk to it": two judges walked straight
         // across the disc, saw nothing latch, and concluded the plate was
         // broken — crossing presses it for half a second, which is less than
-        // the door asks for. And once they are past it, "not on it yet" points
-        // the wrong way: the plate is behind them now, and one judge looped on
-        // that line with no way to learn which way to turn.
-        const approach = view.platePassed
-          ? "발판을 지나쳤습니다 — 한 걸음 뒤로"
-          : "앞의 발판 위에 멈춰 서세요";
+        // the door asks for. And near the plate the line carries a direction:
+        // "not on it yet" is a fact with no way-to-turn in it, and three
+        // rounds of drifting judges looped on it with the plate at their elbow.
+        const approach =
+          view.plateBearing === "behind"
+            ? "발판을 지나쳤습니다 — 한 걸음 뒤로"
+            : view.plateBearing === "left"
+              ? "발판이 왼쪽에 있습니다"
+              : view.plateBearing === "right"
+                ? "발판이 오른쪽에 있습니다"
+                : "앞의 발판 위에 멈춰 서세요";
         if (!view.plateActive && !view.canFold) {
           prompts.push({ key: null, label: approach, tone: "plain" });
         }
@@ -363,7 +368,11 @@ export class Hud {
           // bottom of the frame while you are still short of it — a judge read
           // the old advisory line as "standing on it", folded, and watched the
           // echo freeze at the rim.
-          prompts.push({ key: null, label: view.platePassed ? approach : "아직 발판 위가 아닙니다", tone: "plain" });
+          prompts.push({
+            key: null,
+            label: view.plateBearing && view.plateBearing !== "ahead" ? approach : "아직 발판 위가 아닙니다",
+            tone: "plain",
+          });
           prompts.push({ key: "⏎", label: "기록 끝내기", tone: "plain" });
         }
       } else if (view.canFold) {
@@ -383,7 +392,13 @@ export class Hud {
       const waiting = !view.hasPlate
         ? "문이 열리기를 기다리세요"
         : view.plateDutyInReplay
-          ? "오른쪽 발판을 직접 밟으세요 — 당신의 발이 문을 엽니다"
+          ? (view.plateBearing === "left"
+            ? "발판이 왼쪽에 있습니다 — 직접 밟으세요"
+            : view.plateBearing === "right"
+              ? "발판이 오른쪽에 있습니다 — 직접 밟으세요"
+              : view.plateBearing === "behind"
+                ? "발판을 지나쳤습니다 — 뒤로 돌아 밟으세요"
+                : "오른쪽 발판을 직접 밟으세요 — 당신의 발이 문을 엽니다")
           : view.plateForEchoOnly
             ? "문이 열리기를 기다리세요 — 이 발판은 메아리의 것입니다"
             : "문이 열리기를 기다리거나, 직접 발판을 밟으세요";

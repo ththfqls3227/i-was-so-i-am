@@ -53,7 +53,9 @@ const PITCH_LIMIT = 1.5;
  * A quarter turn, dragged. Enough that it cannot be a stray click on the canvas
  * and is unmistakably someone looking around on purpose.
  */
-const DRAG_LOOK_LEARNED = Math.PI / 2;
+// A quarter turn was the old bar; an eighth is plenty of proof, and judges
+// doing short precision drags kept the notice for minutes past its use.
+const DRAG_LOOK_LEARNED = Math.PI / 4;
 
 export interface ViewModel {
   phase: SimState["phase"];
@@ -70,8 +72,12 @@ export interface ViewModel {
   attempts: number;
   /** False until the first act lands — while parked, the tape gauge would lie. */
   tapeArmed: boolean;
-  /** Walked over and past the plate: "stand still on it" becomes "step back". */
-  platePassed: boolean;
+  /**
+   * Where the plate is, relative to where the player faces — only when close
+   * enough for coaching and not standing on it. "Not on it yet" told a
+   * drifting player nothing about which way to turn, three rounds running.
+   */
+  plateBearing: "ahead" | "left" | "right" | "behind" | null;
   focus: string | null;
   /** The focused thing is a grip — the only kind of focus E can act on. */
   focusIsHold: boolean;
@@ -2051,20 +2057,30 @@ export class FirstPersonScene {
   }
 
   /**
-   * Walked over the plate and out the far side, while recording, in a room
-   * whose plate answers the living player. Only for plates on the room's own
-   * axis — an off-axis plate has no "past it" a z test can honestly claim.
-   * "Stand still on it" is the wrong coaching from back there; a judge got
-   * "아직 발판 위가 아닙니다" on loop with the plate behind them and no way
-   * to learn which way to turn.
+   * Which way the plate lies from where the player faces, when they are close
+   * and not on it. Three rounds of judges drifted past the disc under the
+   * drag-look fallback and got only "not on it yet" — a fact with no
+   * direction in it. Null when far (the generic line serves), when standing
+   * on it, or when the plate ignores the living foot.
    */
-  private platePassed(state: Readonly<SimState>, present: SimState["actors"][number] | undefined): boolean {
-    if (state.phase !== "recording" || !present) return false;
+  private plateBearing(
+    state: Readonly<SimState>,
+    present: SimState["actors"][number] | undefined,
+  ): ViewModel["plateBearing"] {
+    if (!present) return null;
     const plate = this.chamber.sim.plates[0];
-    if (!plate || plate.requiredActor === "past") return false;
-    if (Math.abs(plate.centre.x) > 0.6) return false;
-    if (state.plates[0]?.pressedBy.includes("present")) return false;
-    return present.z > plate.centre.z + plate.half.z + simConstants.playerRadius + 0.15;
+    if (!plate || plate.requiredActor === "past") return null;
+    if (state.plates[0]?.pressedBy.includes("present")) return null;
+    const dx = plate.centre.x - present.x;
+    const dz = plate.centre.z - present.z;
+    if (Math.hypot(dx, dz) > Math.max(plate.half.x, plate.half.z) + 2.4) return null;
+    const yaw = radiansFromYawUnits(present.yawUnits);
+    let bearing = Math.atan2(dx, dz) - yaw;
+    while (bearing > Math.PI) bearing -= Math.PI * 2;
+    while (bearing < -Math.PI) bearing += Math.PI * 2;
+    if (Math.abs(bearing) < Math.PI / 5) return "ahead";
+    if (Math.abs(bearing) > (Math.PI * 4) / 5) return "behind";
+    return bearing > 0 ? "right" : "left";
   }
 
   /**
@@ -2408,6 +2424,7 @@ export class FirstPersonScene {
           strip.material = material;
           strip.isPickable = false;
           strip.parent = root;
+          if (path.glows) this.glow.addIncludedOnlyMesh(strip);
         }
       }
     }
@@ -2703,7 +2720,7 @@ export class FirstPersonScene {
       canFold: this.simulation.canFold,
       attempts: this.attemptsInRoom,
       tapeArmed: this.simulation.recordedFrames.length > 0 || state.phase !== "recording",
-      platePassed: this.platePassed(state, present),
+      plateBearing: this.plateBearing(state, present),
       focus: focusId,
       // Plates take focus too (the crosshair acknowledges them), but E only
       // ever acts on a grip — a playtest judge read the grab prompt over a

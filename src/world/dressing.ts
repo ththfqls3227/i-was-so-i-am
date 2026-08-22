@@ -6,8 +6,9 @@ export function route(
   points: { x: number; z: number }[],
   wear = 1,
   actor: "past" | "present" = "present",
+  glows = false,
 ): ChamberDressing["routes"][number] {
-  return { id, points, wear, actor };
+  return { id, points, wear, actor, glows };
 }
 
 /** Shelving stops here; salchang and plaster carry the wall above it. */

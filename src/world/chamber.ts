@@ -208,6 +208,13 @@ export interface RouteSpec {
    * wear in a room is.
    */
   actor?: "past" | "present";
+  /**
+   * Joins the bloom, the way the shell rooms' own route lines do. Off by
+   * default: worn lines are memory, not signage. 03's plate line is the one
+   * exception — it is the leg the whole replay hangs on, it runs through the
+   * room's darkest corner, and two rounds of judges never found it matte.
+   */
+  glows?: boolean;
 }
 
 /** One chamber: what the simulation runs, what the renderer builds, what the sign says. */

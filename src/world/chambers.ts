@@ -259,7 +259,10 @@ export const HAND_NOT_BODY_CHAMBER: Chamber = {
     // The plate is off to one side and the alcove is through a gap in a wall.
     // From the door, neither is where the room looks like it goes.
     routes: [
-      route("to-plate", [{ x: 0, z: 2.2 }, { x: 3.6, z: 4.4 }, { x: 3.6, z: 6.5 }]),
+      // The one glowing route in the game: this is the line the replay hangs
+      // on, it lives in the room's darkest corner, and two rounds of judges
+      // never saw it matte. Wear stays within the faint-lines rule.
+      route("to-plate", [{ x: 0, z: 2.2 }, { x: 3.6, z: 4.4 }, { x: 3.6, z: 6.5 }], 1, "present", true),
       route("through-partition", [{ x: 0, z: 2.2 }, { x: 0, z: ALCOVE_PLATE_Z }], 0.55, "past"),
     ],
     // This room leaves through a doorway in its own east wall. It has no
