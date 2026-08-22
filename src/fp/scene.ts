@@ -848,6 +848,10 @@ export class FirstPersonScene {
     if (this.chamber.dressing.corridor) this.buildExit(root, timber);
     else this.buildThreshold(root, timber);
     this.buildOpenBox(root, timber, brass);
+    // A room with no plates, grips or open box binds brass to nothing, and an
+    // unbound material survives worldRoot.dispose — one leaked per campaign,
+    // measured 26→29 across three full runs. If nothing took it, let it go.
+    if (brass.getBindedMeshes().length === 0) brass.dispose();
 
     const echoSkin = echoMaterial(this.scene, "echo-core");
     const echo = createHumanoid(this.scene, "echo", echoSkin);
@@ -2171,7 +2175,11 @@ export class FirstPersonScene {
     }
 
     for (const visual of this.plates) {
-      const active = state.plates.find((plate) => plate.id === visual.id)?.active ?? false;
+      // Pressed-by-anyone, not mechanism-active: an echo-only plate stays
+      // inert to the living player, but the metal under their feet must not.
+      // Two judges stood on 01's plate with no way to know it had registered.
+      const plateState = state.plates.find((plate) => plate.id === visual.id);
+      const active = (plateState?.pressedBy.length ?? 0) > 0;
       // Down fast, back up slower. Two judges played this room for fifteen
       // minutes each and reported no way to tell a plate had been stood on, so
       // the priority here is that the answer arrives inside the same footfall:
@@ -2551,7 +2559,9 @@ export class FirstPersonScene {
       replaySpan: this.chamber.sim.tapeDurationTicks + this.chamber.sim.replayGraceTicks,
       canFold: this.simulation.canFold,
       focus: present?.focusId ?? null,
-      plateActive: state.plates[0]?.active ?? false,
+      // The HUD wants "am I standing on it", not "did the mechanism fire" —
+      // on echo-only plates the two answers differ for the whole first pass.
+      plateActive: state.plates[0]?.pressedBy.includes("present") ?? false,
       doorOpen: state.doors[0]?.open ?? false,
       echoPresent: state.actors.some((actor) => actor.id === "past"),
       success: state.success,
