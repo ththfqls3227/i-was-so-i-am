@@ -72,9 +72,16 @@ test("the opening four rooms can be played through in order", async ({ page }) =
 
   // ---- 03 The Hand, Not the Body: your feet open the way for him.
   await advanceTo(page, "hand-not-body");
-  await walkInPage(page, ["KeyW"], "s.actors.find((a) => a.id === 'present').z > 8.6", 20000);
+  // Fold with W still held — the room's own lesson ("막힌 곳에서도 걸음은
+  // 기록됩니다"). A tape that ends in a step keeps the echo walking forever,
+  // so it does not matter how late the plate opens the door for him. Folding
+  // after release leaves a standing tail, and on a slow machine the door opens
+  // only after the echo's walking frames have run out — he never moves again.
+  await act(page, "press", "KeyW");
+  await waitInPage(page, "s.actors.find((a) => a.id === 'present').z > 8.6", 20000);
   expect((await read(page)).doors[0], "nothing in the recording can open this doorway").toBe(false);
   await act(page, "fold");
+  await act(page, "release", "KeyW");
   await waitInPage(page, 's.phase === "replay"');
   // Aimed straight at the plate and walked once, rather than out to a corner
   // and forward. Two legs means stopping at a coordinate mid-way, and stopping

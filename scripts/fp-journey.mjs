@@ -214,10 +214,15 @@ try {
   await advanceTo("hand-not-body");
   check("advancing reaches 03", (await read()).chamber === "hand-not-body");
   await act("setLook", 0, 0);
-  await hold(["KeyW"], 2600);
+  // Fold with W still held — the room's own lesson. A tape ending in a step
+  // keeps the echo walking forever; a standing tail strands him at the door
+  // on any machine slow enough that the plate opens it late.
+  await act("press", "KeyW");
+  await until((s) => s.z > 8.6, 15000);
   const blocked = await read();
   check("03 the shut doorway stops the recording", blocked.z < 9 && blocked.doors[0] === false, `z ${blocked.z.toFixed(2)}`);
   await act("fold");
+  await act("release", "KeyW");
   await until((s) => s.phase === "replay");
   // Step onto the amber plate and stay there while he walks through. Steered by
   // where the plate actually is, because the plate is 1.9 m across and a guessed
