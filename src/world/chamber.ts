@@ -254,6 +254,19 @@ export interface Chamber {
    */
   rerecordNotice?: string;
   /**
+   * What to add to the failure card once someone has failed the same way
+   * several times over.
+   *
+   * Nothing is offered on the first two attempts: failing twice is how the
+   * rooms are learned, and a game that explains itself the moment you are
+   * wrong has taken the room away from you. By the third identical failure the
+   * player is not learning any more, and by the fifth they are about to leave.
+   *
+   * `after` is the failure count this line starts appearing at. Rooms with no
+   * approved line for this simply say nothing, which is the honest default.
+   */
+  hints?: readonly { after: number; line: string }[];
+  /**
    * The last door, and what the fold key does at it.
    *
    * Only the corridor has one. Every recording you have ever made ended with

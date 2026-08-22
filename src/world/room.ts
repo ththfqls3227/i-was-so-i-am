@@ -144,6 +144,10 @@ export const AWAKENING_CHAMBER: Chamber = {
   sim: AWAKENING,
   shell: ROOM_SHELL,
   number: "00",
+  hints: [
+    { after: 3, line: "메아리가 발판에 도착해야 문이 열립니다." },
+    { after: 5, line: "발판 위에 멈춰 서서 ⏎." },
+  ],
   subtitleOnEntry: "기억 보관소에 오신 것을 환영합니다. 이 방에서의 모든 행동은 기록됩니다.",
   dressing: AWAKENING_DRESSING,
 };

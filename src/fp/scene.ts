@@ -85,6 +85,8 @@ export interface ViewModel {
   hasNextChamber: boolean;
   /** What the fold key offers at the last door, or null anywhere else. */
   finalBeat: string | null;
+  /** Lines this room is willing to offer after repeated identical failures. */
+  hints: readonly { after: number; line: string }[];
   /**
    * The closing lines have started. Wayfinding prompts stop: "빛으로 나가세요"
    * under the last thing the game says is the game talking over itself.
@@ -1864,6 +1866,10 @@ export class FirstPersonScene {
       event.preventDefault();
     }
     if (down) {
+      // A key the player is still holding is not a new press. The browser keeps
+      // firing keydown for it, and without this a key held through a restart
+      // silently rejoins the fresh attempt.
+      if (event.repeat) return;
       if (this.pressed.has(code)) return;
       this.pressed.add(code);
       if (code === "Enter") this.beginFold();
@@ -1977,6 +1983,10 @@ export class FirstPersonScene {
   rerecord(): void {
     if (this.simulation.state.phase === "recording") return;
     const previousPhase = this.simulation.state.phase;
+    // Every attempt starts from a standstill. Players who fail reach for R with
+    // a hand still on W, and the recording that began walking on its own was
+    // the one they then failed with — which is how eight attempts became ten.
+    this.pressed.clear();
     this.simulation.rerecord();
     this.yaw = radiansFromYawUnits(this.chamber.sim.spawn.yawUnits);
     this.pitch = 0;
@@ -2583,6 +2593,7 @@ export class FirstPersonScene {
       finalBeat: this.chamber.finalBeat && state.success && !this.ended
         ? this.chamber.finalBeat.prompt
         : null,
+      hints: this.chamber.hints ?? [],
       pointerLockDenied: this.pointerLockDenied && !this.pointerLocked,
       dragLookLearned: this.dragTurned >= DRAG_LOOK_LEARNED,
     };

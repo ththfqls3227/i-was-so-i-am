@@ -58,6 +58,10 @@ export class Hud {
   private readonly flash = element("div", "flash");
   /** The last door has been closed; the result panel is frozen on the ending. */
   private ended = false;
+  /** The same failure, in the same room, over and over. */
+  private repeated = { room: "", error: "", count: 0 };
+  /** The card renders every frame; one failure must only be counted once. */
+  private countedThisFailure = false;
 
   /** 봉인 낙관 — the seal that comes down when a recording is closed. */
   private readonly seal = element("div", "seal");
@@ -222,9 +226,21 @@ export class Hud {
     const span = view.phase === "recording" ? view.tapeDuration : view.replaySpan;
     const progress = Math.max(0, Math.min(1, view.tapeTick / span));
     this.tapeFill.style.width = `${(progress * 100).toFixed(2)}%`;
-    this.tapeMark.style.left = view.phase === "recording" ? "100%" : `${((view.tapeDuration / view.replaySpan) * 100).toFixed(2)}%`;
+    // The mark is where the tape runs out and the grace begins, which only
+    // means anything during a replay. While recording it sat pinned at the end
+    // of the bar saying nothing, and a tick at three quarters with no reading
+    // is what made people think the replay lasts as long as the recording.
+    const replaying = view.phase !== "recording";
+    this.tapeMark.hidden = !replaying;
+    if (replaying) {
+      this.tapeMark.style.left = `${((view.tapeDuration / view.replaySpan) * 100).toFixed(2)}%`;
+    }
     const remaining = Math.max(0, (span - view.tapeTick) / 30);
-    const leftLabel = view.phase === "recording" ? "기록 시간" : "재생 시간";
+    // The number has always been what is left, and the label never said so —
+    // so a player who got faster saw it read higher each attempt and took it
+    // for the game quietly giving them more. These are the words the copy
+    // settled on: docs/voice-and-story.md.
+    const leftLabel = view.phase === "recording" ? "남은 기록 시간" : "메아리 시간";
     if (this.tapeLeft.textContent !== leftLabel) this.tapeLeft.textContent = leftLabel;
     const rightLabel = `${remaining.toFixed(1)}s`;
     if (this.tapeRight.textContent !== rightLabel) this.tapeRight.textContent = rightLabel;
@@ -321,6 +337,42 @@ export class Hud {
     this.subtitle.textContent = text;
   }
 
+  /**
+   * Hide a button and take it out of play at the same time.
+   *
+   * Hidden is only a picture: the element stays in the document and stays
+   * clickable by anything driving the page, so a script — or a stray click on
+   * a card that is on its way out — can press a button the player cannot see.
+   */
+  private offer(button: HTMLButtonElement, offered: boolean): void {
+    if (button.hidden !== !offered) button.hidden = !offered;
+    if (button.disabled !== !offered) button.disabled = !offered;
+  }
+
+  /**
+   * Count identical failures and hand back the line the room is willing to
+   * offer, if it has reached one.
+   *
+   * Counted per room and per failure code, so failing two different ways twice
+   * each is not treated as being stuck — being stuck is the same wall four
+   * times.
+   */
+  private hintFor(view: ViewModel): string {
+    const room = view.chamberNumber;
+    const error = view.lastError ?? "";
+    if (this.repeated.room !== room || this.repeated.error !== error) {
+      this.repeated = { room, error, count: 1 };
+    } else if (!this.countedThisFailure) {
+      this.repeated.count += 1;
+    }
+    this.countedThisFailure = true;
+    let offered = "";
+    for (const hint of view.hints) {
+      if (this.repeated.count >= hint.after) offered = hint.line;
+    }
+    return offered;
+  }
+
   private renderResult(view: ViewModel): void {
     // The ending is the last thing this panel ever shows. Without the latch the
     // per-frame render puts the between-rooms card straight back over it, because
@@ -328,14 +380,18 @@ export class Hud {
     if (this.ended) return;
     const finished = view.phase === "success" || (view.phase === "rerecord" && view.recordingEnabled);
     if (this.result.hidden !== !finished) this.result.hidden = !finished;
-    if (!finished) return;
+    if (!finished) {
+      // Back in play, so the next failure is a new one to count.
+      this.countedThisFailure = false;
+      return;
+    }
     if (view.phase === "success") {
       this.result.dataset.kind = "success";
       this.resultHeading.textContent = "보관 완료";
       this.resultBody.textContent = "당신이 지나간 자리를, 당신이 다시 지나갔습니다.";
-      this.again.hidden = !view.recordingEnabled;
+      this.offer(this.again, view.recordingEnabled);
       this.again.textContent = "R · 다시 해보기";
-      this.onward.hidden = !view.hasNextChamber;
+      this.offer(this.onward, view.hasNextChamber);
       this.resultHint.textContent = view.hasNextChamber ? "" : "여기까지가 지금 열려 있는 구역입니다";
       if (view.finalBeat) {
         // Not a room you have run out of, so not a room card. The last door
@@ -345,18 +401,20 @@ export class Hud {
         this.result.dataset.kind = "final";
         this.resultHeading.textContent = "";
         this.resultBody.textContent = "";
-        this.again.hidden = true;
-        this.onward.hidden = true;
+        this.offer(this.again, false);
+        this.offer(this.onward, false);
         this.resultHint.textContent = view.finalBeat;
       }
     } else {
       this.result.dataset.kind = "fail";
       this.resultHeading.textContent = "다시 기록";
       this.resultBody.textContent = view.lastError ? FAILURE_COPY[view.lastError] : "이번 재생은 끝났습니다.";
-      this.again.hidden = false;
+      this.offer(this.again, true);
       this.again.textContent = "R · 다시 기록";
-      this.onward.hidden = true;
-      this.resultHint.textContent = "";
+      this.offer(this.onward, false);
+      // Empty until the same wall has been hit enough times to stop being a
+      // lesson. The room decides whether it has anything to say.
+      this.resultHint.textContent = this.hintFor(view);
     }
     if (view.rerecordNotice) {
       // The finale keeps the key and changes the sentence. Nothing is taken away
