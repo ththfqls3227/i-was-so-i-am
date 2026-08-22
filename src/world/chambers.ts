@@ -228,6 +228,12 @@ export const HAND_NOT_BODY_CHAMBER: Chamber = {
   sim: HAND_NOT_BODY,
   shell: HAND_SHELL,
   number: "03",
+  // Both playtest judges quit here: the sign teaches the twist but not the
+  // move, and nothing else in the room does either. The hints carry the move.
+  hints: [
+    { after: 3, line: "재생 중에는 당신의 발이 자유롭습니다. 오른쪽의 발판을 직접 밟으세요." },
+    { after: 5, line: "발판을 밟은 채 기다리면, 메아리가 열린 문을 지나 막다른 방까지 걸어갑니다." },
+  ],
   subtitleOnEntry: "안내: 기록되는 것은 위치가 아니라 행동입니다. 막힌 곳에서도 걸음은 기록됩니다.",
   dressing: standardDressing(HAND_SHELL, {
     seedBase: 3300,

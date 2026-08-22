@@ -292,9 +292,11 @@ describe("the fold tail is the posture, not an event", () => {
 
   it("does not re-fire a jump for every tick of the tail", () => {
     // Fold mid-air with jump still held: a tail that carried press edges would
-    // make the echo hop forever. Edges are derived from transitions, so it does not.
+    // make the echo hop forever. Edges are derived from transitions, so it does
+    // not. (Walk first: the tape only starts on the first pressed button now,
+    // so a leading stretch of nothing no longer pads it past the minimum.)
     const simulation = fresh();
-    drive(simulation, framesFor([{ ticks: 40 }, { jump: true, ticks: 4 }]));
+    drive(simulation, framesFor([{ forward: true, ticks: 40 }, { jump: true, ticks: 4 }]));
     simulation.fold();
     let airborneTicks = 0;
     for (let index = 0; index < 120; index += 1) {

@@ -70,6 +70,8 @@ export interface ViewModel {
   plateForEchoOnly: boolean;
   plateActive: boolean;
   doorOpen: boolean;
+  /** The way out itself. In 03 the first door and the exit are different gates. */
+  exitOpen: boolean;
   echoPresent: boolean;
   success: boolean;
   lastError: SimState["lastError"];
@@ -2220,11 +2222,12 @@ export class FirstPersonScene {
       // comparing two brightnesses from memory.
       visual.travel.position.y = -press * visual.depth;
 
-      // Dormant is dim. At 0.62 the resting ring read as "already lit" — a
-      // judge took 01's untouched plate for an activated one — so the resting
-      // glow drops to a marker of colour, and being stood on becomes the only
-      // bright state.
-      const idle = 0.28 + Math.sin(this.clock * 1.5) * 0.05;
+      // Dormant is dim but breathing. At 0.62 the resting ring read as
+      // "already lit" — a judge took 01's untouched plate for an activated one.
+      // At a flat 0.28 it vanished into 03's dark alcove and a judge could not
+      // find the plate at all. 0.42 with a wide slow pulse keeps it clearly a
+      // waiting thing: visible in the dark, unmistakably not pressed.
+      const idle = 0.42 + Math.sin(this.clock * 1.5) * 0.1;
       const held = 1.55 + Math.sin(this.clock * 5.2) * 0.18;
       const pulse = idle + (held - idle) * press;
       // Brass still answers when you stand on it — a plate that gave no feedback
@@ -2594,6 +2597,7 @@ export class FirstPersonScene {
       // on echo-only plates the two answers differ for the whole first pass.
       plateActive: state.plates[0]?.pressedBy.includes("present") ?? false,
       doorOpen: state.doors[0]?.open ?? false,
+      exitOpen: state.exitOpen,
       echoPresent: state.actors.some((actor) => actor.id === "past"),
       success: state.success,
       lastError: state.lastError,

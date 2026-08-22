@@ -308,7 +308,13 @@ export class Hud {
         : view.plateForEchoOnly
           ? "문이 열리기를 기다리세요 — 이 발판은 메아리의 것입니다"
           : "문이 열리기를 기다리거나, 직접 발판을 밟으세요";
-      return [{ key: null, label: view.doorOpen ? "빛으로 나가세요" : waiting, tone: "echo" }];
+      // In 03 the first door opens while the way out is still shut: the player
+      // is holding it open with their foot. "Walk into the light" at that
+      // moment sends them off the plate and shuts the door on the echo.
+      if (view.doorOpen && !view.exitOpen && view.plateActive) {
+        return [{ key: null, label: "그대로 계세요 — 메아리가 지나갈 때까지", tone: "echo" }];
+      }
+      return [{ key: null, label: view.doorOpen && view.exitOpen ? "빛으로 나가세요" : waiting, tone: "echo" }];
     }
     if (view.phase === "rerecord") {
       return [{ key: "R", label: "다시 기록", tone: "go" }];

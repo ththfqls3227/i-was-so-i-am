@@ -17,7 +17,7 @@ import {
   WALK_SPEED,
   YAW_UNITS,
 } from "./constants";
-import { assertValidFrame, NEUTRAL_FRAME, type Frame } from "./input";
+import { assertValidFrame, buttonsOf, NEUTRAL_FRAME, type Frame } from "./input";
 import {
   evaluateDoors,
   evaluateExit,
@@ -201,12 +201,20 @@ export class Simulation {
       return { state, checksum: checksumState(state), phaseChanged: false };
     }
 
+    // The tape does not start until the first act. Looking around is free:
+    // only the buttons arm the recording, so a player reading the room's sign
+    // spends nothing — three rounds of playtest judges burned their first loop
+    // in every room discovering that it used to cost the whole tape. Only the
+    // tape is parked: the world itself keeps stepping, so a door already
+    // counting its delay keeps counting.
+    const tapeParked = phaseBefore === "recording" && this.frames.length === 0 && buttonsOf(frame) === 0;
+
     const solids = solidsFor(this.room, state.doors);
     const present = state.actors.find((actor) => actor.id === "present");
     const past = state.actors.find((actor) => actor.id === "past");
 
     if (phaseBefore === "recording") {
-      this.frames.push(frame);
+      if (!tapeParked) this.frames.push(frame);
     } else if (past && this.tape) {
       stepActor(past, replayFrame(this.tape, state.tapeTick), solids);
       past.focusId = focusFor(past, this.interactables);
@@ -224,7 +232,7 @@ export class Simulation {
     evaluateDoors(this.room, state);
     evaluateExit(this.room, state);
 
-    state.tapeTick += 1;
+    if (!tapeParked) state.tapeTick += 1;
 
     if (phaseBefore === "recording") {
       if (this.frames.length >= this.room.tapeDurationTicks) this.beginReplay();
