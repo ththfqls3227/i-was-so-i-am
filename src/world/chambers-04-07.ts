@@ -90,11 +90,40 @@ const stairs: Solid[] = Array.from({ length: 10 }, (_, index) =>
   ),
 );
 
+/** The gallery the stairs arrive on, and the rail you lean over to see him. */
+const deck = solid("deck", { x: 1.6, y: DECK_Y - 0.4, z: 11 }, { x: 7, y: DECK_Y, z: FOUR_DEPTH }, "timber");
+
+/**
+ * A staircase has to arrive at the floor it serves.
+ *
+ * Three separate numbers decide whether it does — the rise, the tread count and
+ * the deck height — and they are edited at three different times for three
+ * different reasons. Get it wrong by a centimetre and the top of the flight is a
+ * lip you catch on; get it wrong by ten and there is a step at the top that
+ * looks like part of the landing. Neither shows in a screenshot of a staircase.
+ */
+function checkFlightLands(treads: Solid[], landing: Solid): void {
+  const top = treads.at(-1);
+  if (!top) throw new Error("a flight with no treads");
+  const step = landing.brush.max.y - top.brush.max.y;
+  if (Math.abs(step) > 0.001) {
+    throw new Error(`the top tread is ${step.toFixed(3)} m off the deck it lands on`);
+  }
+  const gap = landing.brush.min.z - top.brush.max.z;
+  if (Math.abs(gap) > 0.001) {
+    throw new Error(`the top tread stops ${gap.toFixed(3)} m short of the deck it lands on`);
+  }
+  if (top.brush.min.x < landing.brush.min.x - 0.001 || top.brush.max.x > landing.brush.max.x + 0.001) {
+    throw new Error("the top tread is wider than the deck it lands on");
+  }
+}
+
+checkFlightLands(stairs, deck);
+
 const fourSolids: Solid[] = [
   ...shellOf(FOUR_HALF, FOUR_DEPTH, FOUR_HEIGHT),
   ...stairs,
-  // The gallery the stairs arrive on, and the rail you lean over to see him.
-  solid("deck", { x: 1.6, y: DECK_Y - 0.4, z: 11 }, { x: 7, y: DECK_Y, z: FOUR_DEPTH }, "timber"),
+  deck,
   solid("deck-rail", { x: 1.6, y: DECK_Y, z: 11 }, { x: 1.8, y: DECK_Y + 1, z: FOUR_DEPTH }, "timber"),
 ];
 

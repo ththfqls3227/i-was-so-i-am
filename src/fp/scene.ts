@@ -965,6 +965,20 @@ export class FirstPersonScene {
     this.shadows?.addShadowCaster(mesh, false);
   }
 
+  /**
+   * Is there room structure at this point?
+   *
+   * Read off the simulation's own brushes, which is the point: it makes the
+   * dressing answerable to the thing the player collides with, rather than to a
+   * second description of the same building.
+   */
+  private solidAt(x: number, y: number, z: number): boolean {
+    return this.chamber.sim.brushes.some((brush) =>
+      x >= brush.min.x && x <= brush.max.x
+      && y >= brush.min.y && y <= brush.max.y
+      && z >= brush.min.z && z <= brush.max.z);
+  }
+
   private buildLighting(root: TransformNode, timber: StandardMaterial): void {
     const shell = this.chamber.shell;
     // Sky is the cool bounce off plaster; ground is the warm one off brick.
@@ -1151,6 +1165,18 @@ export class FirstPersonScene {
     const hung = this.chamber.dressing.sign;
     const signX = hung ? hung.x : -shell.doorwayHalfWidth - 1.5;
     const signZ = hung ? hung.z : shell.depth;
+    // A board hangs on a wall. Checked against the room's own solids rather than
+    // trusted, because the two ways this goes wrong both look fine in a wide
+    // shot: a board floating a hand's breadth off the plaster, and a board sunk
+    // into it so only the paper edge shows. Both were found by photographing
+    // walls one at a time, which is a slow way to learn something the geometry
+    // already knows.
+    if (!this.solidAt(signX, 2.05, signZ + 0.08)) {
+      throw new Error(`the sign at ${signX}, ${signZ} has no wall behind it`);
+    }
+    if (this.solidAt(signX, 2.05, signZ - 0.2)) {
+      throw new Error(`the sign at ${signX}, ${signZ} is inside a wall rather than on it`);
+    }
     const board = buildSignBoard(
       this.scene,
       "chamber-sign",
@@ -1271,6 +1297,15 @@ export class FirstPersonScene {
       // A plate the size of a floor is a field, not a disc: it gets a bordered
       // bay with corner brackets so it still reads as one instrument.
       const field = plate.half.x > 1.1 || plate.half.z > 1.1;
+      // A disc is drawn from half.x alone and the simulation reads a square of
+      // half.x by half.z, so an oblong disc plate would be a picture of a
+      // mechanism that is not the mechanism — wide where the drawing is narrow.
+      // A field is drawn as its own rectangle and may be any shape it likes.
+      if (!field && Math.abs(plate.half.x - plate.half.z) > 0.001) {
+        throw new Error(
+          `plate ${plate.id} is ${plate.half.x} by ${plate.half.z} — a disc cannot draw that`,
+        );
+      }
 
       // Everything that goes down under a foot hangs off this. A field is a
       // floor you walk across and moves a third as far as an instrument does —
@@ -2244,10 +2279,24 @@ export class FirstPersonScene {
   private buildDioramas(root: TransformNode, timber: StandardMaterial): void {
     const dressing = this.chamber.dressing;
     if (dressing.dioramas) {
-      const wallX = -this.chamber.shell.halfWidth;
       for (const diorama of resolveDioramas(this.tapes)) {
+        // Measured off the window, never off a second copy of its numbers.
+        // The corridor's set was 2.9 by 2.2 at a sill of 0.75 written out here,
+        // and the ten openings were 2.9 by 2.2 at a sill of 0.75 written out in
+        // ending.ts, and the two agreed only because nobody had edited either
+        // yet. The one-off views below already worked this way; this is the same
+        // rule applied to the ten that carry the ending.
+        const window = dressing.salchang.find((pane) => pane.id === diorama.spec.windowId);
+        if (!window) {
+          throw new Error(`the diorama for ${diorama.spec.chamberId} has no window ${diorama.spec.windowId}`);
+        }
         this.buildDioramaSet(root, timber, diorama, {
-          wallX, z: diorama.spec.centreZ, width: 2.9, height: 2.2, sillY: 0.75, facing: 1,
+          wallX: window.x,
+          z: window.centreZ,
+          width: window.width,
+          height: window.height,
+          sillY: window.sillY,
+          facing: window.facing,
         });
       }
     }
