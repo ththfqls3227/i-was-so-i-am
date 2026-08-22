@@ -1,3 +1,4 @@
+import { chromium } from "@playwright/test";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
@@ -66,6 +67,34 @@ async function inspectEntry(entryUrl) {
   return Buffer.byteLength(script);
 }
 
+/**
+ * Load the shipped page and look for debug furniture in the built DOM.
+ *
+ * A text scan cannot answer this. The frame counter's element is constructed
+ * either way and only conditionally appended, so its class name is in the
+ * bundle whether or not it ever reaches the screen — the only way to know is to
+ * open the page the judges will open and look.
+ *
+ * It shipped once already, which is why there is a gate here now.
+ */
+async function requireNoDebugFurniture(origin) {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    await page.goto(origin, { waitUntil: "domcontentloaded" });
+    // The HUD decides what to mount as it is built, so wait for it to exist.
+    await page.waitForSelector(".hud", { timeout: 20000 });
+    const debugSelectors = [".diagnostic"];
+    for (const selector of debugSelectors) {
+      const count = await page.locator(selector).count();
+      if (count > 0) throw new Error(`Shipped page mounts debug-only element ${selector} (${count} found)`);
+    }
+    return debugSelectors.length;
+  } finally {
+    await browser.close();
+  }
+}
+
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const address = server.address();
 if (!address || typeof address === "string") throw new Error("Smoke server failed to bind");
@@ -74,7 +103,8 @@ try {
   const rootBytes = await inspectEntry(`${origin}/`);
   const subpathBytes = await inspectEntry(`${origin}/game/`);
   if (rootBytes !== subpathBytes) throw new Error("Root and subpath entries resolved different bundles");
-  console.log(`dist smoke: PASS (${rootBytes} byte JS; root + /game/; procedural 3D only; 4 retired raster assets absent; no test-only APIs)`);
+  const debugChecked = await requireNoDebugFurniture(`${origin}/`);
+  console.log(`dist smoke: PASS (${rootBytes} byte JS; root + /game/; procedural 3D only; 4 retired raster assets absent; no test-only APIs; ${debugChecked} debug element absent from the built DOM)`);
 } finally {
   await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
 }
