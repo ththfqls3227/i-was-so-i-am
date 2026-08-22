@@ -32,15 +32,15 @@ export type SoundName =
 
 export type LoopName = "winch" | "push";
 
-const SILENCE = 0.0001;
+export const SILENCE = 0.0001;
 const NOISE_SECONDS = 2;
 
-interface ToneVoice {
+export interface ToneVoice {
   osc: OscillatorNode;
   gain: GainNode;
 }
 
-interface NoiseVoice {
+export interface NoiseVoice {
   source: AudioBufferSourceNode;
   filter: BiquadFilterNode;
   gain: GainNode;
@@ -68,7 +68,7 @@ interface Graph {
   ui: ToneVoice;
 }
 
-function noiseBuffer(context: AudioContext, brown: boolean): AudioBuffer {
+export function noiseBuffer(context: AudioContext, brown: boolean): AudioBuffer {
   const buffer = context.createBuffer(1, Math.floor(context.sampleRate * NOISE_SECONDS), context.sampleRate);
   const data = buffer.getChannelData(0);
   let last = 0;
@@ -85,7 +85,7 @@ function noiseBuffer(context: AudioContext, brown: boolean): AudioBuffer {
 }
 
 /** Ramp a param from wherever it is now, without the discontinuity a bare set would make. */
-function rampTo(param: AudioParam, value: number, now: number, seconds: number): void {
+export function rampTo(param: AudioParam, value: number, now: number, seconds: number): void {
   param.cancelScheduledValues(now);
   param.setValueAtTime(param.value, now);
   param.linearRampToValueAtTime(value, now + seconds);
@@ -95,7 +95,7 @@ function rampTo(param: AudioParam, value: number, now: number, seconds: number):
  * Attack to `peak`, then an exponential fall to silence. Every one-shot in the
  * game is this shape on a permanently running oscillator.
  */
-function pluck(param: AudioParam, at: number, peak: number, attack: number, decay: number): void {
+export function pluck(param: AudioParam, at: number, peak: number, attack: number, decay: number): void {
   param.cancelScheduledValues(at);
   param.setValueAtTime(param.value, at);
   param.linearRampToValueAtTime(peak, at + attack);

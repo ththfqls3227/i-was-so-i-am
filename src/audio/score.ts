@@ -176,3 +176,194 @@ export const SCORE = {
     gain: 0.022,
   },
 } as const;
+// ===========================================================================
+// The first-person campaign.
+//
+// Everything above belongs to the retired top-down game and is left alone so
+// it keeps compiling. Everything below is the archive.
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// The ten notes.
+//
+// The corridor walks the archive backwards: DIORAMAS is authored 09 first and
+// 00 last, so the notes arrive from the top of the chord downwards and the
+// lowest root — 00, the first room anyone plays — is the last thing to land.
+// The chord grounds on the tape you made before you understood the game.
+//
+// Every room's ambient drone is its own note, two to three octaves down, so the
+// corridor is the rooms remembered rather than a tune played at them.
+//
+// The scale is D minor pentatonic plus the 9th: D E G A C. F — the minor third,
+// the note that would tell you the chord is sad — belongs to 08 alone, and 08's
+// window is empty. You hear F for the whole of that room and never again. The
+// corridor therefore ends on an open fifth stack with a hole where the colour
+// should be, and the hole is a room you walked through.
+// ---------------------------------------------------------------------------
+
+export interface RoomNote {
+  /** Chamber id, as authored in src/world. */
+  chamberId: string;
+  /** Where it sits in the corridor chord. */
+  corridorHz: number;
+  /** The room's own drone root: same pitch class, down in the drone band. */
+  droneHz: number;
+  /** 08 sounds in its own room and never joins the chord. */
+  joinsChord: boolean;
+}
+
+/** In corridor pass order — the order the player meets the windows. */
+export const ROOM_NOTES: readonly RoomNote[] = [
+  { chamberId: "last-hold", corridorHz: 440.0, droneHz: 110.0, joinsChord: true }, // 09 · A
+  { chamberId: "silence", corridorHz: 698.46, droneHz: 87.31, joinsChord: false }, // 08 · F — the hole
+  { chamberId: "unkept", corridorHz: 523.25, droneHz: 130.81, joinsChord: true }, // 07 · C
+  { chamberId: "giving-back", corridorHz: 659.26, droneHz: 82.41, joinsChord: true }, // 06 · E
+  { chamberId: "long-standing", corridorHz: 392.0, droneHz: 98.0, joinsChord: true }, // 05 · G
+  { chamberId: "two-of-us", corridorHz: 587.33, droneHz: 73.42, joinsChord: true }, // 04 · D
+  { chamberId: "hand-not-body", corridorHz: 261.63, droneHz: 130.81, joinsChord: true }, // 03 · C
+  { chamberId: "holding-hand", corridorHz: 220.0, droneHz: 110.0, joinsChord: true }, // 02 · A
+  { chamberId: "second-self", corridorHz: 329.63, droneHz: 82.41, joinsChord: true }, // 01 · E
+  { chamberId: "awakening", corridorHz: 146.83, droneHz: 73.42, joinsChord: true }, // 00 · D — grounds it
+];
+
+/**
+ * 09 alone bends. The gate opening drops the room a semitone and leaves it
+ * there; the corridor then sounds A again, so the walk out puts back the note
+ * the room took. Nothing says this and nothing needs to.
+ */
+export const FINALE_DRONE_DROP_HZ = 103.83; // A2 -> G#2
+
+export const FP_SCORE = {
+  master: {
+    gain: 0.42,
+    ramp: 0.09,
+    openSeconds: 2.4,
+    pauseDuck: 0.35,
+    /** The finale's held breath: full silence, not a duck. */
+    silenceRamp: 0.08,
+    compressor: { threshold: -18, knee: 12, ratio: 4, attack: 0.006, release: 0.2 },
+  },
+
+  /**
+   * Two layers under every room. The timber layer is the building. The cyan
+   * layer is the time technology, and it has been under all eight rooms before
+   * 08 takes it away — absence only registers for something the ear had
+   * stopped noticing.
+   */
+  ambient: {
+    detuneCents: 7,
+    timberGain: 0.06,
+    fifthRatio: 1.498307,
+    fifthGain: 0.02,
+    /** Filtered noise: the room's air. */
+    noiseGain: 0.013,
+    noiseFilterHz: 190,
+    /** The cyan shimmer. Silent in 08, and it does not come back. */
+    cyanPartials: [1174.66, 1567.98, 2093.0],
+    cyanGain: 0.012,
+    cyanDriftHz: 0.07,
+    glideSeconds: 1.7,
+    /** 08 fades it out slowly enough that nobody catches the moment. */
+    cyanFadeSeconds: 3.2,
+  },
+
+  /**
+   * Footsteps. Distance-driven, off the stride the scene already accumulates,
+   * so the feet never skate and never tick while standing still.
+   */
+  step: {
+    brick: { noiseHz: 700, noiseQ: 2, noiseDecay: 0.045, noiseGain: 0.05, bodyHz: 90, bodyDecay: 0.07, bodyGain: 0.035 },
+    /** Only the gallery decks are boarded, so this is 04 and the stairs. */
+    timber: { noiseHz: 520, noiseQ: 1.4, noiseDecay: 0.06, noiseGain: 0.045, bodyHz: 320, ringHz: 480, bodyDecay: 0.09, bodyGain: 0.04 },
+    /**
+     * The echo's feet. Present — he is in the room and the room should say so —
+     * but the body is gone from underneath them and they arrive a hair late.
+     * This is the cyan hologram written for the ear.
+     */
+    echo: { highpassHz: 300, gainScale: 0.55, detuneCents: 8, preDelaySeconds: 0.012 },
+    /** Below this speed the foot is placed, not landed. */
+    minSpeed: 0.4,
+  },
+
+  /** ⏎ — the seal. A press, not a chime. */
+  seal: {
+    thudFromHz: 55,
+    thudToHz: 40,
+    thudSeconds: 0.09,
+    thudGain: 0.12,
+    bodyFilterHz: 400,
+    bodyDecay: 0.16,
+    bodyGain: 0.07,
+    /** The inkpad, barely there. */
+    brassHz: 1200,
+    brassGain: 0.018,
+    /** 09 presses it twice as slowly and half again as hard. */
+    finaleTimeScale: 2,
+    finaleGainScale: 1.6,
+  },
+
+  /** 장지문: paper and timber sliding, ending on a stop. */
+  door: {
+    sweepFromHz: 400,
+    sweepToHz: 900,
+    sweepQ: 1.2,
+    sweepGain: 0.05,
+    stopHz: 210,
+    stopDecay: 0.12,
+    stopGain: 0.045,
+    /**
+     * No chime, ever. An opening door is the drone sinking, because opening a
+     * door and tying someone to a post are the same event and the score does
+     * not get to separate them.
+     */
+    sinkRatio: 0.9438743, // one semitone down
+    sinkSeconds: 1.2,
+    sinkReturnSeconds: 2.4,
+  },
+
+  /** A plate taking weight, a hand closing on brass. Contact, not achievement. */
+  contact: {
+    plateHz: 660,
+    plateAttack: 0.012,
+    plateDecay: 0.2,
+    plateGain: 0.022,
+    holdHz: 480,
+    holdDecay: 0.26,
+    holdGain: 0.026,
+  },
+
+  /**
+   * The sync beat. 04 has a gallery to look down from and an authored warmBand;
+   * 05 is derived from state instead — the player inside the passage while he
+   * stands on plate A. Once per room, never repeated.
+   */
+  attune: {
+    thirdRatio: 1.259921,
+    fifthRatio: 1.498307,
+    gain: 0.026,
+    attackSeconds: 0.6,
+    releaseSeconds: 1.8,
+  },
+
+  /** The corridor stack. Each note arrives and stays. */
+  corridor: {
+    arriveSeconds: 1.1,
+    gain: 0.032,
+    /** The lowest root gets a little more room. */
+    groundGainScale: 1.35,
+    groundArriveSeconds: 1.8,
+  },
+
+  /** 09, after the threshold: brass complaining behind you for three seconds. */
+  creak: {
+    baseHz: 70,
+    lfoHz: 3.1,
+    lfoDepthHz: 180,
+    filterHz: 360,
+    filterQ: 6,
+    gain: 0.04,
+    decaySeconds: 3,
+  },
+
+  ui: { hz: 1760, seconds: 0.05, gain: 0.02 },
+} as const;
