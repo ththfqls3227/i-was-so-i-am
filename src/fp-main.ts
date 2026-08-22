@@ -1,4 +1,5 @@
 import "./fp/style.css";
+import { FpAudioAdapter } from "./audio/fp-adapter";
 import { Hud } from "./fp/hud";
 import { DEFAULT_MOUSE_SENSITIVITY, FirstPersonScene } from "./fp/scene";
 import { runCorpus } from "./sim/corpus";
@@ -29,6 +30,9 @@ declare global {
        * never run against the shipped build.
        */
       runCorpus: () => string[];
+      /** Read-only audio state. Audio never writes to the simulation. */
+      readonly audio: { readonly started: boolean; readonly muted: boolean; readonly masterGain: number };
+      setMuted: (muted: boolean) => void;
       readonly view: ReturnType<FirstPersonScene["viewModel"]>;
       start: () => void;
       look: (deltaX: number, deltaY: number) => void;
@@ -53,8 +57,18 @@ const scene = new FirstPersonScene(app);
 const stored = Number.parseFloat(localStorage.getItem(SENSITIVITY_KEY) ?? "");
 scene.mouseSensitivity = Number.isFinite(stored) && stored > 0 ? stored : DEFAULT_MOUSE_SENSITIVITY;
 
+// Audio subscribes to the render lane and reads simulation state; it has no
+// route back into either. The context is built inside the first real gesture
+// below, never before, so no browser logs an autoplay warning.
+const MUTE_KEY = "i-was-so-i-am:muted:v1";
+const audio = new FpAudioAdapter({
+  state: () => scene.state,
+  muted: localStorage.getItem(MUTE_KEY) === "true",
+});
+
 const hud = new Hud(app, {
   onStart: () => {
+    audio.start();
     scene.resume();
     scene.requestPointerLock();
   },
@@ -69,7 +83,11 @@ const hud = new Hud(app, {
 });
 
 scene.attach({
-  onFrame: (view) => hud.update(view, performance.now()),
+  onFrame: (view) => {
+    hud.update(view, performance.now());
+    audio.onFrame();
+  },
+  onFootstep: (actor, y, speed) => audio.onFootstep(actor, y, speed),
   onPhaseChange: (phase) => {
     // Not in the corridor. There is nothing stored at the end of it and the
     // facility has already said everything it is going to say; a filing
@@ -78,8 +96,14 @@ scene.attach({
       hud.say("보관 완료.", performance.now(), 4200);
     }
   },
-  onFold: () => hud.playFoldFlash(),
-  onSealing: (seconds) => hud.beginSeal(seconds),
+  onFold: () => {
+    hud.playFoldFlash();
+    audio.onFold();
+  },
+  onSealing: (seconds) => {
+    hud.beginSeal(seconds);
+    audio.onSealing();
+  },
   onEnding: () => hud.showEnding(),
   onLine: (line) => hud.say(line, performance.now(), 5200),
 });
@@ -89,6 +113,9 @@ scene.start();
 // Clicking the canvas after Escape puts you straight back in. Pointerdown for the
 // same reason the look controls use it: Babylon eats the compatibility events.
 scene.canvas.addEventListener("pointerdown", () => {
+  // Also the fallback gesture: if the run began without the start button, this
+  // is the first trusted click the page has seen.
+  audio.start();
   if (scene.hasStarted && scene.isPaused) {
     scene.resume();
     scene.requestPointerLock();
@@ -107,6 +134,17 @@ if (EXPOSE_TEST_API) {
       return { ready: scene.ready, context: scene.rendererContext };
     },
     runCorpus: () => runCorpus(ROSTER.first.sim),
+    get audio() {
+      return {
+        started: audio.engine.started,
+        muted: audio.engine.isMuted,
+        masterGain: audio.engine.masterGain,
+      };
+    },
+    setMuted: (muted: boolean) => {
+      audio.setMuted(muted);
+      localStorage.setItem(MUTE_KEY, String(muted));
+    },
     get view() {
       return scene.viewModel();
     },

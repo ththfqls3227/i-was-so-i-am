@@ -101,6 +101,12 @@ export interface SceneEvents {
   onEnding: () => void;
   /** A line the world wants said, outside the usual entry subtitle. */
   onLine: (line: string) => void;
+  /**
+   * A foot landed. Reported rather than interpreted: who, how high they are
+   * standing, and how fast they were going. What that sounds like — brick or
+   * board, mine or his — is the listener's problem, not the renderer's.
+   */
+  onFootstep: (actor: ActorId, y: number, speed: number) => void;
 }
 
 /**
@@ -1930,14 +1936,22 @@ export class FirstPersonScene {
     this.previous = this.current;
     const next = new Map<ActorId, Snapshot>();
     for (const actor of this.simulation.state.actors) {
-      next.set(actor.id, snapshotOf(actor));
+      const snapshot = snapshotOf(actor);
+      next.set(actor.id, snapshot);
       const travelled = this.previous.get(actor.id);
       if (travelled) {
         const dx = actor.x - travelled.x;
         const dz = actor.z - travelled.z;
         const step = Math.sqrt(dx * dx + dz * dz);
         // Stride advances with distance, not time, so the feet never skate.
-        this.stride.set(actor.id, (this.stride.get(actor.id) ?? 0) + step * 2.6);
+        const before = this.stride.get(actor.id) ?? 0;
+        const after = before + step * 2.6;
+        this.stride.set(actor.id, after);
+        // The pose swings on sin(phase), so a foot lands every half turn of it.
+        // Standing still advances nothing and therefore lands nothing.
+        if (Math.floor(after / Math.PI) !== Math.floor(before / Math.PI)) {
+          this.events?.onFootstep(actor.id, actor.y, snapshot.speed);
+        }
       }
     }
     this.current = next;
