@@ -58,8 +58,8 @@ export class Hud {
   private readonly flash = element("div", "flash");
   /** The last door has been closed; the result panel is frozen on the ending. */
   private ended = false;
-  /** The same failure, in the same room, over and over. */
-  private repeated = { room: "", error: "", count: 0 };
+  /** Failures in the same room, counted whatever shape each one took. */
+  private repeated = { room: "", count: 0 };
   /** The card renders every frame; one failure must only be counted once. */
   private countedThisFailure = false;
 
@@ -397,9 +397,8 @@ export class Hud {
    */
   private hintFor(view: ViewModel): string {
     const room = view.chamberNumber;
-    const error = view.lastError ?? "";
     if (this.repeated.room !== room) {
-      this.repeated = { room, error, count: 1 };
+      this.repeated = { room, count: 1 };
     } else if (!this.countedThisFailure) {
       this.repeated.count += 1;
     }
