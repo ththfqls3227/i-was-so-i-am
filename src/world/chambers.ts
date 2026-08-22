@@ -239,6 +239,7 @@ export const HAND_NOT_BODY_CHAMBER: Chamber = {
   hints: [
     { after: 1, line: "재생 중에는 당신의 발이 자유롭습니다. 바닥의 금색 선을 따라가, 오른쪽의 발판을 직접 밟으세요." },
     { after: 2, line: "발판을 밟은 채 기다리면, 메아리가 열린 문을 지나 막다른 방까지 걸어갑니다. 출구가 열리면 당신도 나가야 합니다." },
+    { after: 3, line: "기록이 짧으면 메아리의 걸음도 짧습니다 — 닫힌 문을 향한 걸음을 더 길게 담으세요." },
   ],
   // The rule up front, not four failure cards deep: a judge who met it only
   // as escalating hints spent five tries re-deriving it and quit one short.

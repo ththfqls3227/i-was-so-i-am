@@ -78,6 +78,14 @@ export interface ViewModel {
    * drifting player nothing about which way to turn, three rounds running.
    */
   plateBearing: "ahead" | "left" | "right" | "behind" | null;
+  /**
+   * Where the way out lies from where the player faces. "Walk into the light"
+   * cost one judge six tries and another ten across two rooms, because the
+   * brightest thing on screen was the wrong door both times.
+   */
+  exitBearing: "ahead" | "left" | "right" | "behind";
+  /** The exit has its own gate beyond the doors (03's alcove plate, and kin). */
+  exitGated: boolean;
   focus: string | null;
   /** The focused thing is a grip — the only kind of focus E can act on. */
   focusIsHold: boolean;
@@ -298,6 +306,13 @@ export class FirstPersonScene {
   private attemptsInRoom = 0;
   /** The echo-at-the-shut-door line has been said this replay. */
   private echoDoorSpoken = false;
+  /**
+   * The first door opened at some point while this tape was being recorded.
+   * A recording that never opened it cannot open it on replay either — the
+   * echo walks the same feet — and a judge sat through twenty seconds of
+   * doomed replay before the room would say so.
+   */
+  private doorOpenedWhileRecording = false;
   /** How many of the corridor's closing lines have been said, and the gap left. */
   private approachSpoken = 0;
   private approachWait = 1.2;
@@ -989,6 +1004,7 @@ export class FirstPersonScene {
     this.warmingEcho = null;
     this.attemptsInRoom = 0;
     this.echoDoorSpoken = false;
+    this.doorOpenedWhileRecording = false;
     this.approachSpoken = 0;
     this.approachWait = 1.2;
     this.stride.clear();
@@ -2044,6 +2060,20 @@ export class FirstPersonScene {
    */
   private announceReplay(manual: boolean): void {
     this.echoDoorSpoken = false;
+    // A tape that never opened the door is announced as what it is, instead
+    // of replayed to its certain end. Only where the living foot could have:
+    // rooms whose plate ignores it, or saves it for the second pass, fold
+    // doorless tapes on purpose.
+    const doomed =
+      this.chamber.sim.plates.length > 0 &&
+      this.chamber.sim.plates[0]?.requiredActor !== "past" &&
+      this.chamber.plateDutyInReplay !== true &&
+      !this.doorOpenedWhileRecording;
+    this.doorOpenedWhileRecording = false;
+    if (doomed) {
+      this.events?.onLine("메아리는 당신이 걸은 길만 걷습니다 — 이 기록은 발판에 닿지 못했습니다. R로 다시 기록할 수 있습니다.");
+      return;
+    }
     const line = this.chamber.subtitleOnReplay;
     if (line) {
       this.events?.onLine(line);
@@ -2071,11 +2101,25 @@ export class FirstPersonScene {
     const plate = this.chamber.sim.plates[0];
     if (!plate || plate.requiredActor === "past") return null;
     if (state.plates[0]?.pressedBy.includes("present")) return null;
-    const dx = plate.centre.x - present.x;
-    const dz = plate.centre.z - present.z;
-    if (Math.hypot(dx, dz) > Math.max(plate.half.x, plate.half.z) + 2.4) return null;
+    if (Math.hypot(plate.centre.x - present.x, plate.centre.z - present.z)
+      > Math.max(plate.half.x, plate.half.z) + 2.4) return null;
+    return this.bearingTo(plate.centre.x, plate.centre.z, present);
+  }
+
+  /** Which way the exit box lies from where the player faces. */
+  private exitBearing(present: SimState["actors"][number] | undefined): "ahead" | "left" | "right" | "behind" {
+    if (!present) return "ahead";
+    const exit = this.chamber.sim.exit;
+    return this.bearingTo((exit.min.x + exit.max.x) / 2, (exit.min.z + exit.max.z) / 2, present);
+  }
+
+  private bearingTo(
+    x: number,
+    z: number,
+    present: SimState["actors"][number],
+  ): "ahead" | "left" | "right" | "behind" {
     const yaw = radiansFromYawUnits(present.yawUnits);
-    let bearing = Math.atan2(dx, dz) - yaw;
+    let bearing = Math.atan2(x - present.x, z - present.z) - yaw;
     while (bearing > Math.PI) bearing -= Math.PI * 2;
     while (bearing < -Math.PI) bearing += Math.PI * 2;
     if (Math.abs(bearing) < Math.PI / 5) return "ahead";
@@ -2114,6 +2158,7 @@ export class FirstPersonScene {
     // early keeps being treated as if they had barely started.
     if (previousPhase === "replay") this.attemptsInRoom += 1;
     this.echoDoorSpoken = false;
+    this.doorOpenedWhileRecording = false;
     // Every attempt starts from a standstill. Players who fail reach for R with
     // a hand still on W, and the recording that began walking on its own was
     // the one they then failed with — which is how eight attempts became ten.
@@ -2222,6 +2267,9 @@ export class FirstPersonScene {
     this.lastFrame = frame;
     const result = this.simulation.step(frame);
     this.captureSnapshots();
+    if (phaseBefore === "recording" && (result.state.doors[0]?.open ?? false)) {
+      this.doorOpenedWhileRecording = true;
+    }
     if (result.phaseChanged) {
       if (result.state.phase === "rerecord") this.attemptsInRoom += 1;
       // A replay arriving through here means the tape filled on its own —
@@ -2721,6 +2769,8 @@ export class FirstPersonScene {
       attempts: this.attemptsInRoom,
       tapeArmed: this.simulation.recordedFrames.length > 0 || state.phase !== "recording",
       plateBearing: this.plateBearing(state, present),
+      exitBearing: this.exitBearing(present),
+      exitGated: this.chamber.sim.exitGatedBy !== undefined,
       focus: focusId,
       // Plates take focus too (the crosshair acknowledges them), but E only
       // ever acts on a grip — a playtest judge read the grab prompt over a

@@ -420,11 +420,20 @@ export class Hud {
         // standing in the middle of the room waiting for permission to move.
         return [{ key: null, label: "발판을 계속 밟고 계세요 — 메아리가 지나가면 출구가 열립니다", tone: "echo" }];
       }
-      // In a grip room the way out is open exactly as long as the echo's hand
-      // holds — two judges read the plain line as a standing fact, dawdled,
-      // and met a shut door with the promise still on screen.
-      const out = view.hasPlate ? "빛으로 나가세요" : "빛으로 나가세요 — 메아리가 잡고 있는 동안";
-      return [{ key: null, label: view.doorOpen && view.exitOpen ? out : waiting, tone: "echo" }];
+      // "Walk into the light" cost one judge six tries and another ten,
+      // because the brightest thing on screen was the wrong door both times —
+      // the line now says which way. And in a grip room the way out is open
+      // exactly as long as the echo's hand holds, so that clause stays.
+      const dir = view.exitBearing === "ahead" ? "앞" : view.exitBearing === "left" ? "왼쪽" : view.exitBearing === "right" ? "오른쪽" : "뒤";
+      const out = view.hasPlate
+        ? `출구는 ${dir}입니다 — 빛으로 나가세요`
+        : `출구는 ${dir}입니다 — 메아리가 잡고 있는 동안 나가세요`;
+      // Where the exit has its own gate, the doors stop mattering the moment
+      // it opens: in 03 leaving the plate shuts the first door behind the
+      // echo, and requiring it open again sent the coaching back to "step on
+      // the plate" while the way out stood waiting.
+      const canLeave = view.exitGated ? view.exitOpen : view.doorOpen && view.exitOpen;
+      return [{ key: null, label: canLeave ? out : waiting, tone: "echo" }];
     }
     if (view.phase === "rerecord") {
       return [{ key: "R", label: "다시 기록", tone: "go" }];

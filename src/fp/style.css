@@ -191,7 +191,9 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
 .notice {
   position: absolute;
   left: 50%;
-  top: calc(50% + 42px);
+  /* Out of the sightline: parked under the crosshair it sat on top of doors,
+     plates and the echo for every judge who never got pointer lock. */
+  bottom: 16%;
   transform: translateX(-50%);
   margin: 0;
   padding: 5px 12px;
