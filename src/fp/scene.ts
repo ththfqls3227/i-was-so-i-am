@@ -511,26 +511,34 @@ export class FirstPersonScene {
     // ending corridor, whose windows start at knee height because there is a
     // set behind each one — the bands would have walled them off top and
     // bottom while the piers politely left the gaps.
-    const sideWindows = this.chamber.dressing.salchang.filter(
-      (window) => Math.abs(window.x) === shell.halfWidth,
-    );
-    const sillY = sideWindows.length > 0
-      ? Math.min(...sideWindows.map((window) => window.sillY))
-      : SHELF_HEIGHT + 0.24;
-    const headY = sideWindows.length > 0
-      ? Math.max(...sideWindows.map((window) => window.sillY + window.height))
-      : sillY + shell.height - SHELF_HEIGHT - 0.52;
-    const windowHeight = headY - sillY;
+    //
+    // Per side, and per opening. Both of those are repairs.
+    //
+    // The bands used to be measured across every side window in the room at
+    // once, so one wall's window punched a hole in the other wall as well; and
+    // one sill and one head served every opening, so a wall carrying two
+    // different window heights was left open over the shorter of them. 04 has
+    // both — a 1.15 m light band on each long wall and a 1.7 m view onto the
+    // gallery on the east one — and it had three rectangles of open sky above
+    // its west windows, which is where the blue panel in the alignment audit was
+    // coming from. It was the background: the clear colour, seen through a hole.
     for (const side of [-1, 1] as const) {
       const rotation = new Vector3(0, side < 0 ? HALF_PI : -HALF_PI, 0);
       const x = side * shell.halfWidth;
+      const sideWindows = this.chamber.dressing.salchang.filter((window) => window.x === x);
+      const sillY = sideWindows.length > 0
+        ? Math.min(...sideWindows.map((window) => window.sillY))
+        : SHELF_HEIGHT + 0.24;
+      const headY = sideWindows.length > 0
+        ? Math.max(...sideWindows.map((window) => window.sillY + window.height))
+        : sillY + shell.height - SHELF_HEIGHT - 0.52;
+      const windowHeight = headY - sillY;
       this.surface(`wall-${side}-sill`, shell.depth, sillY, flat(x, sillY / 2, shell.depth / 2), rotation, plaster, root, true, true);
       this.surface(`wall-${side}-head`, shell.depth, shell.height - headY, flat(x, (shell.height + headY) / 2, shell.depth / 2), rotation, plaster, root, true, true);
       // Piers between and beyond the windows, derived from where the windows
       // actually are. Hardcoding 00's spacing put solid wall across 03's
       // openings and left gaps where it had none.
-      const openings = this.chamber.dressing.salchang
-        .filter((window) => Math.abs(window.x) === shell.halfWidth)
+      const openings = sideWindows
         .map((window) => [window.centreZ - window.width / 2, window.centreZ + window.width / 2] as const)
         .sort((left, right) => left[0] - right[0]);
       const piers: [number, number][] = [];
@@ -553,6 +561,38 @@ export class FirstPersonScene {
           true,
           true,
         );
+      }
+      // Spandrels: the plaster over and under a window that does not fill the
+      // band on its own.
+      for (const window of sideWindows) {
+        const under = window.sillY - sillY;
+        if (under > 0.02) {
+          this.surface(
+            `wall-${side}-apron-${window.id}`,
+            window.width,
+            under,
+            flat(x, sillY + under / 2, window.centreZ),
+            rotation,
+            plaster,
+            root,
+            true,
+            true,
+          );
+        }
+        const over = headY - (window.sillY + window.height);
+        if (over > 0.02) {
+          this.surface(
+            `wall-${side}-spandrel-${window.id}`,
+            window.width,
+            over,
+            flat(x, headY - over / 2, window.centreZ),
+            rotation,
+            plaster,
+            root,
+            true,
+            true,
+          );
+        }
       }
     }
 
