@@ -450,6 +450,15 @@ export function buildShelfWall(
   run.position = new Vector3(x, options.baseY ?? 0, centreZ);
   run.parent = parent;
 
+  // A run has to be long enough to hold something. Below about a third of a
+  // metre the box loop computes a negative count and quietly draws none, so the
+  // run comes out as bare posts and stub boards standing off the wall — which
+  // is what 04's gallery return was, a tenth of a metre long, until the audit
+  // measured it instead of looking at it.
+  if (toZ - fromZ < 0.34) {
+    throw new Error(`shelf run ${options.id ?? x} is ${(toZ - fromZ).toFixed(2)} m long — too short to hold a case`);
+  }
+
   const shelfLevels: number[] = [];
   const firstShelf = 0.34;
   const shelfPitch = 0.46;

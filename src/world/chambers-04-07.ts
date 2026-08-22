@@ -200,17 +200,6 @@ export const TWO_OF_US_CHAMBER: Chamber = {
           seed: 4400 + 771,
           baseY: DECK_Y,
         },
-        {
-          id: "gallery-far",
-          x: FOUR_HALF - 0.44,
-          facing: -1,
-          fromZ: 11.4,
-          toZ: 11.5,
-          height: 2.3,
-          seed: 4400 + 772,
-          baseY: DECK_Y,
-          depth: 0.3,
-        },
       ],
       extraSalchang: [
         // No light band on this wall. It was a third lattice in the one frame
