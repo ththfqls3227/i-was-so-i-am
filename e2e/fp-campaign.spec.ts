@@ -80,10 +80,14 @@ test("the opening four rooms can be played through in order", async ({ page }) =
   // and forward. Two legs means stopping at a coordinate mid-way, and stopping
   // takes a round trip: overshoot the corner and the plate is no longer ahead.
   await act(page, "setLook", Math.atan2(3.6, 4.9), 0);
-  await walkInPage(page, ["KeyW"], "s.plates[0].active === true", 25000);
+  // Generous timeouts here, sized for a loaded machine. Under full-suite load
+  // the renderer drops frames and the catch-up clamp slows simulation time
+  // below wall time — the replay window is a sim-time budget, so a wall-clock
+  // wait shorter than the slowed window gives up while the room is still fine.
+  await walkInPage(page, ["KeyW"], "s.plates[0].active === true", 40000);
   await act(page, "setLook", 0, 0);
-  await waitInPage(page, "s.doors[0].open === true", 10000); // standing on it opens it for him
-  await waitInPage(page, "s.exitOpen === true", 20000);
+  await waitInPage(page, "s.doors[0].open === true", 20000); // standing on it opens it for him
+  await waitInPage(page, "s.exitOpen === true", 40000);
   const through = await read(page);
   // 9.2, not 9.6: plates count the body's edge now, so the alcove answers
   // 0.36 m of walking earlier than when only the centre point counted.
