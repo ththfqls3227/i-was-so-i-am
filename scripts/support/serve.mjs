@@ -23,28 +23,55 @@
 //      cannot be mistaken for this one.
 import { spawn } from "node:child_process";
 import { rm } from "node:fs/promises";
+import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 
 const VITE_BIN = fileURLToPath(new URL("../../node_modules/vite/bin/vite.js", import.meta.url));
 
 /** Built with the test handle in it. Never dist/ — see the note above. */
 export const E2E_OUT_DIR = "dist-e2e";
-/** Not 4173. That one belongs to whoever is authoring right now. */
-export const E2E_PORT = 4183;
 /**
- * The one gate that still needs a dev server, on a port of its own.
+ * Where the gate server prefers to listen. Not 4173 — that one belongs to
+ * whoever is authoring right now.
  *
- * fp-cross-engine imports /src/sim/corpus.ts inside the browser so each engine
- * runs the real simulation. A static build has no such path — the module is
- * bundled — so that script cannot be served the shipped build until runCorpus
- * is reachable through the test handle instead. That is a one-line change in
- * src/fp-main.ts and belongs to whoever owns src next.
- *
- * It still gets its own server on its own port rather than adopting whatever is
- * on the authoring port, so the one property that actually bit us — someone
- * else's edits reloading the page mid-run — does not apply here either.
+ * This is a preference, not a claim. Two agents running gates at the same time
+ * would otherwise collide on a fixed port and the second one would fail to
+ * bind for a reason that has nothing to do with what it was testing. Set
+ * GAME_PORT to pin it; leave it unset and the next free port is taken.
  */
-export const DEV_PORT = 4193;
+export const E2E_PORT = Number(process.env.GAME_PORT) || 4183;
+
+/** Whether the port was chosen for us. A pinned port is used as given. */
+const PORT_IS_PINNED = process.env.GAME_PORT !== undefined;
+
+/** Is anything listening here? */
+function portIsFree(port) {
+  return new Promise((resolve) => {
+    const probe = createServer();
+    probe.once("error", () => resolve(false));
+    probe.once("listening", () => probe.close(() => resolve(true)));
+    probe.listen(port, "127.0.0.1");
+  });
+}
+
+/**
+ * The first free port at or after the preferred one.
+ *
+ * A pinned port is returned as given even if it is busy, so that asking for a
+ * specific port and silently getting a different one cannot happen — the bind
+ * failure is the right answer there.
+ */
+export async function chooseGatePort(preferred) {
+  return choosePort(preferred);
+}
+
+async function choosePort(preferred) {
+  if (PORT_IS_PINNED) return preferred;
+  for (let port = preferred; port < preferred + 40; port += 1) {
+    if (await portIsFree(port)) return port;
+  }
+  throw new Error(`No free port between ${preferred} and ${preferred + 39}`);
+}
 
 const run = (command, args, label, env) =>
   new Promise((resolve, reject) => {
@@ -95,14 +122,12 @@ async function answers(url, timeoutMs) {
  * GAME_URL to skip all of this and use a server you are running yourself —
  * useful while iterating, and the reason every script still honours it.
  */
-export async function startGameServer({ label = "gate", mode = "built" } = {}) {
+export async function startGameServer({ label = "gate" } = {}) {
   const provided = process.env.GAME_URL;
   if (provided) {
     console.log(`${label}: using GAME_URL ${provided} (no build, no server started)`);
     return { url: provided, stop: async () => {} };
   }
-
-  if (mode === "dev") return startDevServer(label);
 
   // A stale directory would serve a build from before the change under test.
   await rm(E2E_OUT_DIR, { recursive: true, force: true });
@@ -116,7 +141,8 @@ export async function startGameServer({ label = "gate", mode = "built" } = {}) {
     { ...process.env, VITE_E2E: "true" },
   );
 
-  const url = `http://127.0.0.1:${E2E_PORT}/`;
+  const port = await choosePort(E2E_PORT);
+  const url = `http://127.0.0.1:${port}/`;
   const server = spawn(
     process.execPath,
     [
@@ -125,7 +151,7 @@ export async function startGameServer({ label = "gate", mode = "built" } = {}) {
       "--outDir",
       E2E_OUT_DIR,
       "--port",
-      String(E2E_PORT),
+      String(port),
       "--strictPort",
       "--host",
       "127.0.0.1",
@@ -153,36 +179,6 @@ export async function startGameServer({ label = "gate", mode = "built" } = {}) {
   }
 
   console.log(`${label}: serving ${E2E_OUT_DIR}/ at ${url}`);
-  return {
-    url,
-    stop: async () => {
-      if (exited !== null) return;
-      server.kill("SIGTERM");
-      await new Promise((resolve) => setTimeout(resolve, 200));
-    },
-  };
-}
-
-/** A dev server of our own, for the one gate that needs source on the wire. */
-async function startDevServer(label) {
-  const url = `http://127.0.0.1:${DEV_PORT}/`;
-  const server = spawn(
-    process.execPath,
-    [VITE_BIN, "--port", String(DEV_PORT), "--strictPort", "--host", "127.0.0.1", "--logLevel", "error"],
-    { stdio: "ignore", shell: false },
-  );
-  let exited = null;
-  server.on("exit", (code) => {
-    exited = code;
-  });
-  killOnExit(server, () => exited);
-  try {
-    await answers(url, 30000);
-  } catch (error) {
-    server.kill("SIGTERM");
-    throw new Error(`${error.message}${exited === null ? "" : ` (dev server exited ${exited})`}`, { cause: error });
-  }
-  console.log(`${label}: serving source at ${url} (dev server — see DEV_PORT for why)`);
   return {
     url,
     stop: async () => {

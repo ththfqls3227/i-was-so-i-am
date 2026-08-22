@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
-import { E2E_PORT } from "./scripts/support/serve.mjs";
+import { chooseGatePort, E2E_PORT } from "./scripts/support/serve.mjs";
+
+// Resolved once, so the command and the url it is waited on cannot disagree.
+const port = await chooseGatePort(E2E_PORT);
 
 export default defineConfig({
   testDir: "./e2e",
@@ -8,7 +11,7 @@ export default defineConfig({
   retries: 0,
   reporter: "list",
   use: {
-    baseURL: `http://127.0.0.1:${E2E_PORT}`,
+    baseURL: `http://127.0.0.1:${port}`,
     trace: "retain-on-failure",
   },
   projects: [
@@ -24,8 +27,8 @@ export default defineConfig({
     // reuseExistingServer is off on purpose: with it on, a dev server someone
     // left running on the authoring port would be adopted and this whole change
     // would silently do nothing.
-    command: `npm run build:e2e && npx vite preview --outDir dist-e2e --port ${E2E_PORT} --strictPort --host 127.0.0.1`,
-    url: `http://127.0.0.1:${E2E_PORT}`,
+    command: `npm run build:e2e && npx vite preview --outDir dist-e2e --port ${port} --strictPort --host 127.0.0.1`,
+    url: `http://127.0.0.1:${port}`,
     reuseExistingServer: false,
     timeout: 180_000,
   },

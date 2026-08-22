@@ -1,6 +1,7 @@
 import "./fp/style.css";
 import { Hud } from "./fp/hud";
 import { DEFAULT_MOUSE_SENSITIVITY, FirstPersonScene } from "./fp/scene";
+import { runCorpus } from "./sim/corpus";
 import { ROSTER } from "./world/roster";
 import type { SimState } from "./sim/types";
 
@@ -18,6 +19,16 @@ declare global {
       readonly state: Readonly<SimState>;
       readonly checksum: string;
       readonly renderer: { ready: boolean; context: "webgl1" | "webgl2" };
+      /**
+       * The determinism corpus, run in whatever engine is showing this page.
+       *
+       * Exposed rather than imported from source by the cross-engine gate,
+       * which used to fetch /src/sim/corpus.ts and therefore needed a dev
+       * server to transpile it. That meant the one gate whose whole job is to
+       * prove the shipped simulation agrees across engines was the one gate
+       * never run against the shipped build.
+       */
+      runCorpus: () => string[];
       readonly view: ReturnType<FirstPersonScene["viewModel"]>;
       start: () => void;
       look: (deltaX: number, deltaY: number) => void;
@@ -95,6 +106,7 @@ if (EXPOSE_TEST_API) {
     get renderer() {
       return { ready: scene.ready, context: scene.rendererContext };
     },
+    runCorpus: () => runCorpus(ROSTER.first.sim),
     get view() {
       return scene.viewModel();
     },

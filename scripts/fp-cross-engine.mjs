@@ -2,33 +2,32 @@
 //
 // The whole rebuild rests on one claim: a tape means the same thing everywhere.
 // This runs the committed replay corpus through the real simulation in Chromium,
-// Firefox and WebKit and holds all three to the same checksums that
-// tests/sim-corpus.test.ts holds Node to.
+// Firefox and WebKit — from the built bundle they will actually be given — and
+// holds all three to the same checksums that tests/sim-corpus.test.ts holds
+// Node to.
 //
 // It is the reason src/sim/trig.ts builds its own sine tables. ECMA-262 pins no
 // accuracy for Math.sin, so a core that called it could disagree with itself
 // across engines — and nobody would notice until someone else's replay quietly
 // failed on their machine.
 //
-// Usage: node scripts/fp-cross-engine.mjs   (needs the dev server on 4173)
+// Usage: node scripts/fp-cross-engine.mjs
 import { chromium, firefox, webkit } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { startGameServer } from "./support/serve.mjs";
 
 // Built and served by us, from dist-e2e/, on our own port. See support/serve.mjs
 // for why this must not be whatever happens to be listening on the dev port.
-// This one runs the simulation from source inside each engine, so it needs a
-// server that can serve TypeScript. See DEV_PORT in support/serve.mjs.
-const server = await startGameServer({ label: "cross-engine", mode: "dev" });
+const server = await startGameServer({ label: "cross-engine" });
 const gameUrl = server.url;
 const golden = JSON.parse(await readFile(new URL("../src/sim/corpus-checksums.json", import.meta.url), "utf8"));
 
+// Through the page's own handle rather than by importing source. Importing
+// /src/sim/corpus.ts needed a dev server to transpile it, which meant this gate
+// — the one whose entire job is to prove the shipped simulation agrees across
+// engines — was the only one never pointed at the shipped build.
 const collect = (page) =>
-  page.evaluate(async () => {
-    const { runCorpus } = await import("/src/sim/corpus.ts");
-    const { AWAKENING } = await import("/src/world/room.ts");
-    return runCorpus(AWAKENING);
-  });
+  page.evaluate(() => globalThis.__I_WAS_SO_I_AM_FP__.runCorpus());
 
 const engines = [
   ["chromium", chromium],
