@@ -131,10 +131,16 @@ export class Hud {
     );
     const startButton = element("button", undefined, "클릭해서 시작");
     startButton.id = "start-button";
-    startButton.addEventListener("click", () => this.callbacks.onStart());
+    startButton.addEventListener("click", () => {
+      startButton.blur();
+      this.callbacks.onStart();
+    });
     this.continueButton.id = "continue-button";
     this.continueButton.hidden = true;
-    this.continueButton.addEventListener("click", () => this.callbacks.onContinue());
+    this.continueButton.addEventListener("click", () => {
+      this.continueButton.blur();
+      this.callbacks.onContinue();
+    });
     this.title.append(
       startButton,
       this.continueButton,
@@ -142,10 +148,20 @@ export class Hud {
     );
 
     this.result.append(this.resultHeading, this.resultBody);
+    // Buttons let go of focus once pressed. A clicked button keeps keyboard
+    // focus, and the next Space — a jump, to the player — pressed it again:
+    // a judge was advanced out of a success card they were still reading, into
+    // a room whose first recorded frames were the jump that sent them there.
     this.again.id = "rerecord-button";
-    this.again.addEventListener("click", () => this.callbacks.onRerecord());
+    this.again.addEventListener("click", () => {
+      this.again.blur();
+      this.callbacks.onRerecord();
+    });
     this.onward.id = "advance-button";
-    this.onward.addEventListener("click", () => this.callbacks.onAdvance());
+    this.onward.addEventListener("click", () => {
+      this.onward.blur();
+      this.callbacks.onAdvance();
+    });
     this.result.append(this.onward, this.again, this.resultHint);
     this.result.hidden = true;
     this.finale.append(this.finaleSeal, this.finaleTitle);
@@ -175,6 +191,16 @@ export class Hud {
       this.result,
     );
     parent.append(this.root);
+  }
+
+  /**
+   * Let go of whatever the facility was saying. A line said at the end of one
+   * attempt has no business captioning the start of the next — "the record is
+   * full and sealed" was still on screen while a fresh, empty tape waited.
+   */
+  clearTransient(): void {
+    this.subtitleText = "";
+    this.subtitleUntil = 0;
   }
 
   /** A saved chamber exists; put the way back on the title card. */
@@ -303,7 +329,13 @@ export class Hud {
       if (view.focusIsHold && !view.holding) {
         prompts.push({ key: "E", label: "누르고 있어 잡기", tone: "go" });
       }
-      if (view.hasPlate) {
+      if (view.hasPlate && view.plateDutyInReplay) {
+        // 03: the plate is the second pass's job. "Walk to the plate" here
+        // steered a judge onto it with the recording running — the one move
+        // the room is built to refuse. Say whose turn it is instead.
+        prompts.push({ key: null, label: "이 발판은 재생의 몫입니다 — 지금은 걸음을 기록하세요", tone: "plain" });
+        if (view.canFold) prompts.push({ key: "⏎", label: "기록 끝내기", tone: "plain" });
+      } else if (view.hasPlate) {
         // "Stand still on it", not "walk to it": two judges walked straight
         // across the disc, saw nothing latch, and concluded the plate was
         // broken — crossing presses it for half a second, which is less than
@@ -347,13 +379,26 @@ export class Hud {
       // In 03 the first door opens while the way out is still shut: the player
       // is holding it open with their foot. "Walk into the light" at that
       // moment sends them off the plate and shuts the door on the echo.
+      // The latch, confirmed the instant it happens. The door takes most of a
+      // second to answer a pressed plate, and in that gap a judge in a dark
+      // corner had only "keep waiting" copy to go on — no way to tell a press
+      // that took from a press that missed.
+      // Not in a room whose plate ignores the living foot — there the same
+      // words would be the exact lie the echo-only copy exists to prevent.
+      if (view.plateActive && !view.doorOpen && !view.plateForEchoOnly) {
+        return [{ key: null, label: "발판 인식 — 문이 열립니다", tone: "go" }];
+      }
       if (view.doorOpen && !view.exitOpen && view.plateActive) {
         // Say why the standing matters, or it reads as a goal in itself — a
         // judge who was not on the plate obeyed this line for a whole cycle,
         // standing in the middle of the room waiting for permission to move.
         return [{ key: null, label: "발판을 계속 밟고 계세요 — 메아리가 지나가면 출구가 열립니다", tone: "echo" }];
       }
-      return [{ key: null, label: view.doorOpen && view.exitOpen ? "빛으로 나가세요" : waiting, tone: "echo" }];
+      // In a grip room the way out is open exactly as long as the echo's hand
+      // holds — two judges read the plain line as a standing fact, dawdled,
+      // and met a shut door with the promise still on screen.
+      const out = view.hasPlate ? "빛으로 나가세요" : "빛으로 나가세요 — 메아리가 잡고 있는 동안";
+      return [{ key: null, label: view.doorOpen && view.exitOpen ? out : waiting, tone: "echo" }];
     }
     if (view.phase === "rerecord") {
       return [{ key: "R", label: "다시 기록", tone: "go" }];

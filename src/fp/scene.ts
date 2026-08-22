@@ -81,6 +81,8 @@ export interface ViewModel {
   hasPlate: boolean;
   /** The first plate only answers the echo; the living player's foot is ignored. */
   plateForEchoOnly: boolean;
+  /** The plate is the second pass's job; recording-phase coaching must not point at it. */
+  plateDutyInReplay: boolean;
   plateActive: boolean;
   doorOpen: boolean;
   /** The way out itself. In 03 the first door and the exit are different gates. */
@@ -2039,8 +2041,12 @@ export class FirstPersonScene {
     const line = this.chamber.subtitleOnReplay;
     if (line) {
       this.events?.onLine(line);
-    } else if (!manual) {
-      this.events?.onLine("기록이 가득 차 봉인되었습니다 — 메아리가 걷기 시작합니다.");
+    } else if (manual) {
+      // The replay puts the body back at spawn, and nothing used to say so — a
+      // judge kept navigating from where they folded and walked into a wall.
+      this.events?.onLine("처음 자리로 돌아갑니다 — 메아리가 당신의 길을 걷습니다.");
+    } else {
+      this.events?.onLine("기록이 가득 차 봉인되었습니다 — 처음 자리로 돌아가, 메아리가 걷기 시작합니다.");
     }
   }
 
@@ -2706,6 +2712,7 @@ export class FirstPersonScene {
       holding: state.holds.some((hold) => hold.heldBy.includes("present")),
       hasPlate: state.plates.length > 0,
       plateForEchoOnly: this.chamber.sim.plates[0]?.requiredActor === "past",
+      plateDutyInReplay: this.chamber.plateDutyInReplay === true,
       // The HUD wants "am I standing on it", not "did the mechanism fire" —
       // on echo-only plates the two answers differ for the whole first pass.
       plateActive: state.plates[0]?.pressedBy.includes("present") ?? false,

@@ -92,10 +92,12 @@ const hud = new Hud(app, {
     scene.requestPointerLock();
   },
   onRerecord: () => {
+    hud.clearTransient();
     scene.rerecord();
     scene.requestPointerLock();
   },
   onAdvance: () => {
+    hud.clearTransient();
     scene.advanceChamber();
     saveChamber();
     scene.requestPointerLock();

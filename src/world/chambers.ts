@@ -244,6 +244,7 @@ export const HAND_NOT_BODY_CHAMBER: Chamber = {
   // The echo treading against the shut partition is the room's whole idea —
   // and it reads as a bug until this sentence lands.
   echoAtDoorLine: "메아리가 닫힌 문 앞에서 걷고 있습니다 — 오른쪽 발판이 그 문을 엽니다.",
+  plateDutyInReplay: true,
   dressing: standardDressing(HAND_SHELL, {
     seedBase: 3300,
     windows: [3, 7, 11],

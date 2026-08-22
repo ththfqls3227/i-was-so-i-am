@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NEUTRAL_FRAME } from "../src/sim/input";
+import { encodeFrame, NEUTRAL_FRAME } from "../src/sim/input";
 import { Simulation } from "../src/sim/simulation";
 import { ROSTER } from "../src/world/roster";
 
@@ -34,6 +34,21 @@ describe("the parked tape", () => {
         expect(plate.active, `${chamber.sim.id} · ${plate.id}`).toBe(false);
       }
     }
+  });
+
+  it("stays parked while the player only looks around", () => {
+    // Reading the room is free, and reading it includes turning your head. A
+    // judge reported the clock starting under a look-only drag; the contract
+    // says buttons arm the tape and yaw alone never does.
+    const sim = new Simulation(ROSTER.first.sim);
+    for (const yawUnits of [256, 1024, 3072, 512]) {
+      for (let tick = 0; tick < 15; tick += 1) {
+        sim.step(encodeFrame({ yawUnits }));
+      }
+    }
+    expect(sim.state.phase).toBe("recording");
+    expect(sim.state.tapeTick).toBe(0);
+    expect(sim.recordedFrames.length).toBe(0);
   });
 
   it("arms on the first button and only then lets the clock move", () => {

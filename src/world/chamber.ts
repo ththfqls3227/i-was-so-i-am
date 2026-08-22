@@ -237,6 +237,13 @@ export interface Chamber {
    */
   echoAtDoorLine?: string;
   /**
+   * This room's plate is the second pass's job: during recording, standing on
+   * it achieves nothing the tape can keep. The HUD's plate coaching follows a
+   * room's shape — in 03 "walk to the plate" steered a judge onto it with the
+   * recording running, which is exactly the move the room is built to refuse.
+   */
+  plateDutyInReplay?: boolean;
+  /**
    * Seconds the fold is held before it takes, with everything frozen.
    *
    * Only the finale sets it. You watch your own hand stop being yours before
