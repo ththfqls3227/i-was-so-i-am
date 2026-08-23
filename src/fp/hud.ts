@@ -431,7 +431,9 @@ export class Hud {
       // it opens: in 03 leaving the plate shuts the first door behind the
       // echo, and requiring it open again sent the coaching back to "step on
       // the plate" while the way out stood waiting.
-      const canLeave = view.exitGated ? view.exitOpen : view.doorOpen && view.exitOpen;
+      // Every door, not the first: in 05 the way-in opened and this line sent
+      // the player at a way-on still shut.
+      const canLeave = view.exitGated ? view.exitOpen : view.allDoorsOpen && view.exitOpen;
       return [{ key: null, label: canLeave ? out : waiting, tone: "echo" }];
     }
     if (view.phase === "rerecord") {

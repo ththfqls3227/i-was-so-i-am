@@ -99,6 +99,9 @@ export interface ViewModel {
   plateDutyInReplay: boolean;
   plateActive: boolean;
   doorOpen: boolean;
+  /** Every door in the room, not just the first — 05 has two, and "walk into
+      the light" with the second one shut was the owner's exact complaint. */
+  allDoorsOpen: boolean;
   /** The way out itself. In 03 the first door and the exit are different gates. */
   exitOpen: boolean;
   echoPresent: boolean;
@@ -306,6 +309,8 @@ export class FirstPersonScene {
   private attemptsInRoom = 0;
   /** The echo-at-the-shut-door line has been said this replay. */
   private echoDoorSpoken = false;
+  /** The shaft of light in the way out, lit only while leaving would work. */
+  private exitBeacon: Mesh | null = null;
   /** How many of the corridor's closing lines have been said, and the gap left. */
   private approachSpoken = 0;
   private approachWait = 1.2;
@@ -888,6 +893,7 @@ export class FirstPersonScene {
     const grips = this.buildGrips(root, brass, timber);
     void grips;
     const doorSlab = this.buildDoor(root, timber);
+    this.exitBeacon = this.buildExitBeacon(root);
     if (this.chamber.dressing.corridor) this.buildExit(root, timber);
     else this.buildThreshold(root, timber);
     this.buildOpenBox(root, timber, brass);
@@ -948,6 +954,7 @@ export class FirstPersonScene {
 
   /** Drop the current chamber: its tree, its materials and its lights. */
   private clearRoom(): void {
+    this.exitBeacon = null;
     for (const light of this.roomLights) light.dispose();
     this.roomLights = [];
     // A chamber's materials and textures are procedural and its own, so they go
@@ -1177,6 +1184,28 @@ export class FirstPersonScene {
   }
 
   /** Cyan dashed for what the recording should walk, amber solid for the present. */
+  /**
+   * A shaft of light standing in the way out, lit only while the way out is
+   * really open. "Walk into the light" pointed at nothing a player could see
+   * from across a room — the owner asked, room after room, which light — and
+   * a bearing in words is no substitute for a landmark in the world. The
+   * corridor of the ending stages its own last door and gets none.
+   */
+  private buildExitBeacon(root: TransformNode): Mesh | null {
+    if (this.chamber.sim.id === "ending-corridor") return null;
+    const exit = this.chamber.sim.exit;
+    const beacon = MeshBuilder.CreateCylinder("exit-beacon", {
+      diameterTop: 0.42, diameterBottom: 0.95, height: 2.9, tessellation: 24,
+    }, this.scene);
+    beacon.position = new Vector3((exit.min.x + exit.max.x) / 2, 1.45, (exit.min.z + exit.max.z) / 2);
+    beacon.material = signalMaterial(this.scene, "exit-beacon-light", new Color3(1, 0.93, 0.78), 0.9);
+    beacon.isPickable = false;
+    beacon.parent = root;
+    this.glow.addIncludedOnlyMesh(beacon);
+    beacon.setEnabled(false);
+    return beacon;
+  }
+
   private buildRouteLines(root: TransformNode): void {
     const shell = this.chamber.shell;
     const past = signalMaterial(this.scene, "route-past", PALETTE.cyan.scale(0.4), 0.8);
@@ -2344,6 +2373,16 @@ export class FirstPersonScene {
       if (this.echoes.live) this.echoes.live.alpha = 0.34 * (0.35 + arrival * 0.65);
     }
 
+    if (this.exitBeacon) {
+      // Lit by the same truth the prompt speaks: every door open and the exit
+      // gate satisfied, or nothing.
+      const passable = this.chamber.sim.exitGatedBy !== undefined
+        ? state.exitOpen
+        : state.exitOpen && state.doors.every((d) => d.open);
+      this.exitBeacon.setEnabled(passable);
+      if (passable) this.exitBeacon.visibility = 0.5 + Math.sin(this.clock * 2.2) * 0.18;
+    }
+
     const door = state.doors[0];
     // Sideways, into the pocket: a papered leaf that rose into the lintel would
     // read as a shutter rather than a door.
@@ -2788,6 +2827,7 @@ export class FirstPersonScene {
       // on echo-only plates the two answers differ for the whole first pass.
       plateActive: state.plates[0]?.pressedBy.includes("present") ?? false,
       doorOpen: state.doors[0]?.open ?? false,
+      allDoorsOpen: state.doors.every((door) => door.open),
       exitOpen: state.exitOpen,
       echoPresent: state.actors.some((actor) => actor.id === "past"),
       success: state.success,
