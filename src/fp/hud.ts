@@ -143,7 +143,7 @@ export class Hud {
     this.title.append(
       startButton,
       this.continueButton,
-      element("p", "hint", "W A S D 이동 · 마우스 시점 · Space 점프 · E 잡기\n⏎ 기록 끝내기 · R 다시 기록 · Esc 멈춤 · M 음소거"),
+      element("p", "hint", "W A S D 이동 · 마우스 시점 · Space 점프 · E 잡기\n⏎ 기록 끝내기 · R 다시 기록 · N 다음 방 · Esc 멈춤 · M 음소거"),
     );
 
     this.result.append(this.resultHeading, this.resultBody);

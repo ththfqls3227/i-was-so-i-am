@@ -56,7 +56,11 @@ export const SECOND_SELF_CHAMBER: Chamber = {
   sim: SECOND_SELF,
   shell: ROOM_SHELL,
   number: "01",
-  subtitleOnEntry: "기록은 폐기되지 않습니다. 다시 재생될 뿐입니다. 보관소는 이것을 메아리라 부릅니다.",
+  // The twist, said at the door. This room and 00 share a shell, and a player
+  // who does the right thing never witnesses the rule change — the owner and
+  // two judges all asked what the difference even was. The naming-the-echo
+  // beat this line used to carry lives in 00's replay line now.
+  subtitleOnEntry: "이번 발판은 메아리의 것입니다 — 산 발은 무시합니다. 기록을 끝내고, 조금 전의 당신에게 맡기세요.",
   dressing: standardDressing(ROOM_SHELL, { seedBase: 1700 }),
 };
 

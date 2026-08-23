@@ -70,6 +70,7 @@ const audio = new FpAudioAdapter({
 // way back in was the title and four rooms of replays — a save is written on
 // every room change and spent from the title card.
 const CHAMBER_KEY = "i-was-so-i-am:chamber:v1";
+let lastSavedChamberId = scene.currentChamber.sim.id;
 const saveChamber = (): void => {
   try {
     localStorage.setItem(CHAMBER_KEY, scene.currentChamber.sim.id);
@@ -99,7 +100,6 @@ const hud = new Hud(app, {
   onAdvance: () => {
     hud.clearTransient();
     scene.advanceChamber();
-    saveChamber();
     scene.requestPointerLock();
   },
 });
@@ -117,6 +117,13 @@ scene.attach({
   onFrame: (view) => {
     hud.update(view, performance.now());
     audio.onFrame();
+    // The bookmark follows every way a room can change — the button, the N
+    // key, a continue — instead of being wired into one of them.
+    const chamberId = scene.currentChamber.sim.id;
+    if (chamberId !== lastSavedChamberId) {
+      lastSavedChamberId = chamberId;
+      saveChamber();
+    }
   },
   onFootstep: (actor, y, speed) => audio.onFootstep(actor, y, speed),
   onPhaseChange: (phase) => {

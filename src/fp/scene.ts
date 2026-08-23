@@ -1925,6 +1925,13 @@ export class FirstPersonScene {
       this.pressed.add(code);
       if (code === "Enter") this.beginFold();
       if (code === "KeyR") this.rerecord();
+      // The room-skip the judging notes promised and the build never had: a
+      // reviewer walking all ten rooms should not have to earn each doorway.
+      if (code === "KeyN" && this.started && !this.ended) this.advanceChamber();
+      // The title card says Esc pauses. Under pointer lock the browser's own
+      // exit already lands on pause via pointerlockchange; in the drag-look
+      // fallback nothing did, and the promise was a lie there.
+      if (code === "Escape" && this.started && !this.paused && !this.ended) this.pause();
     } else {
       this.pressed.delete(code);
     }
