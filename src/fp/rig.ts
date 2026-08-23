@@ -130,6 +130,14 @@ export interface Pose {
   grounded: boolean;
   /** Seconds, for the idle breath. Render-only, never fed back to the tick. */
   clock: number;
+  /**
+   * Something the right hand is holding: yaw is the target's bearing relative
+   * to the body's facing, pitch is up toward it from the shoulder. While set,
+   * that arm leaves the stride and stays on the grip — a figure whose tape is
+   * holding a door open used to swing both arms as if carrying nothing, and
+   * the owner asked, fairly, what the hand was supposed to be doing.
+   */
+  reach?: { yaw: number; pitch: number } | null;
 }
 
 /**
@@ -168,6 +176,15 @@ export function poseHumanoid(rig: Humanoid, pose: Pose): void {
     rig.body.position.y = breath;
     rig.torso.rotation.y = 0;
     rig.torso.rotation.x = 0.1;
+  }
+  // Both cases write the shoulder's yaw, so a finished reach never leaves a
+  // stale twist behind on the next stride.
+  rig.shoulders[1].rotation.y = 0;
+  if (pose.reach) {
+    rig.shoulders[1].rotation.x = -(Math.PI / 2) - pose.reach.pitch;
+    rig.shoulders[1].rotation.y = pose.reach.yaw;
+    rig.elbows[1].rotation.x = -0.08;
+    rig.torso.rotation.y += pose.reach.yaw * 0.2;
   }
   rig.head.rotation.x = -rig.torso.rotation.x * 0.7;
 }

@@ -157,15 +157,15 @@ export const AWAKENING_CHAMBER: Chamber = {
   // judge in a hurry skips the title card, and this card is the only other
   // place the loop is ever explained.
   hints: [
-    { after: 1, line: "메아리가 발판에 도착해야 문이 열립니다." },
+    { after: 1, line: "잔상이 발판에 도착해야 문이 열립니다." },
     { after: 2, line: "발판 위에 멈춰 서서 ⏎." },
   ],
   // The whole loop, before the first tape rolls: judges kept meeting the
   // second half of the contract on a failure card. One breath longer than the
   // old welcome, and the only room that gets the full sentence.
-  subtitleOnEntry: "기억 보관소에 오신 것을 환영합니다. 이 방에서의 행동은 기록되고 — 기록이 끝나면 메아리가 그 길을 다시 걷습니다. 메아리가 발판을 밟는 동안, 당신은 빛으로 나가세요.",
+  subtitleOnEntry: "기억 보관소에 오신 것을 환영합니다. 이곳에서의 행동은 기록되고, 기록이 끝나면 조금 전의 당신 — 잔상 — 이 같은 길을 다시 걷습니다. 잔상이 발판을 밟는 동안 빛으로 나가세요.",
   // The loop's causality, said the moment it starts mattering. Three rounds of
   // judges pieced it together from failure cards instead — after the failing.
-  subtitleOnReplay: "메아리가 당신의 길을 다시 걷습니다. 메아리가 발판을 밟으면 문이 열립니다 — 그때 빛으로 나가세요.",
+  subtitleOnReplay: "잔상이 당신의 길을 되밟는 중입니다. 발판에 닿으면 문이 열리니, 그때 빛으로 나가세요.",
   dressing: AWAKENING_DRESSING,
 };

@@ -60,7 +60,7 @@ export const SECOND_SELF_CHAMBER: Chamber = {
   // who does the right thing never witnesses the rule change — the owner and
   // two judges all asked what the difference even was. The naming-the-echo
   // beat this line used to carry lives in 00's replay line now.
-  subtitleOnEntry: "이번 발판은 메아리의 것입니다 — 산 발은 무시합니다. 기록을 끝내고, 조금 전의 당신에게 맡기세요.",
+  subtitleOnEntry: "이 방의 발판은 잔상만 알아봅니다. 지금의 발에는 무게가 없습니다 — 기록을 끝내고, 조금 전의 당신에게 맡기세요.",
   dressing: standardDressing(ROOM_SHELL, { seedBase: 1700 }),
 };
 
@@ -109,7 +109,7 @@ export const HOLDING_HAND_CHAMBER: Chamber = {
   sim: HOLDING_HAND,
   shell: ROOM_SHELL,
   number: "02",
-  subtitleOnEntry: "메아리의 손은 성실합니다. 기록이 끝날 때까지, 잡은 것을 놓지 않습니다.",
+  subtitleOnEntry: "잔상의 손은 성실합니다. 기록이 끝날 때까지, 잡은 것을 놓지 않습니다.",
   // Four windows rather than the standard three, evenly spaced. 01 and 02 were
   // running the same window row, which put the same three bands on the same
   // three patches of floor in both rooms — and 02 is the one room whose subject
@@ -242,15 +242,15 @@ export const HAND_NOT_BODY_CHAMBER: Chamber = {
   // the first rung points at the golden floor line the room already draws.
   hints: [
     { after: 1, line: "재생 중에는 당신의 발이 자유롭습니다. 바닥의 금색 선을 따라가, 오른쪽의 발판을 직접 밟으세요." },
-    { after: 2, line: "발판을 밟은 채 기다리면, 메아리가 열린 문을 지나 막다른 방까지 걸어갑니다. 출구가 열리면 당신도 나가야 합니다." },
-    { after: 3, line: "기록이 짧으면 메아리의 걸음도 짧습니다 — 닫힌 문을 향한 걸음을 더 길게 담으세요." },
+    { after: 2, line: "발판을 밟은 채 기다리면 잔상이 열린 문을 지나 막다른 방까지 걸어갑니다. 출구가 열리면 당신도 나가야 합니다." },
+    { after: 3, line: "기록이 짧으면 잔상의 걸음도 짧습니다 — 문을 향해 걷는 시간을 더 길게 담으세요." },
   ],
   // The rule up front, not four failure cards deep: a judge who met it only
   // as escalating hints spent five tries re-deriving it and quit one short.
-  subtitleOnEntry: "안내: 이 방의 발판은 재생 중의 당신 몫입니다. 기록에는 — 닫힌 문을 향한 걸음을 담으세요.",
+  subtitleOnEntry: "안내: 이 방의 발판은 2회차의 당신이 직접 밟습니다. 기록에는 닫힌 문을 향해 걷는 걸음을 담으세요.",
   // The echo treading against the shut partition is the room's whole idea —
   // and it reads as a bug until this sentence lands.
-  echoAtDoorLine: "메아리가 닫힌 문 앞에서 걷고 있습니다 — 오른쪽 발판이 그 문을 엽니다.",
+  echoAtDoorLine: "잔상이 닫힌 문 앞에서 걷고 있습니다 — 오른쪽 발판이 저 문을 엽니다.",
   plateDutyInReplay: true,
   dressing: standardDressing(HAND_SHELL, {
     seedBase: 3300,

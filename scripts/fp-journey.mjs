@@ -169,7 +169,7 @@ try {
   await advanceTo("second-self");
   check("advancing reaches 01", (await read()).chamber === "second-self");
   const entry01 = (await read()).subtitle;
-  check("01 says its line", entry01.includes("메아리"), entry01);
+  check("01 says its line", entry01.includes("잔상"), entry01);
 
   // 01: stand on the plate that ignores you, fold, then walk through his door.
   await act("setLook", 0, 0);

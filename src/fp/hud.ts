@@ -290,7 +290,7 @@ export class Hud {
     // a judge decided the clock ran at two speeds rather than not at all.
     const leftLabel = view.phase === "recording"
       ? (view.tapeArmed ? "남은 기록 시간" : "기록 대기 — 움직이면 시작됩니다")
-      : "메아리 시간";
+      : "잔상 시간";
     if (this.tapeLeft.textContent !== leftLabel) this.tapeLeft.textContent = leftLabel;
     const rightLabel = `${remaining.toFixed(1)}s`;
     if (this.tapeRight.textContent !== rightLabel) this.tapeRight.textContent = rightLabel;
@@ -326,7 +326,7 @@ export class Hud {
       // focus too, and the same prompt over a plate sent two judges hunting
       // for something to hold in rooms that have nothing to grab.
       if (view.focusIsHold && !view.holding) {
-        prompts.push({ key: "E", label: "누르고 있어 잡기", tone: "go" });
+        prompts.push({ key: "E", label: "길게 눌러 잡기", tone: "go" });
       }
       if (view.hasPlate && view.plateDutyInReplay) {
         // 03: the plate is the second pass's job. "Walk to the plate" here
@@ -334,7 +334,7 @@ export class Hud {
         // the room is built to refuse. Say whose turn it is, and what THIS
         // pass is for: "record your steps" told a judge nothing about which
         // steps, and cost five tries.
-        prompts.push({ key: null, label: "이 발판은 재생의 몫입니다 — 지금은 닫힌 문을 향해 걸으세요", tone: "plain" });
+        prompts.push({ key: null, label: "이 발판은 2회차에 밟습니다 — 지금은 닫힌 문 쪽으로 걸어 두세요", tone: "plain" });
         if (view.canFold) prompts.push({ key: "⏎", label: "기록 끝내기", tone: "plain" });
       } else if (view.hasPlate) {
         // "Stand still on it", not "walk to it": two judges walked straight
@@ -399,7 +399,7 @@ export class Hud {
                 ? "발판을 지나쳤습니다 — 뒤로 돌아 밟으세요"
                 : "오른쪽 발판을 직접 밟으세요 — 당신의 발이 문을 엽니다")
           : view.plateForEchoOnly
-            ? "문이 열리기를 기다리세요 — 이 발판은 메아리의 것입니다"
+            ? "이 발판은 잔상의 것입니다 — 문이 열릴 때까지 기다리세요"
             : "문이 열리기를 기다리거나, 직접 발판을 밟으세요";
       // In 03 the first door opens while the way out is still shut: the player
       // is holding it open with their foot. "Walk into the light" at that
@@ -411,13 +411,13 @@ export class Hud {
       // Not in a room whose plate ignores the living foot — there the same
       // words would be the exact lie the echo-only copy exists to prevent.
       if (view.plateActive && !view.doorOpen && !view.plateForEchoOnly) {
-        return [{ key: null, label: "발판 인식 — 문이 열립니다", tone: "go" }];
+        return [{ key: null, label: "발판이 눌렸습니다 — 곧 문이 열립니다", tone: "go" }];
       }
       if (view.doorOpen && !view.exitOpen && view.plateActive) {
         // Say why the standing matters, or it reads as a goal in itself — a
         // judge who was not on the plate obeyed this line for a whole cycle,
         // standing in the middle of the room waiting for permission to move.
-        return [{ key: null, label: "발판을 계속 밟고 계세요 — 메아리가 지나가면 출구가 열립니다", tone: "echo" }];
+        return [{ key: null, label: "그대로 밟고 계세요. 잔상이 문을 지나면 출구가 열립니다", tone: "echo" }];
       }
       // "Walk into the light" cost one judge six tries and another ten,
       // because the brightest thing on screen was the wrong door both times —
@@ -426,7 +426,7 @@ export class Hud {
       const dir = view.exitBearing === "ahead" ? "앞" : view.exitBearing === "left" ? "왼쪽" : view.exitBearing === "right" ? "오른쪽" : "뒤";
       const out = view.hasPlate
         ? `출구는 ${dir}입니다 — 빛으로 나가세요`
-        : `출구는 ${dir}입니다 — 메아리가 잡고 있는 동안 나가세요`;
+        : `잔상이 잡아 주는 동안입니다 — ${dir}의 출구로 나가세요`;
       // Where the exit has its own gate, the doors stop mattering the moment
       // it opens: in 03 leaving the plate shuts the first door behind the
       // echo, and requiring it open again sent the coaching back to "step on
@@ -549,11 +549,11 @@ export class Hud {
             // The generic line says "press the plate and leave" — in the
             // role-reversal room that reads as one move when it is two, and a
             // judge took the two halves for a contradiction.
-            ? "문이 닫힌 채였습니다 — 재생 중 오른쪽 발판을 밟고 있어야 메아리가 지나갑니다. 출구는 발판 너머, 동쪽 통로 끝입니다."
+            ? "문이 닫힌 채였습니다. 2회차에 오른쪽 발판을 밟고 있어야 잔상이 지나갑니다 — 출구는 발판 너머 동쪽 통로 끝에 있습니다."
             : view.lastError === "out-of-time"
             ? (view.exitOpen
-              ? "시간이 지났습니다. 출구는 열려 있었습니다 — 다음에는 길이 열리면, 당신이 빛으로 나가세요."
-              : "시간이 지났습니다 — 출구가 끝내 열리지 않았습니다.")
+              ? "시간이 다 되었습니다. 출구는 열려 있었으니 — 다음에는 길이 열리는 순간 나가세요."
+              : "시간이 다 되었습니다. 출구는 끝내 열리지 않았습니다.")
             : FAILURE_COPY[view.lastError])
         : "이번 재생은 끝났습니다.";
       this.offer(this.again, true);

@@ -2070,9 +2070,9 @@ export class FirstPersonScene {
     } else if (manual) {
       // The replay puts the body back at spawn, and nothing used to say so — a
       // judge kept navigating from where they folded and walked into a wall.
-      this.events?.onLine("처음 자리로 돌아갑니다 — 메아리가 당신의 길을 걷습니다.");
+      this.events?.onLine("몸이 처음 자리로 돌아갑니다. 이제 잔상이 당신의 길을 걷습니다.");
     } else {
-      this.events?.onLine("기록이 가득 차 봉인되었습니다 — 처음 자리로 돌아가, 메아리가 걷기 시작합니다.");
+      this.events?.onLine("기록이 가득 차 저절로 봉인됐습니다. 처음 자리로 — 잔상이 걷기 시작합니다.");
     }
   }
 
@@ -2314,11 +2314,29 @@ export class FirstPersonScene {
     if (echoActive && echoSnapshot) {
       this.echo.root.position.set(echoSnapshot.x, echoSnapshot.y, echoSnapshot.z);
       this.echo.root.rotation.y = echoSnapshot.yaw;
+      // A hand that is holding something looks like it: while the tape keeps
+      // a grip, the right arm reaches for the thing it is gripping instead of
+      // swinging with the stride.
+      const heldId = state.holds.find((hold) => hold.heldBy.includes("past"))?.id ?? null;
+      let reach: { yaw: number; pitch: number } | null = null;
+      const heldSpec = heldId === null
+        ? undefined
+        : this.simulation.definition.holds.find((hold) => hold.id === heldId);
+      if (heldSpec) {
+        const dx = heldSpec.at.x - echoSnapshot.x;
+        const dz = heldSpec.at.z - echoSnapshot.z;
+        let yaw = Math.atan2(dx, dz) - echoSnapshot.yaw;
+        while (yaw > Math.PI) yaw -= Math.PI * 2;
+        while (yaw < -Math.PI) yaw += Math.PI * 2;
+        const pitch = Math.atan2(heldSpec.at.y - (echoSnapshot.y + 1.46), Math.hypot(dx, dz));
+        reach = { yaw, pitch };
+      }
       poseHumanoid(this.echo, {
         speed: echoSnapshot.speed,
         phase: this.stride.get("past") ?? 0,
         grounded: echoSnapshot.grounded,
         clock: this.clock,
+        reach,
       });
       // The echo arrives rather than appearing: a short fade-in on the first
       // second of the second pass.
