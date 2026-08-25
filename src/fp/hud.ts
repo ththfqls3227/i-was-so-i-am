@@ -413,7 +413,10 @@ export class Hud {
         // the room is built to refuse. Say whose turn it is, and what THIS
         // pass is for: "record your steps" told a judge nothing about which
         // steps, and cost five tries.
-        prompts.push({ key: null, label: "이 발판은 2회차에 밟습니다 — 지금은 닫힌 문 쪽으로 걸어 두세요", tone: "plain" });
+        // 오른쪽, not 이: at spawn the plate is out of frame in every room
+        // that uses this line (03, 06, 07 all keep it to the right), and a
+        // deictic with no referent sent an auditor hunting before the walk.
+        prompts.push({ key: null, label: "오른쪽 발판은 2회차에 밟습니다 — 지금은 닫힌 문 쪽으로 걸어 두세요", tone: "plain" });
         if (view.canFold) prompts.push({ key: "⏎", label: "기록 끝내기", tone: "plain" });
       } else if (view.hasPlate) {
         // "Stand still on it", not "walk to it": two judges walked straight
