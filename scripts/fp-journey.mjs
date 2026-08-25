@@ -70,6 +70,7 @@ const read = () => withHandle(() => page.evaluate(() => {
     doorById: Object.fromEntries(state.doors.map((d) => [d.id, d.open])),
     y: present?.y ?? 0,
     subtitle: globalThis.document.querySelector(".subtitle")?.textContent ?? "",
+    subtitleShown: globalThis.document.querySelector(".subtitle")?.dataset.shown ?? "",
     sealing: fp.view.sealing === true,
     rerecordNotice: fp.view.rerecordNotice ?? "",
     crosshairSealing: globalThis.document.querySelector(".crosshair")?.dataset.sealing ?? "",
@@ -415,8 +416,17 @@ try {
   check("the room goes black and holds", quiet.blackout === "true", quiet.blackout);
   check("and nothing is on screen during the hold", quiet.finaleOn !== "true", `finale ${quiet.finaleOn}`);
 
-  await page.waitForTimeout(2200);
-  const titled = await read();
+  // The archivist's goodbye fills the dark for some twenty seconds before the
+  // title answers her, so the title is waited for rather than ambushed — and
+  // her speaking at all is part of what this walk certifies.
+  let spokeInTheDark = false;
+  let titled = quiet;
+  for (let waited = 0; waited < 32000 && titled.finaleOn !== "true"; waited += 400) {
+    await page.waitForTimeout(400);
+    titled = await read();
+    if (titled.subtitleShown === "true" && titled.finaleOn !== "true") spokeInTheDark = true;
+  }
+  check("the archivist speaks in the dark", spokeInTheDark, String(spokeInTheDark));
   check("then the title, and only the title", titled.finaleOn === "true", titled.finaleOn);
   check("which is the English typography", titled.finaleTitle === "I WAS, SO I AM.", titled.finaleTitle);
   // Pressing again must not restart anything.
