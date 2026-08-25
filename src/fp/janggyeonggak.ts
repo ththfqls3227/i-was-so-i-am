@@ -55,12 +55,16 @@ function bakeTexture(
 ): DynamicTexture {
   const scratch = scratchContext(size, size);
   draw(scratch);
-  const texture = new DynamicTexture(name, { width: size, height: size }, scene, false);
+  // Mipmaps and anisotropy, or the brick reads as mush from a standing eye:
+  // every floor and wall in the game is seen at a grazing angle, which is the
+  // one view plain trilinear-without-mips is worst at.
+  const texture = new DynamicTexture(name, { width: size, height: size }, scene, true);
   texture.getContext().drawImage(scratch.canvas, 0, 0);
   texture.wrapU = Texture.WRAP_ADDRESSMODE;
   texture.wrapV = Texture.WRAP_ADDRESSMODE;
   texture.uScale = scale;
   texture.vScale = scale;
+  texture.anisotropicFilteringLevel = 8;
   texture.update(false);
   return texture;
 }
@@ -414,7 +418,7 @@ export function buildDioramaBoard(
   context.font = '700 22px "Helvetica Neue", Helvetica, Arial, sans-serif';
   context.fillText(number, width / 2, height - 70);
 
-  const texture = new DynamicTexture(name, { width, height }, scene, false);
+  const texture = new DynamicTexture(name, { width, height }, scene, true);
   const target = texture.getContext();
   // Flipped, because DynamicTexture reads bottom-up.
   target.translate(0, height);
@@ -561,6 +565,33 @@ export function buildShelfWall(
   litBoxes.parent = run;
   litBoxes.thinInstanceSetBuffer("matrix", new Float32Array(lit), 16);
   litBoxes.thinInstanceRefreshBoundingInfo(true);
+
+  // Paper lanterns along the top of the run. Not lights — lit surfaces: the
+  // cases below them read as kept rather than warehoused, and the darkest
+  // stretch of every room is exactly where a shelf wall faces away from the
+  // sun. Fixed spacing, no randomness — the seeded stream above is already
+  // spoken for and a jittered lantern row reads as broken, not handmade.
+  const lanternPaper = hanjiMaterial(scene, `lantern-paper-${options.id ?? x}`, seed + 4040, 0.5);
+  const lanternY = height - 0.14;
+  const lanternOut = facing * (depth + 0.16);
+  for (let z = -span / 2 + 1.1; z <= span / 2 - 1.1; z += 2.4) {
+    const shade = MeshBuilder.CreateBox(`lantern-${options.id ?? x}-${z.toFixed(1)}`, { width: 0.15, height: 0.2, depth: 0.15 }, scene);
+    shade.position = new Vector3(lanternOut, lanternY, z);
+    shade.material = lanternPaper;
+    shade.isPickable = false;
+    shade.parent = run;
+    const cap = MeshBuilder.CreateBox(`lantern-cap-${options.id ?? x}-${z.toFixed(1)}`, { width: 0.19, height: 0.035, depth: 0.19 }, scene);
+    cap.position = new Vector3(lanternOut, lanternY + 0.115, z);
+    cap.material = timber;
+    cap.isPickable = false;
+    cap.parent = run;
+    const hanger = MeshBuilder.CreateBox(`lantern-hanger-${options.id ?? x}-${z.toFixed(1)}`, { width: 0.02, height: 0.16, depth: 0.02 }, scene);
+    hanger.position = new Vector3(lanternOut / 2, height + 0.02, z);
+    hanger.rotation.z = facing * 0.9;
+    hanger.material = timber;
+    hanger.isPickable = false;
+    hanger.parent = run;
+  }
 
   return { root: run, boxes, lit: litBoxes, frame };
 }

@@ -277,6 +277,13 @@ export class FirstPersonScene {
   private accumulator = 0;
   private lastFrameTime = 0;
   private bobPhase = 0;
+  /** Eased gate on the bob — feet on brick swing it, air does not. */
+  private bobGain = 0;
+  /** Landing dip envelope, wound to 1 the frame the ground comes back. */
+  private landDip = 0;
+  private wasGrounded = true;
+  /** When the archivist last answered an empty-handed E. */
+  private missedGrabAt = -Infinity;
   private clock = 0;
   private fps = 60;
   private running = false;
@@ -398,6 +405,12 @@ export class FirstPersonScene {
     this.pipeline.bloomWeight = 0.46;
     this.pipeline.bloomKernel = 52;
     this.pipeline.bloomScale = 0.6;
+    // A light sharpen after FXAA. The AA pass is what keeps edges calm and it
+    // pays for that in micro-contrast; this buys the texture detail back
+    // without inviting the halos a heavier amount draws on the muntins.
+    this.pipeline.sharpenEnabled = true;
+    this.pipeline.sharpen.edgeAmount = 0.16;
+    this.pipeline.sharpen.colorAmount = 1;
     const grade = this.pipeline.imageProcessing;
     grade.toneMappingEnabled = true;
     grade.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
@@ -2000,6 +2013,7 @@ export class FirstPersonScene {
       this.pressed.add(code);
       if (code === "Enter") this.beginFold();
       if (code === "KeyR") this.rerecord();
+      if (code === "KeyE") this.answerEmptyGrab();
       // The room-skip the judging notes promised and the build never had: a
       // reviewer walking all ten rooms should not have to earn each doorway.
       if (code === "KeyN" && this.started && !this.ended) this.advanceChamber();
@@ -2010,6 +2024,25 @@ export class FirstPersonScene {
     } else {
       this.pressed.delete(code);
     }
+  }
+
+  /**
+   * E with nothing in reach says so, sparingly. Two playtesters — one of them
+   * the owner — pressed it a step past the grip they meant and read the
+   * silence as the game being broken rather than the hand being empty.
+   */
+  private answerEmptyGrab(): void {
+    if (!this.started || this.paused || this.ended) return;
+    if (this.chamber.sim.holds.length === 0) return;
+    const state = this.simulation.state;
+    if (state.phase !== "recording" && state.phase !== "replay") return;
+    const present = state.actors.find((actor) => actor.id === "present");
+    if (!present) return;
+    if (present.focusId !== null && this.chamber.sim.holds.some((hold) => hold.id === present.focusId)) return;
+    const now = performance.now();
+    if (now - this.missedGrabAt < 2600) return;
+    this.missedGrabAt = now;
+    this.events?.onLine("손이 닿는 곳에 잡을 것이 없습니다 — 손잡이 가까이에서 E.");
   }
 
   /** Absolute aim, in radians. Used by rerecord and by capture choreography. */
@@ -2378,9 +2411,19 @@ export class FirstPersonScene {
     if (present) {
       const gait = Math.min(1, present.speed / simConstants.walkSpeed);
       this.bobPhase += present.speed * deltaSeconds * 3.4;
-      const bob = Math.sin(this.bobPhase * 2) * 0.022 * gait;
-      const sway = Math.sin(this.bobPhase) * 0.0075 * gait;
-      this.camera.position.set(present.x, present.y + simConstants.eyeHeight + bob, present.z);
+      // The bob belongs to feet on brick. Un-gated it kept pumping through a
+      // jump — a swimming feeling with nothing underfoot to explain it — and
+      // the ease keeps the hand-off from popping either way.
+      const gate = present.grounded ? gait : 0;
+      this.bobGain += (gate - this.bobGain) * Math.min(1, deltaSeconds * 10);
+      if (present.grounded && !this.wasGrounded) this.landDip = 1;
+      this.wasGrounded = present.grounded;
+      this.landDip = Math.max(0, this.landDip - deltaSeconds * 5.5);
+      // Half a sine, down and back up, over the envelope's life.
+      const dip = Math.sin(this.landDip * Math.PI) * 0.032;
+      const bob = Math.sin(this.bobPhase * 2) * 0.022 * this.bobGain;
+      const sway = Math.sin(this.bobPhase) * 0.0075 * this.bobGain;
+      this.camera.position.set(present.x, present.y + simConstants.eyeHeight + bob - dip, present.z);
       this.camera.rotation.set(this.pitch, this.yaw, sway);
     }
 

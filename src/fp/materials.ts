@@ -68,8 +68,9 @@ export function normalFromHeight(
     }
   }
   scratch.putImageData(image, 0, 0);
-  const texture = new DynamicTexture(name, { width: size, height: size }, scene, false);
+  const texture = new DynamicTexture(name, { width: size, height: size }, scene, true);
   texture.getContext().drawImage(scratch.canvas, 0, 0);
+  texture.anisotropicFilteringLevel = 8;
   texture.update(false);
   texture.wrapU = Texture.WRAP_ADDRESSMODE;
   texture.wrapV = Texture.WRAP_ADDRESSMODE;
@@ -104,7 +105,7 @@ export function panelMaterial(scene: Scene, name: string, options: PanelOptions)
   const panelHeight = size / rows;
   const gap = Math.max(6, bevel * 1.6);
   const random = seededRandom(seed);
-  const albedo = new DynamicTexture(`${name}-albedo`, { width: size, height: size }, scene, false);
+  const albedo = new DynamicTexture(`${name}-albedo`, { width: size, height: size }, scene, true);
   const context = albedo.getContext();
   const height = scratchContext(size, size);
 
@@ -178,6 +179,7 @@ export function panelMaterial(scene: Scene, name: string, options: PanelOptions)
 
   albedo.wrapU = Texture.WRAP_ADDRESSMODE;
   albedo.wrapV = Texture.WRAP_ADDRESSMODE;
+  albedo.anisotropicFilteringLevel = 8;
   albedo.update(false);
 
   const surface = new StandardMaterial(name, scene);
