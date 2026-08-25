@@ -103,7 +103,15 @@ export interface ViewModel {
   doorOpen: boolean;
   /** Every door in the room, not just the first — 05 has two, and "walk into
       the light" with the second one shut was the owner's exact complaint. */
-  allDoorsOpen: boolean;
+  /**
+   * Every door still ahead of the player is open. Doors already walked
+   * through do not count: 05 shuts the way in behind you as the way on
+   * opens, so "all doors open" was a moment that room simply never has —
+   * and the go-signal it gated never fired there.
+   */
+  wayAheadOpen: boolean;
+  /** The room's own recording chip, when its tape needs coaching to make. */
+  recordingCueLine: string | null;
   /** The way out itself. In 03 the first door and the exit are different gates. */
   exitOpen: boolean;
   echoPresent: boolean;
@@ -284,6 +292,8 @@ export class FirstPersonScene {
   private wasGrounded = true;
   /** When the archivist last answered an empty-handed E. */
   private missedGrabAt = -Infinity;
+  /** Recording ticks spent standing on the first plate — the script's act break. */
+  private firstStandTicks = 0;
   private clock = 0;
   private fps = 60;
   private running = false;
@@ -1041,6 +1051,7 @@ export class FirstPersonScene {
     this.gripCueSpoken.clear();
     this.upstairsWait = null;
     this.upstairsSpoken = false;
+    this.firstStandTicks = 0;
     this.approachSpoken = 0;
     this.approachWait = 1.2;
     this.stride.clear();
@@ -2191,6 +2202,19 @@ export class FirstPersonScene {
    * direction in it. Null when far (the generic line serves), when standing
    * on it, or when the plate ignores the living foot.
    */
+  /**
+   * The recording chip for a room whose tape is a schedule of standing.
+   * Two acts: the first plate until it has a real stand on record, then the
+   * second. While a plate is underfoot the line holds the player there.
+   */
+  private recordingCueLine(state: Readonly<SimState>): string | null {
+    const script = this.chamber.recordingScript;
+    if (!script || state.phase !== "recording") return null;
+    if (state.plates[0]?.pressedBy.includes("present")) return script.onFirst;
+    if (state.plates[1]?.pressedBy.includes("present")) return script.onSecond;
+    return this.firstStandTicks >= 90 ? script.toSecond : script.toFirst;
+  }
+
   private plateBearing(
     state: Readonly<SimState>,
     present: SimState["actors"][number] | undefined,
@@ -2265,6 +2289,7 @@ export class FirstPersonScene {
     this.yaw = radiansFromYawUnits(this.chamber.sim.spawn.yawUnits);
     this.pitch = 0;
     for (const leaf of this.doorLeaves) leaf.offset = 0;
+    this.firstStandTicks = 0;
     this.captureSnapshots();
     this.previous = new Map(this.current);
     this.events?.onPhaseChange("recording", previousPhase);
@@ -2364,6 +2389,12 @@ export class FirstPersonScene {
     });
     this.lastFrame = frame;
     const result = this.simulation.step(frame);
+    // The recording script's two acts split on this: whether the tape already
+    // holds a real stand on the first plate. Ninety ticks is three seconds —
+    // less than that opens the way in for less time than crossing the room takes.
+    if (result.state.phase === "recording" && (result.state.plates[0]?.pressedBy.includes("present") ?? false)) {
+      this.firstStandTicks += 1;
+    }
     this.captureSnapshots();
     if (result.phaseChanged) {
       if (result.state.phase === "rerecord") this.attemptsInRoom += 1;
@@ -2464,11 +2495,15 @@ export class FirstPersonScene {
     }
 
     if (this.exitBeacon) {
-      // Lit by the same truth the prompt speaks: every door open and the exit
-      // gate satisfied, or nothing.
+      // Lit by the same truth the prompt speaks: every door still AHEAD open
+      // and the exit gate satisfied. Doors behind the player stopped counting
+      // when 05 turned out to shut the way in at the exact moment the way on
+      // opens — under "all doors" this beacon could never light there at all.
+      const walker = state.actors.find((actor) => actor.id === "present");
       const passable = this.chamber.sim.exitGatedBy !== undefined
         ? state.exitOpen
-        : state.exitOpen && state.doors.every((d) => d.open);
+        : state.exitOpen && state.doors.every((door, index) =>
+          door.open || (this.chamber.sim.doors[index]?.brush.max.z ?? 0) < (walker?.z ?? 0));
       this.exitBeacon.setEnabled(passable);
       if (passable) this.exitBeacon.visibility = 0.5 + Math.sin(this.clock * 2.2) * 0.18;
     }
@@ -2967,15 +3002,20 @@ export class FirstPersonScene {
       plateForEchoOnly: this.chamber.sim.plates[0]?.requiredActor === "past",
       plateDutyInReplay: this.chamber.plateDutyInReplay === true,
       replayWaitLine: this.chamber.replayWait
-        ? ((present?.y ?? 0) > this.chamber.replayWait.aboveY
-          ? this.chamber.replayWait.aboveLine
-          : this.chamber.replayWait.belowLine)
+        ? (((this.chamber.replayWait.axis === "y" ? present?.y : present?.z) ?? 0) > this.chamber.replayWait.at
+          ? this.chamber.replayWait.after
+          : this.chamber.replayWait.before)
         : null,
       // The HUD wants "am I standing on it", not "did the mechanism fire" —
       // on echo-only plates the two answers differ for the whole first pass.
-      plateActive: state.plates[0]?.pressedBy.includes("present") ?? false,
+      // Any plate, not the first: 08 forces its first plate down and asks the
+      // player to stand on the second, which under a plates[0] read never
+      // counted as standing anywhere.
+      plateActive: state.plates.some((plate) => plate.pressedBy.includes("present")),
       doorOpen: state.doors[0]?.open ?? false,
-      allDoorsOpen: state.doors.every((door) => door.open),
+      wayAheadOpen: state.doors.every((door, index) =>
+        door.open || (this.chamber.sim.doors[index]?.brush.max.z ?? 0) < (present?.z ?? 0)),
+      recordingCueLine: this.recordingCueLine(state),
       exitOpen: state.exitOpen,
       echoPresent: state.actors.some((actor) => actor.id === "past"),
       success: state.success,

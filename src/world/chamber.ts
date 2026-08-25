@@ -271,11 +271,19 @@ export interface Chamber {
   upstairsCue?: { aboveY: number; line: string };
   /**
    * What the replay chip says in this room instead of the generic "wait for
-   * the door", split at a height. 04 is why: waiting is exactly the wrong
-   * move there — below the deck you climb while he holds, and above it you
-   * take the second grip yourself. Both registers steer; neither waits.
+   * the door", split at a position. 04 splits on height (below the deck you
+   * climb while he holds; above it you take the second grip yourself) and 05
+   * splits on depth (outside the passage you dive in while his standing holds
+   * the door; inside it you wait for his second stand). Both registers steer.
    */
-  replayWait?: { aboveY: number; belowLine: string; aboveLine: string };
+  replayWait?: { axis: "y" | "z"; at: number; before: string; after: string };
+  /**
+   * Recording-phase coaching for a room whose tape is a schedule of standing.
+   * 05 is why: both plates only answer the echo, so the recording pass has
+   * nothing to press and nothing to see — the one thing being made is time,
+   * and no generic plate copy can say whose time or where to spend it.
+   */
+  recordingScript?: { toFirst: string; onFirst: string; toSecond: string; onSecond: string };
   /**
    * Multiplier on the room's fill light — hemispheric sky and scene ambient.
    * 04 sets it: a two-storey room on a one-storey room's fill reads as a

@@ -216,9 +216,10 @@ export const TWO_OF_US_CHAMBER: Chamber = {
   // The generic replay chip says to wait for the door, and in this room
   // waiting is the one move that fails the window.
   replayWait: {
-    aboveY: DECK_Y - 0.4,
-    belowLine: "잔상이 버티는 동안 — 뒤쪽 계단으로 올라가세요",
-    aboveLine: "난간 곁의 손잡이를 잡으세요 — 나가는 길이 열립니다",
+    axis: "y",
+    at: DECK_Y - 0.4,
+    before: "잔상이 버티는 동안 — 뒤쪽 계단으로 올라가세요",
+    after: "난간 곁의 손잡이를 잡으세요 — 나가는 길이 열립니다",
   },
   lightLift: 1.3,
   dressing: standardDressing(
@@ -404,6 +405,26 @@ export const LONG_STANDING_CHAMBER: Chamber = {
   shell: fiveShell,
   number: "05",
   subtitleOnEntry: "기록을 서두르지 마십시오. 그가 서 있는 만큼만, 문은 열려 있습니다.",
+  // Both plates only answer the echo, so the recording pass has nothing to
+  // press and nothing to watch — the owner recorded a stroll, replayed it,
+  // and stood at a door that never opened. The tape here is a schedule of
+  // standing, and these four lines are the only place that can be said.
+  recordingScript: {
+    toFirst: "왼쪽 발판으로 — 여기 서 있는 시간이 그대로 기록됩니다",
+    onFirst: "그대로 서 계세요. 오래 설수록, 재생에서 첫 문이 오래 열립니다",
+    toSecond: "이제 오른쪽 발판으로 가서 서세요 — 끝의 문을 여는 자리입니다",
+    onSecond: "서 계세요. 충분하다 싶으면 ⏎ 기록 끝내기",
+  },
+  replayWait: {
+    axis: "z",
+    at: PASSAGE_FROM,
+    before: "그가 첫 발판에 서 있는 동안만 문이 열립니다 — 열리면 바로 안으로",
+    after: "그가 다음 발판으로 옮겨 서면 앞이 열립니다 — 안에서 기다리세요",
+  },
+  hints: [
+    { after: 2, line: "첫 발판에 더 오래 서 있도록 기록하세요. 들어갈 시간은 딱 그 길이입니다." },
+    { after: 4, line: "기록의 뒷부분은 오른쪽 발판 위여야 합니다 — 끝의 문은 그 자리만 압니다." },
+  ],
   dressing: standardDressing(fiveShell, {
     seedBase: 5500,
     corridor: false,

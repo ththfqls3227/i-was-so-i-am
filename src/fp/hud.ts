@@ -373,8 +373,17 @@ export class Hud {
   private promptsFor(view: ViewModel): Prompt[] {
     if (!view.recordingEnabled) {
       // No fold, no rerecord — neither key does anything here, so neither is
-      // offered. The room is walked, and that is the whole of it.
-      return view.phase === "success" ? [] : [{ key: null, label: "빛으로 나가세요", tone: "echo" }];
+      // offered. But 08 taught this branch humility: a no-recording room can
+      // still have a shut door and a plate with the player's name on it, and
+      // "walk into the light" at a sealed doorway coached a player to leave a
+      // room they had not solved. Only the corridor is walked and nothing else.
+      if (view.phase === "success") return [];
+      if (!view.wayAheadOpen) {
+        if (view.hasPlate && view.plateActive) return [{ key: null, label: "발판이 눌렸습니다 — 곧 문이 열립니다", tone: "go" }];
+        if (view.hasPlate) return [{ key: null, label: "빈 발판에 올라서세요", tone: "plain" }];
+        return [{ key: null, label: "문이 열리기를 기다리세요", tone: "plain" }];
+      }
+      return [{ key: null, label: "빛으로 나가세요", tone: "echo" }];
     }
     if (view.phase === "recording") {
       const prompts: Prompt[] = [];
@@ -385,6 +394,13 @@ export class Hud {
       // for something to hold in rooms that have nothing to grab.
       if (view.focusIsHold && !view.holding) {
         prompts.push({ key: "E", label: "길게 눌러 잡기", tone: "go" });
+      }
+      if (view.recordingCueLine) {
+        // A scripted room speaks for itself. The generic plate coaching below
+        // assumes one plate and a pass that presses it — 05 has neither.
+        prompts.push({ key: null, label: view.recordingCueLine, tone: "plain" });
+        if (view.canFold) prompts.push({ key: "⏎", label: "기록 끝내기", tone: "plain" });
+        return prompts;
       }
       if (view.hasPlate && view.plateDutyInReplay) {
         // 03: the plate is the second pass's job. "Walk to the plate" here
@@ -491,7 +507,7 @@ export class Hud {
       // the plate" while the way out stood waiting.
       // Every door, not the first: in 05 the way-in opened and this line sent
       // the player at a way-on still shut.
-      const canLeave = view.exitGated ? view.exitOpen : view.allDoorsOpen && view.exitOpen;
+      const canLeave = view.exitGated ? view.exitOpen : view.wayAheadOpen && view.exitOpen;
       return [{ key: null, label: canLeave ? out : waiting, tone: "echo" }];
     }
     if (view.phase === "rerecord") {
