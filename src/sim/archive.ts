@@ -23,6 +23,11 @@ export class TapeArchive {
     return this.byChamber.has(roomId);
   }
 
+  /** How many rooms have left something here. The ending counts them. */
+  get count(): number {
+    return this.byChamber.size;
+  }
+
   /**
    * The player's tape for this room, or the fallback, or null.
    *

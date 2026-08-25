@@ -147,7 +147,7 @@ scene.attach({
     hud.beginSeal(seconds);
     audio.onSealing();
   },
-  onEnding: () => hud.showEnding(),
+  onEnding: () => hud.showEnding(scene.tapes.count),
   onLine: (line) => hud.say(line, performance.now(), 5200),
 });
 

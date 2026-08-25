@@ -34,6 +34,34 @@ const FAILURE_COPY: Record<FailureCode, string> = {
   "tape-invalid": "기록을 읽을 수 없습니다.",
 };
 
+/**
+ * 사서 — the archive's keeper, drawn in ink. Every line the facility says now
+ * comes from her, visual-novel style: portrait low on the screen, a name on a
+ * seal, and words that arrive at a hand's pace. No asset pipeline; she is a
+ * few brush strokes of inline SVG.
+ */
+const ARCHIVIST_SVG = `
+<svg viewBox="0 0 120 140" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <ellipse cx="60" cy="80" rx="46" ry="56" fill="#7fd8e820"/>
+  <path d="M14 140 C22 96 42 88 60 88 C78 88 98 96 106 140 Z" fill="#1d2733"/>
+  <path d="M42 96 L60 122 L78 96 L70 92 L60 106 L50 92 Z" fill="#e9e4d2"/>
+  <path d="M38 94 L60 126 L82 94 L74 89 L60 112 L46 89 Z" fill="#2e3c4f"/>
+  <rect x="53" y="76" width="14" height="16" rx="6" fill="#e6d8bd"/>
+  <ellipse cx="60" cy="56" rx="24" ry="27" fill="#efe3c8"/>
+  <path d="M36 52 C34 26 50 16 60 16 C70 16 86 26 84 52 C84 40 74 30 60 30 C46 30 36 40 36 52 Z" fill="#20232b"/>
+  <circle cx="60" cy="15" r="7" fill="#20232b"/>
+  <rect x="63" y="9" width="19" height="2.6" rx="1.3" fill="#b98b3e" transform="rotate(16 63 10)"/>
+  <path d="M46 52 Q52 49 57 52" stroke="#3a3227" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+  <path d="M63 52 Q68 49 74 52" stroke="#3a3227" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+  <path d="M47 60 Q52 63 56 60" stroke="#2c261d" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M64 60 Q68 63 73 60" stroke="#2c261d" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M55 71 Q60 73.5 65 71" stroke="#8a5a4a" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+  <path d="M36 42 C36 30 46 22 54 20" stroke="#8fe0ef" stroke-width="2.2" fill="none" opacity="0.65" stroke-linecap="round"/>
+</svg>`;
+
+/** Characters per second the archivist speaks at. */
+const SPEECH_CPS = 34;
+
 function element<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   className?: string,
@@ -56,7 +84,16 @@ export class Hud {
   private readonly tapeLeft = element("span");
   private readonly tapeRight = element("span");
   private readonly prompts = element("div", "prompts");
-  private readonly subtitle = element("p", "subtitle");
+  private readonly subtitle = element("div", "subtitle");
+  /** The visible, typed-out half of the archivist's line. */
+  private readonly vnText = element("span", "vn-text");
+  /**
+   * The whole line, present in the DOM from the first frame at zero opacity.
+   * The typewriter is a picture; anything reading textContent — a test, a
+   * screen reader — gets the full sentence without waiting for the hand.
+   */
+  private readonly vnFull = element("span", "vn-full");
+  private sayStartedAt = 0;
   private readonly flash = element("div", "flash");
   /** The last door has been closed; the result panel is frozen on the ending. */
   private ended = false;
@@ -70,6 +107,8 @@ export class Hud {
   private readonly finale = element("div", "finale");
   private readonly finaleTitle = element("h1", undefined, "I WAS, SO I AM.");
   private readonly finaleSeal = element("div", "finale-seal", "封");
+  /** What the player leaves in the building, counted. Shown after the title. */
+  private readonly finaleEpilogue = element("p", "finale-epilogue");
   private endingTimers: number[] = [];
   private readonly resultHeading = element("h2");
   private readonly resultBody = element("p");
@@ -110,6 +149,14 @@ export class Hud {
 
   constructor(parent: HTMLElement, private readonly callbacks: HudCallbacks) {
     for (let index = 0; index < 4; index += 1) this.crosshair.append(element("span"));
+
+    const portrait = element("div", "vn-portrait");
+    portrait.innerHTML = ARCHIVIST_SVG;
+    const panel = element("div", "vn-panel");
+    const line = element("p", "vn-line");
+    line.append(this.vnText, this.vnFull);
+    panel.append(element("span", "vn-name", "사서"), line);
+    this.subtitle.append(portrait, panel);
 
     this.pass.append(element("i"), this.passLabel);
 
@@ -163,7 +210,7 @@ export class Hud {
     });
     this.result.append(this.onward, this.again, this.resultHint);
     this.result.hidden = true;
-    this.finale.append(this.finaleSeal, this.finaleTitle);
+    this.finale.append(this.finaleSeal, this.finaleTitle, this.finaleEpilogue);
     this.blackout.hidden = true;
     this.finale.hidden = true;
 
@@ -200,6 +247,8 @@ export class Hud {
   clearTransient(): void {
     this.subtitleText = "";
     this.subtitleUntil = 0;
+    this.vnText.textContent = "";
+    this.vnFull.textContent = "";
   }
 
   /** A saved chamber exists; put the way back on the title card. */
@@ -470,13 +519,29 @@ export class Hud {
     }
     const shown = this.subtitleText !== "" && now < this.subtitleUntil && !view.paused;
     if (this.subtitle.dataset.shown !== String(shown)) this.subtitle.dataset.shown = String(shown);
-    if (shown && this.subtitle.textContent !== this.subtitleText) this.subtitle.textContent = this.subtitleText;
+    if (shown) {
+      const revealed = Math.min(
+        this.subtitleText.length,
+        Math.max(1, Math.floor(((now - this.sayStartedAt) / 1000) * SPEECH_CPS)),
+      );
+      const typed = this.subtitleText.slice(0, revealed);
+      if (this.vnText.textContent !== typed) this.vnText.textContent = typed;
+      // The little ▼ every visual novel taught players to look for — only
+      // once the hand has finished writing.
+      const done = String(revealed >= this.subtitleText.length);
+      if (this.subtitle.dataset.done !== done) this.subtitle.dataset.done = done;
+    }
   }
 
   say(text: string, now: number, duration = 4200): void {
     this.subtitleText = text;
-    this.subtitleUntil = now + duration;
-    this.subtitle.textContent = text;
+    this.sayStartedAt = now;
+    // However long the caller asked for, the line stays at least long enough
+    // to finish being written and be read once.
+    const spoken = (text.length / SPEECH_CPS) * 1000;
+    this.subtitleUntil = now + Math.max(duration, spoken + 2400);
+    this.vnText.textContent = "";
+    this.vnFull.textContent = text;
   }
 
   /**
@@ -578,13 +643,11 @@ export class Hud {
    * No buttons, because there is nothing after this and offering one would turn
    * an ending into a menu.
    */
-  showEnding(): void {
+  showEnding(tapesKept = 0): void {
     this.ended = true;
-    // Everything the game was still saying goes quiet first. The lines that
-    // belong here have already been said on the walk down; this is the silence
-    // after them, not another caption.
-    this.subtitle.textContent = "";
-    this.subtitleUntil = 0;
+    // Everything the game was still saying goes quiet first. What follows is
+    // the archivist's goodbye, spoken into the dark at her own pace.
+    this.clearTransient();
     this.notice.hidden = true;
     this.result.hidden = true;
     this.prompts.textContent = "";
@@ -602,20 +665,33 @@ export class Hud {
     this.seal.dataset.on = "true";
 
     for (const timer of this.endingTimers) clearTimeout(timer);
-    // Stamp, fall, silence, title. The 1500 in the middle is the point of the
-    // whole sequence: nothing on screen, nothing to press, long enough to be
-    // uncomfortable if you are waiting for a menu.
+    // Stamp, fall — and then the archivist speaks into the dark, three lines
+    // at her own pace, before the title answers them in the first person.
+    // The pauses are the point: nothing on screen, nothing to press, long
+    // enough to be uncomfortable if you are waiting for a menu.
+    const beat = (at: number, text: string, hold: number): number =>
+      window.setTimeout(() => this.say(text, performance.now(), hold), at);
     this.endingTimers = [
       window.setTimeout(() => {
         this.blackout.hidden = false;
         void this.blackout.offsetWidth;
         this.blackout.dataset.on = "true";
       }, 1150),
+      beat(2050, "당신이 지나간 자리마다, 당신이 남아 있었습니다.", 5200),
+      beat(7900, "과거의 당신이 있었기에 —", 3400),
+      beat(11500, "지금의 당신이 있습니다.", 4600),
       window.setTimeout(() => {
+        this.clearTransient();
         this.finale.hidden = false;
         void this.finale.offsetWidth;
         this.finale.dataset.on = "true";
-      }, 1150 + 900 + 1500),
+      }, 16700),
+      window.setTimeout(() => {
+        if (tapesKept > 0) {
+          this.finaleEpilogue.textContent = `이 보관소에는 당신의 잔상 ${tapesKept}개가 잠들어 있습니다.`;
+        }
+        this.finaleEpilogue.dataset.on = "true";
+      }, 19600),
     ];
   }
 
