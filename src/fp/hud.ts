@@ -311,7 +311,12 @@ export class Hud {
     // player has plainly worked it out, and it fades.
     //
     // Nothing left to aim at once the last door is closed.
-    const showNotice = playing && view.pointerLockDenied && !view.dragLookLearned && !this.ended;
+    // Not while the archivist is speaking: the notice's 16% anchor lands
+    // inside her panel, and at arrival — the one moment a lock-denied player
+    // most needs the drag lesson — the two texts typed over each other and
+    // neither could be read. The line waits its turn instead.
+    const showNotice = playing && view.pointerLockDenied && !view.dragLookLearned && !this.ended
+      && this.subtitle.dataset.shown !== "true";
     // Never taken out of the layout again once it has appeared: hidden cuts a
     // fade off mid-way, and an element at zero opacity with no pointer events
     // is not in anybody's way.

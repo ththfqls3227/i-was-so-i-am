@@ -204,7 +204,7 @@ export const TWO_OF_US_CHAMBER: Chamber = {
       holdId: "ground-grip",
       phase: "replay",
       holder: "past",
-      line: "잔상이 손잡이를 잡았습니다. 뒤쪽 계단으로 — 위층 문이 열려 있습니다.",
+      line: "잔상이 손잡이를 잡았습니다. 계단으로 — 위층 문이 열려 있습니다.",
     },
   ],
   // Delivered a beat after arrival upstairs, so the warm band lands first and
@@ -218,7 +218,7 @@ export const TWO_OF_US_CHAMBER: Chamber = {
   replayWait: {
     axis: "y",
     at: DECK_Y - 0.4,
-    before: "잔상이 버티는 동안 — 뒤쪽 계단으로 올라가세요",
+    before: "잔상이 버티는 동안 — 계단으로 올라가세요",
     after: "난간 곁의 손잡이를 잡으세요 — 나가는 길이 열립니다",
   },
   lightLift: 1.3,
@@ -542,6 +542,11 @@ export const GIVING_BACK_CHAMBER: Chamber = {
   shell: sixShell,
   number: "06",
   subtitleOnEntry: "그 편이 빠릅니다.",
+  // 03's shape: the amber plate is the second pass's job (it holds the slot
+  // door open while he walks). Without this flag the arrival chip said "stand
+  // on the plate" — a tape of standing at a plate the echo cannot press, and
+  // a room that tape can never solve.
+  plateDutyInReplay: true,
   dressing: standardDressing(sixShell, {
     seedBase: 6600,
     corridor: false,
@@ -640,6 +645,9 @@ export const UNKEPT_CHAMBER: Chamber = {
   shell: sevenShell,
   number: "07",
   subtitleOnEntry: "이 구역은 관리 대상에서 제외되었습니다. …그는 아무것도 묻지 않는군요.",
+  // Same trap as 06, one room later: the plate is replay duty, the recording
+  // is the slot walk and the grab at the end of it.
+  plateDutyInReplay: true,
   dressing: standardDressing(sevenShell, {
     seedBase: 7700,
     corridor: false,

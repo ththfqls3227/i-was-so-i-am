@@ -247,7 +247,7 @@ export const HAND_NOT_BODY_CHAMBER: Chamber = {
   ],
   // The rule up front, not four failure cards deep: a judge who met it only
   // as escalating hints spent five tries re-deriving it and quit one short.
-  subtitleOnEntry: "안내: 이 방의 발판은 2회차의 당신이 직접 밟습니다. 기록에는 닫힌 문을 향해 걷는 걸음을 담으세요.",
+  subtitleOnEntry: "안내: 오른쪽 발판은 2회차의 당신이 직접 밟습니다. 기록에는 닫힌 문을 향해 걷는 걸음을 담으세요.",
   // The echo treading against the shut partition is the room's whole idea —
   // and it reads as a bug until this sentence lands.
   echoAtDoorLine: "잔상이 닫힌 문 앞에서 걷고 있습니다 — 오른쪽 발판이 저 문을 엽니다.",
