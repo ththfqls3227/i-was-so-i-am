@@ -118,32 +118,41 @@ test("the corridor ends on one line and nothing else", async ({ page }) => {
       const node = document.querySelector<HTMLElement>(selector);
       return node !== null && !node.hidden && node.offsetParent !== null;
     };
-    const log: { t: number; finale: boolean; result: boolean }[] = [];
+    const log: { t: number; finale: boolean; result: boolean; say: boolean }[] = [];
     const started = performance.now();
     const timer = window.setInterval(() => {
-      log.push({ t: performance.now() - started, finale: shown(".finale"), result: shown(".result") });
+      log.push({
+        t: performance.now() - started,
+        finale: shown(".finale"),
+        result: shown(".result"),
+        say: document.querySelector(".subtitle")?.getAttribute("data-shown") === "true",
+      });
     }, 40);
     Object.assign(window, { __endingLog: log, __endingTimer: timer });
   });
 
   await act(page, "fold");
   const finale = page.locator(".finale");
-  await expect(finale, "the title arrives").toBeVisible({ timeout: 20000 });
+  // The archivist speaks into the dark for some twenty seconds before the
+  // title answers her — the wait is sized for the goodbye, not for a cut.
+  await expect(finale, "the title arrives").toBeVisible({ timeout: 32000 });
   await expect(finale.locator("h1")).toHaveText("I WAS, SO I AM.");
 
   const timeline = await page.evaluate(() => {
-    const w = window as unknown as { __endingLog: { t: number; finale: boolean; result: boolean }[]; __endingTimer: number };
+    const w = window as unknown as { __endingLog: { t: number; finale: boolean; result: boolean; say: boolean }[]; __endingTimer: number };
     window.clearInterval(w.__endingTimer);
     return w.__endingLog;
   });
 
   const firstTitle = timeline.find((frame) => frame.finale);
   expect(firstTitle, "the title was recorded arriving").toBeDefined();
-  const quiet = timeline.filter((frame) => !frame.finale && !frame.result);
+  const spoken = timeline.some((frame) => frame.say && !frame.finale);
+  expect(spoken, "the archivist speaks in the dark before the title").toBe(true);
+  const quiet = timeline.filter((frame) => !frame.finale && !frame.result && !frame.say);
   expect(quiet.length, "there is a stretch with nothing on screen at all").toBeGreaterThan(0);
   const quietFor = (quiet[quiet.length - 1]?.t ?? 0) - (quiet[0]?.t ?? 0);
   expect(quietFor, "and it lasts long enough to be a silence").toBeGreaterThan(800);
-  expect(firstTitle?.t ?? 0, "the title does not cut the silence short").toBeGreaterThan(2000);
+  expect(firstTitle?.t ?? 0, "the title does not cut the goodbye short").toBeGreaterThan(2000);
 
   // Nothing to press while it stands.
   await expect(page.locator("#advance-button")).toBeHidden();
