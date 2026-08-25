@@ -124,7 +124,7 @@ export class Hud {
   private readonly resultBody = element("p");
   private readonly resultHint = element("p", "hint");
   private readonly again = element("button", undefined, "R · 다시 기록");
-  private readonly onward = element("button", undefined, "다음 방");
+  private readonly onward = element("button", undefined, "N · 다음 방");
   /** Picks the campaign back up mid-roster. Only ever shown when a save exists. */
   private readonly continueButton = element("button");
   /**
@@ -446,7 +446,7 @@ export class Hud {
       // In the role-reversal room the generic line's first half ("wait for
       // the door") is exactly wrong — waiting is the move that fails. Its
       // plate room gets the imperative alone.
-      const waiting = !view.hasPlate
+      const waiting = view.replayWaitLine ?? (!view.hasPlate
         ? "문이 열리기를 기다리세요"
         : view.plateDutyInReplay
           ? (view.plateBearing === "left"
@@ -458,7 +458,7 @@ export class Hud {
                 : "오른쪽 발판을 직접 밟으세요 — 당신의 발이 문을 엽니다")
           : view.plateForEchoOnly
             ? "이 발판은 잔상의 것입니다 — 문이 열릴 때까지 기다리세요"
-            : "문이 열리기를 기다리거나, 직접 발판을 밟으세요";
+            : "문이 열리기를 기다리거나, 직접 발판을 밟으세요");
       // In 03 the first door opens while the way out is still shut: the player
       // is holding it open with their foot. "Walk into the light" at that
       // moment sends them off the plate and shuts the door on the echo.

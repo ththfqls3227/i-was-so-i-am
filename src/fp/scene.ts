@@ -97,6 +97,8 @@ export interface ViewModel {
   plateForEchoOnly: boolean;
   /** The plate is the second pass's job; recording-phase coaching must not point at it. */
   plateDutyInReplay: boolean;
+  /** The room's own replay chip, already picked for the storey the player is on. */
+  replayWaitLine: string | null;
   plateActive: boolean;
   doorOpen: boolean;
   /** Every door in the room, not just the first — 05 has two, and "walk into
@@ -284,11 +286,13 @@ export class FirstPersonScene {
   private echo: Humanoid;
   private archival: Humanoid | null = null;
   private echoes: RoomEchoes = { live: null, archival: null };
-  private doorSlab: Mesh;
-  private doorOffset = 0;
-  /** Where the leaf sits when shut, and how far it slides. Both come from its brush. */
-  private doorHome = 0;
-  private doorTravel = 0;
+  /**
+   * One sliding leaf per sim door, in the sim's order. 04 is why this is a
+   * list: its upper doorway sat at deck height with no leaf at all while a
+   * ground-level slab animated inside the stair mass, and its way out was an
+   * invisible wall — "the echo grabbed and nothing happened" was this.
+   */
+  private doorLeaves: { slab: Mesh; home: number; travel: number; offset: number }[] = [];
   private plates: PlateVisual[];
   private shadows: ShadowGenerator | null = null;
   /** One band material per salchang, so a single window can be lit on its own. */
@@ -311,6 +315,15 @@ export class FirstPersonScene {
   totalRerecords = 0;
   /** The echo-at-the-shut-door line has been said this replay. */
   private echoDoorSpoken = false;
+  /** Grip cues already said this room visit, keyed `holdId:phase`. */
+  private readonly gripCueSpoken = new Set<string>();
+  /** The lamp over each grip, driven bright while the grip is held. */
+  private readonly gripLamps = new Map<string, PointLight>();
+  /** Upstairs-cue countdown once armed, and whether it has had its say. */
+  private upstairsWait: number | null = null;
+  private upstairsSpoken = false;
+  /** What scene ambient is before a room's lightLift is applied to it. */
+  private readonly ambientRest = new Color3(0.111, 0.105, 0.093);
   /** The shaft of light in the way out, lit only while leaving would work. */
   private exitBeacon: Mesh | null = null;
   /** How many of the corridor's closing lines have been said, and the gap left. */
@@ -353,7 +366,7 @@ export class FirstPersonScene {
     // this building does not contain, and it is why 04's gallery piers read as
     // cold slabs. Same luminance as before (0.105 by Rec. 601), turned onto the
     // plaster's own hue so unlit stone reads as stone in shadow.
-    this.scene.ambientColor = new Color3(0.111, 0.105, 0.093);
+    this.scene.ambientColor = this.ambientRest;
     this.scene.fogMode = Scene.FOGMODE_EXP2;
     this.scene.fogDensity = 0.008;
     // Warm-neutral haze. This was (0.66, 0.69, 0.74), a bright blue-grey, and
@@ -366,7 +379,13 @@ export class FirstPersonScene {
     this.camera.inputs.clear();
     this.camera.rotationQuaternion = null;
     this.camera.fov = 1.05;
-    this.camera.minZ = 0.08;
+    // The sim keeps the eye 0.36 m from anything it collides with, but the
+    // dressing (shelf cases, grip columns) has no collision at all — walk into
+    // one and the near plane is the only thing deciding what the wall of a
+    // case looks like from inside. At 0.08 the cut plane was visible on every
+    // brush-against; 0.04 keeps depth precision (maxZ/minZ = 1750) and halves
+    // the distance at which geometry opens up.
+    this.camera.minZ = 0.04;
     this.camera.maxZ = 70;
 
     this.pipeline = new DefaultRenderingPipeline("fp-pipeline", true, this.scene, [this.camera]);
@@ -394,7 +413,7 @@ export class FirstPersonScene {
     this.glow.intensity = 0.62;
 
     const built = this.dressRoom();
-    this.doorSlab = built.doorSlab;
+    this.doorLeaves = built.doorLeaves;
     this.plates = built.plates;
     this.echo = built.echo;
     this.archival = built.archival;
@@ -489,7 +508,7 @@ export class FirstPersonScene {
    * children of anything — that pair is what makes a room disposable.
    */
   private dressRoom(): {
-    doorSlab: Mesh;
+    doorLeaves: { slab: Mesh; home: number; travel: number; offset: number }[];
     plates: PlateVisual[];
     echo: Humanoid;
     /** The one left standing from an earlier room. Only 08 has one. */
@@ -894,7 +913,7 @@ export class FirstPersonScene {
     const plates = this.buildPlates(root, brass, timber);
     const grips = this.buildGrips(root, brass, timber);
     void grips;
-    const doorSlab = this.buildDoor(root, timber);
+    const doorLeaves = this.buildDoors(root, timber);
     this.exitBeacon = this.buildExitBeacon(root);
     if (this.chamber.dressing.corridor) this.buildExit(root, timber);
     else this.buildThreshold(root, timber);
@@ -946,7 +965,7 @@ export class FirstPersonScene {
     this.roomLights = this.scene.lights.filter((light) => !lightsBefore.has(light));
 
     return {
-      doorSlab,
+      doorLeaves,
       plates,
       echo,
       archival,
@@ -957,6 +976,7 @@ export class FirstPersonScene {
   /** Drop the current chamber: its tree, its materials and its lights. */
   private clearRoom(): void {
     this.exitBeacon = null;
+    this.gripLamps.clear();
     for (const light of this.roomLights) light.dispose();
     this.roomLights = [];
     // A chamber's materials and textures are procedural and its own, so they go
@@ -995,17 +1015,19 @@ export class FirstPersonScene {
     this.simulation = new Simulation(chamber.sim);
 
     const built = this.dressRoom();
-    this.doorSlab = built.doorSlab;
+    this.doorLeaves = built.doorLeaves;
     this.plates = built.plates;
     this.echo = built.echo;
     this.archival = built.archival;
     this.echoes = built.echoes;
 
-    this.doorOffset = 0;
     this.dioramaLoop = null;
     this.warmingEcho = null;
     this.attemptsInRoom = 0;
     this.echoDoorSpoken = false;
+    this.gripCueSpoken.clear();
+    this.upstairsWait = null;
+    this.upstairsSpoken = false;
     this.approachSpoken = 0;
     this.approachWait = 1.2;
     this.stride.clear();
@@ -1050,7 +1072,13 @@ export class FirstPersonScene {
     // toward the sky.
     sky.diffuse = new Color3(0.64, 0.66, 0.68);
     sky.groundColor = new Color3(0.34, 0.28, 0.21);
-    sky.intensity = 0.52;
+    // Fill only — the key light stays where it is, because the sun is what
+    // draws the slat bands and a lifted sun changes the drawing rather than
+    // the legibility. Scene ambient rides the same knob: it is what every
+    // unlit surface falls back to, which upstairs in 04 is most of them.
+    const lift = this.chamber.lightLift ?? 1;
+    sky.intensity = 0.52 * lift;
+    this.scene.ambientColor = this.ambientRest.scale(lift);
 
     // The sun, outside the west salchang. Everything warm in the room is this
     // light arriving through slats, so it is angled across the room rather than
@@ -1542,6 +1570,7 @@ export class FirstPersonScene {
       lamp.diffuse = new Color3(1, 0.86, 0.62);
       lamp.intensity = 0.34;
       lamp.range = 4.2;
+      this.gripLamps.set(hold.id, lamp);
     }
     return pillars;
   }
@@ -1654,33 +1683,48 @@ export class FirstPersonScene {
    * behind it. It slides sideways into the wall rather than lifting — a paper
    * door that rose into a lintel would read as a shutter.
    */
-  private buildDoor(root: TransformNode, timber: StandardMaterial): Mesh {
+  private buildDoors(root: TransformNode, timber: StandardMaterial): { slab: Mesh; home: number; travel: number; offset: number }[] {
+    const doors = this.chamber.sim.doors;
+    // A room with no sim door still shows a leaf: the corridor's far wall ends
+    // on shut paper, measured from the shell.
+    if (doors.length === 0) return [this.buildDoorLeaf(root, timber, null, "far")];
+    return doors.map((door, index) => this.buildDoorLeaf(root, timber, door.brush, door.id || String(index)));
+  }
+
+  private buildDoorLeaf(
+    root: TransformNode,
+    timber: StandardMaterial,
+    brush: Chamber["sim"]["doors"][number]["brush"] | null,
+    suffix: string,
+  ): { slab: Mesh; home: number; travel: number; offset: number } {
     // The leaf is measured from the door's own brush rather than from the shell.
     // 03's door is in a partition halfway down the hall, and reading the shell
     // put the only door in the room fifteen metres from the hole it fills.
-    const brush = this.chamber.sim.doors[0]?.brush;
     const leafWidth = brush ? brush.max.x - brush.min.x - 0.04 : this.chamber.shell.doorwayHalfWidth * 2 - 0.04;
     const leafHeight = brush ? brush.max.y - brush.min.y - 0.03 : this.chamber.shell.doorwayHeight - 0.03;
     const leafX = brush ? (brush.min.x + brush.max.x) / 2 : 0;
     const leafZ = brush
       ? (brush.min.z + brush.max.z) / 2
       : this.chamber.shell.depth + this.chamber.shell.wallThickness / 2;
-    this.doorHome = leafX;
-    this.doorTravel = leafWidth + 0.04;
+    // The sill the doorway stands on. 04's upper door begins at deck height,
+    // and measuring every leaf up from the floor drew that one inside the
+    // stair mass while the doorway it belonged to stayed an invisible wall.
+    const baseY = brush ? brush.min.y : 0;
+    const travel = leafWidth + 0.04;
 
     // A door that is not in the far wall needs its own frame; the far-wall one
     // already has posts and a head from the doorway reveal.
     if (brush && !this.chamber.dressing.corridor) {
       for (const side of [-1, 1] as const) {
-        const post = MeshBuilder.CreateBox(`partition-post-${side}`, { width: 0.22, height: leafHeight + 0.3, depth: 0.34 }, this.scene);
-        post.position = new Vector3(leafX + side * (leafWidth / 2 + 0.11), (leafHeight + 0.3) / 2, leafZ);
+        const post = MeshBuilder.CreateBox(`partition-post-${suffix}-${side}`, { width: 0.22, height: leafHeight + 0.3, depth: 0.34 }, this.scene);
+        post.position = new Vector3(leafX + side * (leafWidth / 2 + 0.11), baseY + (leafHeight + 0.3) / 2, leafZ);
         post.material = timber;
         post.isPickable = false;
         post.parent = root;
         this.cast(post);
       }
-      const head = MeshBuilder.CreateBox("partition-head", { width: leafWidth + 0.5, height: 0.24, depth: 0.36 }, this.scene);
-      head.position = new Vector3(leafX, leafHeight + 0.12, leafZ);
+      const head = MeshBuilder.CreateBox(`partition-head-${suffix}`, { width: leafWidth + 0.5, height: 0.24, depth: 0.36 }, this.scene);
+      head.position = new Vector3(leafX, baseY + leafHeight + 0.12, leafZ);
       head.material = timber;
       head.isPickable = false;
       head.parent = root;
@@ -1690,15 +1734,15 @@ export class FirstPersonScene {
       // way the player came from, which is the one direction nothing in the
       // lighting rig points, so without this the wall the room is about is a
       // black rectangle with a lit door floating in it.
-      const spill = new PointLight("partition-spill", new Vector3(leafX, leafHeight * 0.62, leafZ - 0.9), this.scene);
+      const spill = new PointLight(`partition-spill-${suffix}`, new Vector3(leafX, baseY + leafHeight * 0.62, leafZ - 0.9), this.scene);
       spill.diffuse = new Color3(1, 0.9, 0.72);
       spill.specular = new Color3(0.18, 0.15, 0.11);
       spill.intensity = 1.35;
       spill.range = 7.5;
     }
 
-    const slab = MeshBuilder.CreateBox("door-slab", { width: leafWidth, height: leafHeight, depth: 0.1 }, this.scene);
-    slab.position = new Vector3(leafX, leafHeight / 2, leafZ);
+    const slab = MeshBuilder.CreateBox(`door-slab-${suffix}`, { width: leafWidth, height: leafHeight, depth: 0.1 }, this.scene);
+    slab.position = new Vector3(leafX, baseY + leafHeight / 2, leafZ);
     slab.material = timber;
     slab.receiveShadows = true;
     slab.isPickable = false;
@@ -1729,7 +1773,7 @@ export class FirstPersonScene {
     // clipped to 172 by the glow layer, and taking it to 0.6 moved the door
     // panel 0.1% in a frame shot at the moment the plate went down. There is no
     // headroom left in this surface.
-    const paper = hanjiMaterial(this.scene, "door-hanji", 5501, this.chamber.dressing.corridor ? 0.34 : 0);
+    const paper = hanjiMaterial(this.scene, `door-hanji-${suffix}`, 5501, this.chamber.dressing.corridor ? 0.34 : 0);
     const columns = 3;
     const rows = 4;
     const stileWidth = 0.09;
@@ -1788,12 +1832,12 @@ export class FirstPersonScene {
     pull.parent = slab;
 
     // The pocket the leaf slides into, so it disappears somewhere real.
-    const pocket = MeshBuilder.CreateBox("door-pocket", { width: leafWidth + 0.2, height: leafHeight + 0.2, depth: 0.16 }, this.scene);
-    pocket.position = new Vector3(leafX + this.doorTravel + leafWidth / 2 - 0.1, leafHeight / 2, leafZ + 0.1);
+    const pocket = MeshBuilder.CreateBox(`door-pocket-${suffix}`, { width: leafWidth + 0.2, height: leafHeight + 0.2, depth: 0.16 }, this.scene);
+    pocket.position = new Vector3(leafX + travel + leafWidth / 2 - 0.1, baseY + leafHeight / 2, leafZ + 0.1);
     pocket.material = timber;
     pocket.isPickable = false;
     pocket.parent = root;
-    return slab;
+    return { slab, home: leafX, travel, offset: 0 };
   }
 
   private buildExit(root: TransformNode, timber: StandardMaterial): void {
@@ -2187,7 +2231,7 @@ export class FirstPersonScene {
     this.simulation.rerecord();
     this.yaw = radiansFromYawUnits(this.chamber.sim.spawn.yawUnits);
     this.pitch = 0;
-    this.doorOffset = 0;
+    for (const leaf of this.doorLeaves) leaf.offset = 0;
     this.captureSnapshots();
     this.previous = new Map(this.current);
     this.events?.onPhaseChange("recording", previousPhase);
@@ -2386,15 +2430,18 @@ export class FirstPersonScene {
       if (passable) this.exitBeacon.visibility = 0.5 + Math.sin(this.clock * 2.2) * 0.18;
     }
 
-    const door = state.doors[0];
     // Sideways, into the pocket: a papered leaf that rose into the lintel would
     // read as a shutter rather than a door.
-    const target = door?.open ? this.doorTravel : 0;
-    // Ease rather than snap: a leaf that teleports open reads as a bug.
-    this.doorOffset += (target - this.doorOffset) * Math.min(1, deltaSeconds * 6.5);
-    this.doorSlab.position.x = this.doorHome + this.doorOffset;
+    for (const [index, leaf] of this.doorLeaves.entries()) {
+      const target = state.doors[index]?.open ? leaf.travel : 0;
+      // Ease rather than snap: a leaf that teleports open reads as a bug.
+      leaf.offset += (target - leaf.offset) * Math.min(1, deltaSeconds * 6.5);
+      leaf.slab.position.x = leaf.home + leaf.offset;
+    }
 
     this.driveWarmBand(state, deltaSeconds);
+    this.driveGripFeedback(state);
+    this.driveUpstairsCue(state, deltaSeconds);
     this.driveFinalApproach(deltaSeconds);
 
     // Cyan to amber, once, over the ending's own length. Driven here rather
@@ -2788,6 +2835,56 @@ export class FirstPersonScene {
     material.emissiveColor = Color3.Lerp(this.bandRest, this.bandWarm, swell * 0.85);
   }
 
+  /**
+   * A taken grip answers in light, and — where a room has opted in — in words.
+   *
+   * The lamp switches rather than swells: a hand closing on brass is a discrete
+   * act, and the plate's eased press ramp on it read as the room warming up for
+   * some further thing. The cue lines exist because 04's grab opens a door
+   * behind and above the one holding it, which no amount of lamp can say.
+   */
+  private driveGripFeedback(state: Readonly<SimState>): void {
+    for (const hold of state.holds) {
+      const lamp = this.gripLamps.get(hold.id);
+      if (!lamp) continue;
+      lamp.intensity = hold.heldBy.length > 0 ? 1.15 + Math.sin(this.clock * 5.2) * 0.12 : 0.34;
+    }
+    const cues = this.chamber.gripCues;
+    if (!cues) return;
+    for (const cue of cues) {
+      if (state.phase !== cue.phase) continue;
+      const key = `${cue.holdId}:${cue.phase}`;
+      if (this.gripCueSpoken.has(key)) continue;
+      const hold = state.holds.find((each) => each.id === cue.holdId);
+      if (!hold || !hold.heldBy.includes(cue.holder)) continue;
+      this.gripCueSpoken.add(key);
+      this.events?.onLine(cue.line);
+    }
+  }
+
+  /**
+   * The second-storey orientation line, said once and never on arrival.
+   *
+   * The wait clears the warm band (1.5 s) before any words land — the band
+   * works by going unexplained, and a caption arriving with it would read as
+   * its label. If the way out is already open by then, the player has found
+   * the grip without help and the line stays unsaid.
+   */
+  private driveUpstairsCue(state: Readonly<SimState>, deltaSeconds: number): void {
+    const cue = this.chamber.upstairsCue;
+    if (!cue || this.upstairsSpoken) return;
+    if (this.upstairsWait === null) {
+      const above = (this.interpolated("present", 1)?.y ?? 0) > cue.aboveY;
+      if (above && state.phase === "replay") this.upstairsWait = 2.6;
+      return;
+    }
+    this.upstairsWait -= deltaSeconds;
+    if (this.upstairsWait > 0) return;
+    this.upstairsSpoken = true;
+    if (state.doors.every((door) => door.open)) return;
+    this.events?.onLine(cue.line);
+  }
+
   private interpolated(id: ActorId, alpha: number): Snapshot | null {
     const to = this.current.get(id);
     if (!to) return null;
@@ -2826,6 +2923,11 @@ export class FirstPersonScene {
       hasPlate: state.plates.length > 0,
       plateForEchoOnly: this.chamber.sim.plates[0]?.requiredActor === "past",
       plateDutyInReplay: this.chamber.plateDutyInReplay === true,
+      replayWaitLine: this.chamber.replayWait
+        ? ((present?.y ?? 0) > this.chamber.replayWait.aboveY
+          ? this.chamber.replayWait.aboveLine
+          : this.chamber.replayWait.belowLine)
+        : null,
       // The HUD wants "am I standing on it", not "did the mechanism fire" —
       // on echo-only plates the two answers differ for the whole first pass.
       plateActive: state.plates[0]?.pressedBy.includes("present") ?? false,

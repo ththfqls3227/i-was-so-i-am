@@ -190,6 +190,37 @@ export const TWO_OF_US_CHAMBER: Chamber = {
   } satisfies RoomShell,
   number: "04",
   subtitleOnEntry: "일부 설비는 두 사람 몫의 힘을 요구합니다. 보관소에는 당신이 두 명 있습니다.",
+  // The grab's whole effect is a door behind and above the player. Both passes
+  // get one sentence saying it worked, because a playtest owner held the grip
+  // for a full tape while reading the room as broken.
+  gripCues: [
+    {
+      holdId: "ground-grip",
+      phase: "recording",
+      holder: "present",
+      line: "잡고 있는 동안 위층 문이 열립니다. 이 자리는 곧 잔상의 몫이 됩니다.",
+    },
+    {
+      holdId: "ground-grip",
+      phase: "replay",
+      holder: "past",
+      line: "잔상이 손잡이를 잡았습니다. 뒤쪽 계단으로 — 위층 문이 열려 있습니다.",
+    },
+  ],
+  // Delivered a beat after arrival upstairs, so the warm band lands first and
+  // stays unexplained. DECK_Y - 0.4 matches the band's own threshold.
+  upstairsCue: {
+    aboveY: DECK_Y - 0.4,
+    line: "난간 곁에 손잡이가 하나 더 있습니다. 잡으면 나가는 길의 빗장이 열린 채 고정됩니다.",
+  },
+  // The generic replay chip says to wait for the door, and in this room
+  // waiting is the one move that fails the window.
+  replayWait: {
+    aboveY: DECK_Y - 0.4,
+    belowLine: "잔상이 버티는 동안 — 뒤쪽 계단으로 올라가세요",
+    aboveLine: "난간 곁의 손잡이를 잡으세요 — 나가는 길이 열립니다",
+  },
+  lightLift: 1.3,
   dressing: standardDressing(
     {
       halfWidth: FOUR_HALF,

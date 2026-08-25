@@ -251,6 +251,39 @@ export interface Chamber {
    */
   plateDutyInReplay?: boolean;
   /**
+   * Said once per room visit, the first time the named grip is taken by the
+   * named actor in the named phase. 04 sets both of its lines: the grab there
+   * opens a door behind and above the player, so a grab that worked is
+   * indistinguishable from one that did nothing until somebody says which.
+   */
+  gripCues?: readonly {
+    holdId: string;
+    phase: "recording" | "replay";
+    holder: "present" | "past";
+    line: string;
+  }[];
+  /**
+   * Said once per room visit, a beat after the player first stands above this
+   * height during replay. The beat is load-bearing: 04's warm band fires the
+   * moment you arrive upstairs and works by not being explained — a caption
+   * landing on top of it would turn the room's one answer into UI.
+   */
+  upstairsCue?: { aboveY: number; line: string };
+  /**
+   * What the replay chip says in this room instead of the generic "wait for
+   * the door", split at a height. 04 is why: waiting is exactly the wrong
+   * move there — below the deck you climb while he holds, and above it you
+   * take the second grip yourself. Both registers steer; neither waits.
+   */
+  replayWait?: { aboveY: number; belowLine: string; aboveLine: string };
+  /**
+   * Multiplier on the room's fill light — hemispheric sky and scene ambient.
+   * 04 sets it: a two-storey room on a one-storey room's fill reads as a
+   * basement upstairs. The key light is never lifted with it, because the sun
+   * is what draws the slat bands and brightening it changes the drawing.
+   */
+  lightLift?: number;
+  /**
    * Seconds the fold is held before it takes, with everything frozen.
    *
    * Only the finale sets it. You watch your own hand stop being yours before
