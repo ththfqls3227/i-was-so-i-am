@@ -102,6 +102,7 @@ const hud = new Hud(app, {
     scene.advanceChamber();
     scene.requestPointerLock();
   },
+  onBlip: () => audio.engine.trigger("blip"),
 });
 
 {
@@ -147,7 +148,7 @@ scene.attach({
     hud.beginSeal(seconds);
     audio.onSealing();
   },
-  onEnding: () => hud.showEnding(scene.tapes.count),
+  onEnding: () => hud.showEnding(scene.tapes.count, scene.totalRerecords),
   onLine: (line) => hud.say(line, performance.now(), 5200),
 });
 

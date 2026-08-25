@@ -182,12 +182,17 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
   gap: 14px;
   width: min(760px, 86vw);
   opacity: 0;
+  /* In fast, out slow: the line starts writing at once, and leaves a wake. */
   transition: opacity 420ms ease, transform 420ms ease;
   pointer-events: none;
   /* Above the blackout: the ending is her speaking into the dark. */
   z-index: 40;
 }
-.subtitle[data-shown="true"] { opacity: 1; transform: translateX(-50%) translateY(0); }
+.subtitle[data-shown="true"] {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  transition-duration: 160ms;
+}
 .vn-portrait { flex: 0 0 104px; width: 104px; height: 122px; filter: drop-shadow(0 6px 18px #000a); }
 .vn-portrait svg { width: 100%; height: 100%; display: block; }
 .vn-panel {
@@ -213,30 +218,20 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
 }
 .vn-line {
   margin: 2px 0 0;
-  position: relative;
   font-size: 0.98rem;
   line-height: 1.65;
   letter-spacing: 0.01em;
   color: #eef2f7;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
-/* The whole sentence, for anything that reads rather than watches. */
-.vn-full { position: absolute; left: 0; top: 0; opacity: 0; pointer-events: none; user-select: none; }
-/* The finished-line marker every visual novel taught players to look for. */
-.subtitle[data-done="true"] .vn-panel::after {
-  content: "▼";
-  position: absolute;
-  right: 12px;
-  bottom: 5px;
-  font-size: 0.58rem;
-  color: #8fa2b8;
-  animation: vn-tick 1.15s ease-in-out infinite;
-}
-@keyframes vn-tick {
-  0%, 100% { transform: translateY(0); opacity: 0.85; }
-  50% { transform: translateY(2.5px); opacity: 0.45; }
-}
+/* Words hold their shape; characters arrive. The line is laid out whole
+   before any of it shows, so the reveal is an opacity and never a reflow. */
+.vn-word { display: inline-block; }
+.vn-line span span { opacity: 0; }
+.vn-line span span.on { opacity: 1; transition: opacity 60ms linear; }
 @media (prefers-reduced-motion: reduce) {
-  .subtitle[data-done="true"] .vn-panel::after { animation: none; }
+  .vn-line span span { opacity: 1; }
 }
 
 .notice {
@@ -495,8 +490,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
   background: #000;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 1400ms ease-out;
-  /* And the title above everything, including her. */
+  /* No fade. The title is stamped, the way every record in the game was
+     closed — one frame, whole. */
   z-index: 50;
 }
 .finale[data-on="true"] { opacity: 1; }

@@ -307,6 +307,8 @@ export class FirstPersonScene {
   private warmingEcho: number | null = null;
   /** Tries this room has eaten — natural failures plus replays aborted with R. */
   private attemptsInRoom = 0;
+  /** Every recording taken back with R, across the whole run. The ending's ledger. */
+  totalRerecords = 0;
   /** The echo-at-the-shut-door line has been said this replay. */
   private echoDoorSpoken = false;
   /** The shaft of light in the way out, lit only while leaving would work. */
@@ -2176,6 +2178,7 @@ export class FirstPersonScene {
     // ever say so. The hint ladder has to see these, or a player who aborts
     // early keeps being treated as if they had barely started.
     if (previousPhase === "replay") this.attemptsInRoom += 1;
+    this.totalRerecords += 1;
     this.echoDoorSpoken = false;
     // Every attempt starts from a standstill. Players who fail reach for R with
     // a hand still on W, and the recording that began walking on its own was

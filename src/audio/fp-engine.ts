@@ -20,7 +20,8 @@ export type FpSound =
   | "door-slide"
   | "plate"
   | "hold"
-  | "ui";
+  | "ui"
+  | "blip";
 
 export type Surface = "brick" | "timber";
 export type Walker = "present" | "past";
@@ -215,6 +216,11 @@ export class FpAudioEngine {
         return pluck(graph.contact.hold.gain.gain, now, FP_SCORE.contact.holdGain, 0.008, FP_SCORE.contact.holdDecay);
       case "ui":
         return pluck(graph.ui.gain.gain, now, FP_SCORE.ui.gain, 0.001, FP_SCORE.ui.seconds);
+      case "blip":
+        // The archivist's voice, such as it is: the ui tick at a quarter of
+        // its weight, once every few written characters. In a game with no
+        // music this is what reads as someone speaking.
+        return pluck(graph.ui.gain.gain, now, FP_SCORE.ui.gain * 0.25, 0.001, 0.035);
     }
   }
 
