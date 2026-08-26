@@ -256,8 +256,15 @@ export class Simulation {
       const inLight = echoExit !== undefined && past !== undefined
         && (past.x - echoExit.at.x) * (past.x - echoExit.at.x)
           + (past.z - echoExit.at.z) * (past.z - echoExit.at.z) <= echoExit.radius * echoExit.radius;
+      // Being there is not the same as having done it. 07 puts the grip he is
+      // meant to be holding at the same coordinates as his light, so a tape
+      // that merely walked him into the slot — no E, nothing held — still ended
+      // the room: position was the whole test and the holding was decoration.
+      // The exit gate is the room's own statement of what the arrival has to
+      // mean, so ask it. In 03 and 06 it is the plate under his feet, which he
+      // is standing on by virtue of having arrived; in 07 it is the grip.
       this.echoExitDwellTicks = inLight ? this.echoExitDwellTicks + 1 : 0;
-      const echoArrived = inLight && this.echoExitDwellTicks >= 3;
+      const echoArrived = inLight && state.exitOpen && this.echoExitDwellTicks >= 3;
       if ((present && state.exitOpen && this.reachedExit(present.x, present.y, present.z)) || echoArrived) {
         state.phase = "success";
         state.success = true;
