@@ -14,7 +14,14 @@
       content="과거의 나를 기록하고, 그 잔상과 함께 기억 보관소를 빠져나가는 1인칭 협동 퍼즐. ⏎로 기록을 끝내면 과거의 당신이 그 자세 그대로 남아 발판을 누르고, 문을 붙들어 줍니다. 열 개의 방, 그리고 두고 떠나야 하는 것."
     />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="./og-image.jpg" />
+    <!-- Absolute, because a relative og:image is not resolved by the scrapers
+         that matter: the card is built from the markup alone, off-page, with no
+         base to resolve "./" against. It read fine in a browser and would have
+         shipped a blank thumbnail to the one listing judges actually see. -->
+    <meta property="og:url" content="https://i-was-so-i-am.vercel.app/" />
+    <meta property="og:image" content="https://i-was-so-i-am.vercel.app/og-image.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://i-was-so-i-am.vercel.app/og-image.jpg" />
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23080b14'/%3E%3Ccircle cx='25' cy='32' r='12' fill='none' stroke='%235fd8e8' stroke-width='5'/%3E%3Ccircle cx='39' cy='32' r='12' fill='none' stroke='%23e8a44f' stroke-width='5'/%3E%3C/svg%3E"

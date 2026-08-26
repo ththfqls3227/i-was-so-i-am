@@ -354,12 +354,16 @@ export class Hud {
     }
 
     const pass = view.phase === "recording" ? "1회차 · 기록" : view.phase === "replay" ? "2회차 · 재생" : view.phase === "success" ? "보관 완료" : "다시 기록";
-    // 00 through 07 are the teaching wing and say so. 08 onward is the story,
-    // and the corridor has no number at all — both keep the archive's plates.
+    // Five rooms of teaching, then five of being asked. This used to call the
+    // first EIGHT rooms 튜토리얼, which is the game saying out loud what the
+    // owner said after playing it: that it is tutorial nearly all the way to
+    // the end. The corridor has no number and keeps the archive's plate.
     const stage = Number(view.chamberNumber);
-    const home = Number.isFinite(stage) && stage <= 7
-      ? `튜토리얼 ${stage + 1}단계 · ${view.chamberName}`
-      : `${view.chamberNumber} ${view.chamberName}`;
+    const home = !Number.isFinite(stage)
+      ? `${view.chamberNumber} ${view.chamberName}`
+      : stage <= 4
+        ? `튜토리얼 ${stage + 1}단계 · ${view.chamberName}`
+        : `퍼즐 ${stage - 4}단계 · ${view.chamberName}`;
     const phaseName = `${home} · ${pass}`;
     if (this.passLabel.textContent !== phaseName) this.passLabel.textContent = phaseName;
     if (this.observerFrame.dataset.on !== String(view.observerOn)) {

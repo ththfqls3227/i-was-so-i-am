@@ -96,27 +96,26 @@ test("rooms 04 through 08 stay playable and tell the truth about each pass", asy
   await walkUntil(page, ["KeyW"], (state) => state.phase === "success", 25_000);
 
   // ---- 05 Long Standing: the tape is a two-stop schedule, not a sprint.
+  // First room of the puzzle half, so the four-line recording script and the
+  // two waiting lines are gone. What must still hold is the room itself: the
+  // doors answer the schedule on the tape whether or not anyone narrated it.
   await advanceTo(page, "long-standing");
   await act(page, "setLook", 0, 0);
-  await expectPrompt("왼쪽 푸른 발판으로");
+  await expect(prompts).not.toContainText("왼쪽 푸른 발판으로");
   await walkUntil(page, ["KeyW"], (state) => state.z > 5.7);
   await act(page, "setLook", -Math.PI / 2, 0);
   await walkUntil(page, ["KeyW"], (state) => state.x < -3.6);
-  await expectPrompt("그대로 서 계세요");
   await page.waitForTimeout(5_000);
   await act(page, "setLook", Math.PI / 2, 0);
   await walkUntil(page, ["KeyW"], (state) => state.x > -2.5);
-  await expectPrompt("오른쪽 발판으로");
   await walkUntil(page, ["KeyW"], (state) => state.x > 3.6, 25_000);
-  await expectPrompt("충분하다 싶으면");
   await page.waitForTimeout(500);
   await act(page, "fold");
   await waitInPage(page, 's.phase === "replay"');
   await act(page, "setLook", 0, 0);
-  await expectPrompt("열리면 바로 안으로");
+  await expect(prompts).not.toContainText("열리면 바로 안으로");
   await waitInPage(page, "s.doors.find((d) => d.id === 'way-in')?.open === true", 12_000);
   await walkUntil(page, ["KeyW"], (state) => state.z > 11.5, 25_000);
-  await expectPrompt("안에서 기다리세요");
   await waitInPage(page, "s.doors.find((d) => d.id === 'way-on')?.open === true", 25_000);
   await walkUntil(page, ["KeyW"], (state) => state.phase === "success", 25_000);
 

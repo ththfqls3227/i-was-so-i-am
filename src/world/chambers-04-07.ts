@@ -405,10 +405,13 @@ export const LONG_STANDING_CHAMBER: Chamber = {
   shell: fiveShell,
   number: "05",
   subtitleOnEntry: "기록을 서두르지 마십시오. 그가 서 있는 만큼만, 문은 열려 있습니다.",
-  // Both plates only answer the echo, so the recording pass has nothing to
-  // press and nothing to watch — the owner recorded a stroll, replayed it,
-  // and stood at a door that never opened. The tape here is a schedule of
-  // standing, and these four lines are the only place that can be said.
+  // The first room that only asks. Both plates answer the echo alone, so the
+  // recording pass has nothing to press and nothing to watch — which is the
+  // question, not an oversight: what goes on a tape when nothing in the room
+  // responds to you? The four-line script that used to walk the player through
+  // it, and the two waiting lines that narrated the second pass, are what the
+  // hint ladder now hands over to whoever spends tries on it.
+  coached: false,
   recordingScript: {
     toFirst: "왼쪽 푸른 발판으로 가세요. 여기 서 있는 시간이 그대로 기록됩니다",
     onFirst: "그대로 서 계세요. 오래 설수록, 재생에서 첫 문이 오래 열립니다",
@@ -424,6 +427,7 @@ export const LONG_STANDING_CHAMBER: Chamber = {
   hints: [
     { after: 2, line: "첫 발판에 더 오래 서 있도록 기록하세요. 들어갈 시간은 딱 그 길이입니다." },
     { after: 4, line: "기록의 뒷부분은 오른쪽 발판 위여야 합니다. 끝의 문은 그 자리만 압니다." },
+    { after: 6, line: "한 번의 기록에 두 번 서세요. 왼쪽 발판에 오래, 그다음 오른쪽 발판 위에서 기록을 끝냅니다." },
   ],
   dressing: standardDressing(fiveShell, {
     seedBase: 5500,
