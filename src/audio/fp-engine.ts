@@ -56,8 +56,11 @@ interface Graph {
  * Every musical voice still runs and still takes its automation, so flipping
  * this back on is the whole undo.
  */
-// On again, on the owner's ask. The whole score was written and kept running
-// behind a silent gain; 08's missing-layer beat only reads with it audible.
+// The "no music" of 2026-08-23 is withdrawn: the owner wants a score, just not
+// the one that was here. So the bus stays open, and what was on it is silenced
+// at the source instead — see FP_SCORE.ambient, where the drone's gains are now
+// zero. The distinction matters: this wire is what a real score will arrive on,
+// and it is what beginEndingMusic ramps for the goodbye.
 const MUSIC_ENABLED = true;
 
 const noteFor = (chamberId: string): (typeof ROOM_NOTES)[number] | undefined =>

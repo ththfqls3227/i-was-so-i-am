@@ -251,16 +251,32 @@ export const FP_SCORE = {
    * stopped noticing.
    */
   ambient: {
+    // Silenced, all of it, at the owner's word: "그거 소음 없애버리라고."
+    //
+    // The offender is the pair of sines seven cents apart. Two tones that close
+    // beat against each other several times a second, and a beat that never
+    // resolves is the sound a fluorescent tube makes — the ear cannot stop
+    // tracking it and gets tired trying. It was written as "the building",
+    // something felt rather than heard, and at the level it needed to be felt
+    // it was the loudest continuous thing in the game.
+    //
+    // The voices are all still built and still take their automation, so this
+    // is four numbers rather than a demolition: real music lands on this same
+    // bus and can put any of them back if it wants them.
     detuneCents: 7,
-    timberGain: 0.06,
+    timberGain: 0,
     fifthRatio: 1.498307,
-    fifthGain: 0.02,
-    /** Filtered noise: the room's air. */
-    noiseGain: 0.013,
+    fifthGain: 0,
+    noiseGain: 0,
     noiseFilterHz: 190,
-    /** The cyan shimmer. Silent in 08, and it does not come back. */
+    /**
+     * The cyan shimmer, kept but taken most of the way down. Three sine
+     * partials above 1 kHz is the other thing in here capable of tiring an ear,
+     * and it is only in the mix at all so 08 can take it away — which needs it
+     * present, not prominent.
+     */
     cyanPartials: [1174.66, 1567.98, 2093.0],
-    cyanGain: 0.012,
+    cyanGain: 0.0035,
     cyanDriftHz: 0.07,
     glideSeconds: 1.7,
     /** 08 fades it out slowly enough that nobody catches the moment. */
@@ -272,9 +288,13 @@ export const FP_SCORE = {
    * so the feet never skate and never tick while standing still.
    */
   step: {
-    brick: { noiseHz: 700, noiseQ: 2, noiseDecay: 0.045, noiseGain: 0.05, bodyHz: 90, bodyDecay: 0.07, bodyGain: 0.035 },
+    // Roughly doubled. These were set while a drone bed was filling the room,
+    // where a foot only had to peek over it; with the bed gone the building is
+    // quiet and the player could walk the length of a hall hearing nothing of
+    // themselves. You are a body in this place before you are a camera.
+    brick: { noiseHz: 700, noiseQ: 2, noiseDecay: 0.045, noiseGain: 0.115, bodyHz: 90, bodyDecay: 0.07, bodyGain: 0.08 },
     /** Only the gallery decks are boarded, so this is 04 and the stairs. */
-    timber: { noiseHz: 520, noiseQ: 1.4, noiseDecay: 0.06, noiseGain: 0.045, bodyHz: 320, ringHz: 480, bodyDecay: 0.09, bodyGain: 0.04 },
+    timber: { noiseHz: 520, noiseQ: 1.4, noiseDecay: 0.06, noiseGain: 0.105, bodyHz: 320, ringHz: 480, bodyDecay: 0.09, bodyGain: 0.09 },
     /**
      * The echo's feet. Present — he is in the room and the room should say so —
      * but the body is gone from underneath them and they arrive a hair late.
