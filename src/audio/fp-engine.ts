@@ -39,6 +39,8 @@ interface Graph {
   droneFifth: OscillatorNode;
   droneBed: NoiseVoice;
   cyan: { voices: ToneVoice[]; gain: GainNode };
+  /** Where struck notes are hung. One sub-bus, so the score has its own fader. */
+  score: GainNode;
   steps: Record<`${Walker}-${Surface}`, StepVoice>;
   seal: { thud: ToneVoice; body: NoiseVoice; brass: ToneVoice };
   door: { sweep: NoiseVoice; stop: ToneVoice };
@@ -74,6 +76,8 @@ export class FpAudioEngine {
   private silenced = false;
   /** The one wire the owner's "no music" runs through, kept for the goodbye. */
   private musicGain: GainNode | null = null;
+  /** Context time the next note is due. Zero until the first frame arrives. */
+  private nextStrikeAt = 0;
   private roomHz = ROOM_NOTES[ROOM_NOTES.length - 1]?.droneHz ?? 73.42;
 
   constructor(muted = false) {
@@ -188,6 +192,95 @@ export class FpAudioEngine {
    * The owner's "no music" stands for the whole game except the goodbye: at
    * the ending the corridor's own chords come back, from silence, slowly.
    */
+  /**
+   * Keep the score a little ahead of the clock. Called every rendered frame.
+   *
+   * A note is scheduled once, at a time in the future, and the browser's audio
+   * thread plays it there whatever the frame rate does afterwards. So a dropped
+   * frame costs nothing and the music never stutters with the picture — which
+   * matters here, because this game is at its most beautiful in the rooms that
+   * are hardest to draw.
+   */
+  advanceScore(): void {
+    const graph = this.graph;
+    const context = this.context;
+    if (!graph || !context || this.muted || this.paused || this.silenced) return;
+    const now = context.currentTime;
+    const spec = FP_SCORE.score;
+    // First frame after a start or a resume: do not fire immediately. Walking
+    // into a room and being played at is the behaviour of a menu.
+    if (this.nextStrikeAt === 0 || this.nextStrikeAt < now - 1) {
+      this.nextStrikeAt = now + spec.restMin;
+      return;
+    }
+    while (this.nextStrikeAt < now + spec.lookaheadSeconds) {
+      this.strike(this.nextStrikeAt);
+      // A phrase is two notes close together; the rest of the time it is one.
+      if (Math.random() < spec.pairChance) {
+        const gap = spec.pairGapMin + Math.random() * (spec.pairGapMax - spec.pairGapMin);
+        this.strike(this.nextStrikeAt + gap);
+      }
+      this.nextStrikeAt += spec.restMin + Math.random() * (spec.restMax - spec.restMin);
+    }
+  }
+
+  /**
+   * One struck string, built and thrown away.
+   *
+   * Nodes per note rather than a pool: an oscillator is cheap, it is stopped on
+   * a schedule, and the alternative is retuning a held voice mid-ring, which is
+   * a portamento — the sound of a slide whistle, not of a string being struck.
+   */
+  private strike(at: number): void {
+    const graph = this.graph;
+    const context = this.context;
+    if (!graph || !context) return;
+    const spec = FP_SCORE.score;
+    const degree = spec.degrees[Math.floor(Math.random() * spec.degrees.length)] ?? 1;
+    const high = Math.random() < 0.42;
+    const octave = (high ? spec.octaves[1] : spec.octaves[0]) ?? 4;
+    const hz = this.roomHz * octave * degree;
+    const decay = spec.decayMin + Math.random() * (spec.decayMax - spec.decayMin);
+    const peak = high ? spec.gainHigh : spec.gainLow;
+
+    const filter = context.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.Q.value = spec.filterQ;
+    filter.frequency.setValueAtTime(spec.filterFromHz, at);
+    filter.frequency.exponentialRampToValueAtTime(spec.filterToHz, at + decay);
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0.0001, at);
+    gain.gain.exponentialRampToValueAtTime(peak, at + spec.attackSeconds);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + decay);
+    filter.connect(gain).connect(graph.score);
+
+    // Triangle for the body, a quiet sine an octave up for the strike. Two
+    // partials is all a plucked string needs to stop sounding like a test tone.
+    const body = context.createOscillator();
+    body.type = "triangle";
+    body.frequency.value = hz;
+    body.connect(filter);
+    const shimmer = context.createOscillator();
+    shimmer.type = "sine";
+    shimmer.frequency.value = hz * 2;
+    const shimmerGain = context.createGain();
+    shimmerGain.gain.value = 0.3;
+    shimmer.connect(shimmerGain).connect(filter);
+
+    const until = at + decay + 0.05;
+    body.start(at);
+    body.stop(until);
+    shimmer.start(at);
+    shimmer.stop(until);
+    body.onended = () => {
+      body.disconnect();
+      shimmer.disconnect();
+      shimmerGain.disconnect();
+      filter.disconnect();
+      gain.disconnect();
+    };
+  }
+
   beginEndingMusic(): void {
     if (!this.musicGain || !this.context) return;
     const now = this.context.currentTime;
@@ -343,6 +436,13 @@ export class FpAudioEngine {
     music.connect(master);
     this.musicGain = music;
 
+    // The struck notes hang off their own bus rather than off `music` directly,
+    // so the score can be pulled down under a line of dialogue later without
+    // taking the goodbye's ramp with it.
+    const scoreBus = context.createGain();
+    scoreBus.gain.value = 1;
+    scoreBus.connect(music);
+
     const white = noiseBuffer(context, false);
     const brown = noiseBuffer(context, true);
 
@@ -454,6 +554,7 @@ export class FpAudioEngine {
       droneFifth: droneFifth.osc,
       droneBed,
       cyan: { voices: cyanVoices, gain: cyanGain },
+      score: scoreBus,
       steps: {
         "present-brick": stepVoice("brick", "present"),
         "present-timber": stepVoice("timber", "present"),

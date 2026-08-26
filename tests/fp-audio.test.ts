@@ -33,6 +33,13 @@ function recorder(): { voice: FpAudioVoice; calls: Call[] } {
     corridorNote: log("corridorNote"),
     resetCorridor: log("resetCorridor"),
     creak: log("creak"),
+    // Both are driven by the adapter and neither is asserted here. They are in
+    // the mock because `as unknown as FpAudioVoice` below silences the compiler
+    // about anything missing: advanceScore is called on every frame, so leaving
+    // it out failed seven tests at runtime with a TypeError rather than at the
+    // type level, which is the cast's bill coming due.
+    advanceScore: log("advanceScore"),
+    beginEndingMusic: log("beginEndingMusic"),
     started: true,
     isMuted: false,
     masterGain: 0.42,

@@ -42,7 +42,7 @@ export type FpAudioVoice = Pick<
   FpAudioEngine,
   "start" | "setMuted" | "setPaused" | "setSilenced" | "setRoom" | "bendRoomDown"
   | "sinkAndReturn" | "footstep" | "trigger" | "attune" | "corridorNote" | "resetCorridor" | "creak"
-  | "beginEndingMusic"
+  | "beginEndingMusic" | "advanceScore"
   | "started" | "isMuted" | "masterGain"
 >;
 
@@ -88,6 +88,9 @@ export class FpAudioAdapter {
 
   /** Called every rendered frame with the HUD's view of the world. */
   onFrame(): void {
+    // The score keeps its own clock and only needs to be nudged forward; it
+    // reads nothing about the room, so it goes first and unconditionally.
+    this.engine.advanceScore();
     const state = this.readState();
     if (state.roomId !== this.roomId) this.enterRoom(state);
 

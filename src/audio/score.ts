@@ -284,6 +284,58 @@ export const FP_SCORE = {
   },
 
   /**
+   * The score proper: a plucked string, struck now and then, and otherwise
+   * silence.
+   *
+   * What was here before was a drone, and a drone is a layer rather than a
+   * piece — always on, never going anywhere, and after ten minutes it is only
+   * a hum you cannot switch off. This is the opposite bet. Nothing sounds most
+   * of the time; when a note does arrive it is allowed to be a real note, ring
+   * for three or four seconds, and stop.
+   *
+   * The pitches are not invented. Every room already owns one — 00 is D, 01 E,
+   * 02 A, 03 C, and so on down ROOM_NOTES — chosen so the corridor's windows
+   * could sum into a chord at the end. Building the score on the same roots
+   * means the music of a room and the note that room contributes to the
+   * goodbye are the same material.
+   */
+  score: {
+    /**
+     * Minor pentatonic, as ratios from the room's root: 0, 3, 5, 7, 10
+     * semitones. It has no semitone steps in it, so no two notes left ringing
+     * together can grate however they are picked — which is the property that
+     * lets the picking be careless and the result still be music.
+     */
+    degrees: [1, 1.189207, 1.33484, 1.498307, 1.781797],
+    /**
+     * Two and three octaves over the room's root, which puts the voice at
+     * 293-1047 Hz across the ten rooms. Down at the root it would be the drone
+     * again; up here it reads as something struck in a large quiet room.
+     */
+    octaves: [4, 8],
+    /** Seconds between notes. Long, and the long end is most of the point. */
+    restMin: 2.4,
+    restMax: 5.2,
+    /** Now and then a second note follows close, which is what makes a phrase. */
+    pairChance: 0.26,
+    pairGapMin: 0.26,
+    pairGapMax: 0.42,
+    /** A struck string: immediate, then a long tail. */
+    attackSeconds: 0.006,
+    decayMin: 2.6,
+    decayMax: 4.2,
+    /** Quieter than a footstep on purpose. The room is the subject, not this. */
+    gainLow: 0.055,
+    gainHigh: 0.038,
+    /** The tail loses its brightness before it loses its volume, as strings do. */
+    filterFromHz: 2600,
+    filterToHz: 620,
+    filterQ: 0.7,
+    /** How far ahead of the clock notes are scheduled, in seconds. */
+    lookaheadSeconds: 0.6,
+  },
+
+  /**
    * Footsteps. Distance-driven, off the stride the scene already accumulates,
    * so the feet never skate and never tick while standing still.
    */
