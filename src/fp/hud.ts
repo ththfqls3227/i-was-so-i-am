@@ -79,6 +79,22 @@ function element<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
+/**
+ * What a room is called on screen: five rooms of teaching, then five of being
+ * asked. The corridor has no number and keeps the archive's own plate.
+ *
+ * Exported because the title card names a room too, on the continue button,
+ * and it was reading 「이어하기 — 01 두 번째 나」 against an in-game header of
+ * 「튜토리얼 2단계 · 두 번째 나」. One room, two numbers, because the split
+ * moved here and the button was left behind. One place to say it now.
+ */
+export function chamberLabel(number: string, name: string): string {
+  const stage = Number(number);
+  if (!Number.isFinite(stage)) return `${number} ${name}`;
+  if (stage <= 4) return `튜토리얼 ${stage + 1}단계 · ${name}`;
+  return `퍼즐 ${stage - 4}단계 · ${name}`;
+}
+
 export class Hud {
   private readonly root = element("div", "hud");
   private readonly crosshair = element("div", "crosshair");
@@ -354,17 +370,7 @@ export class Hud {
     }
 
     const pass = view.phase === "recording" ? "1회차 · 기록" : view.phase === "replay" ? "2회차 · 재생" : view.phase === "success" ? "보관 완료" : "다시 기록";
-    // Five rooms of teaching, then five of being asked. This used to call the
-    // first EIGHT rooms 튜토리얼, which is the game saying out loud what the
-    // owner said after playing it: that it is tutorial nearly all the way to
-    // the end. The corridor has no number and keeps the archive's plate.
-    const stage = Number(view.chamberNumber);
-    const home = !Number.isFinite(stage)
-      ? `${view.chamberNumber} ${view.chamberName}`
-      : stage <= 4
-        ? `튜토리얼 ${stage + 1}단계 · ${view.chamberName}`
-        : `퍼즐 ${stage - 4}단계 · ${view.chamberName}`;
-    const phaseName = `${home} · ${pass}`;
+    const phaseName = `${chamberLabel(view.chamberNumber, view.chamberName)} · ${pass}`;
     if (this.passLabel.textContent !== phaseName) this.passLabel.textContent = phaseName;
     if (this.observerFrame.dataset.on !== String(view.observerOn)) {
       this.observerFrame.dataset.on = String(view.observerOn);

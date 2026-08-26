@@ -1,6 +1,6 @@
 import "./fp/style.css";
 import { FpAudioAdapter } from "./audio/fp-adapter";
-import { Hud } from "./fp/hud";
+import { Hud, chamberLabel } from "./fp/hud";
 import { DEFAULT_MOUSE_SENSITIVITY, FirstPersonScene } from "./fp/scene";
 import { runCorpus } from "./sim/corpus";
 import { ROSTER } from "./world/roster";
@@ -113,7 +113,7 @@ const hud = new Hud(app, {
   // Not the first room (nothing to skip) and not the corridor (an ending is
   // not a place to be dropped back into cold).
   if (saved && saved.sim.id !== ROSTER.first.sim.id && ROSTER.after(saved.sim.id) !== null) {
-    hud.offerContinue(`이어하기 — ${saved.number} ${saved.sim.name}`);
+    hud.offerContinue(`이어하기 — ${chamberLabel(saved.number, saved.sim.name)}`);
   }
 }
 
