@@ -212,6 +212,9 @@ export const HAND_NOT_BODY: RoomDefinition = {
   ],
   exitGatedBy: { kind: "plate", id: "alcove-plate" },
   exit: { id: "exit", min: { x: 3.4, y: 0, z: 12.4 }, max: { x: 6, y: 4, z: 14 } },
+  // His plate is his light: the moment he takes it the room is done, and the
+  // player who held the door for him no longer walks a victory lap.
+  echoExit: { at: { x: 0, z: 10.6 }, radius: 1.0 },
 };
 
 /**
@@ -242,7 +245,7 @@ export const HAND_NOT_BODY_CHAMBER: Chamber = {
   // the first rung points at the golden floor line the room already draws.
   hints: [
     { after: 1, line: "재생 중에는 당신의 발이 자유롭습니다. 바닥의 금색 선을 따라가, 오른쪽의 발판을 직접 밟으세요." },
-    { after: 2, line: "발판을 밟은 채 기다리면 잔상이 열린 문을 지나 막다른 방까지 걸어갑니다. 출구가 열리면 당신도 나가야 합니다." },
+    { after: 2, line: "발판을 밟은 채 기다리면 잔상이 열린 문을 지나 막다른 방의 빛까지 걸어갑니다. 잔상이 그 빛에 닿으면 이 방은 끝납니다." },
     { after: 3, line: "기록이 짧으면 잔상의 걸음도 짧습니다 — 문을 향해 걷는 시간을 더 길게 담으세요." },
   ],
   // The rule up front, not four failure cards deep: a judge who met it only

@@ -111,6 +111,8 @@ export interface ViewModel {
    * and the go-signal it gated never fired there.
    */
   wayAheadOpen: boolean;
+  /** The echo reaching its light ends this room — no exit walk afterwards. */
+  echoFinishes: boolean;
   /** The room's own recording chip, when its tape needs coaching to make. */
   recordingCueLine: string | null;
   /** The observer viewport is up — the HUD draws its frame and label. */
@@ -1304,6 +1306,9 @@ export class FirstPersonScene {
 
   private buildExitBeacon(root: TransformNode): Mesh | null {
     if (this.chamber.sim.id === "ending-corridor") return null;
+    // No second light where his light ends the room: an exit pillar in an
+    // echoExit room beckons the player toward a walk that no longer exists.
+    if (this.chamber.sim.echoExit) return null;
     const exit = this.chamber.sim.exit;
     const beacon = MeshBuilder.CreateCylinder("exit-beacon", {
       diameterTop: 0.42, diameterBottom: 0.95, height: 2.9, tessellation: 24,
@@ -3145,6 +3150,7 @@ export class FirstPersonScene {
         door.open || (this.chamber.sim.doors[index]?.brush.max.z ?? 0) < (present?.z ?? 0)),
       recordingCueLine: this.recordingCueLine(state),
       observerOn: this.observerOn,
+      echoFinishes: this.chamber.sim.echoExit !== undefined,
       exitOpen: state.exitOpen,
       echoPresent: state.actors.some((actor) => actor.id === "past"),
       success: state.success,

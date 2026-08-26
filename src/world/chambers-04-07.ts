@@ -520,6 +520,9 @@ export const GIVING_BACK: RoomDefinition = {
   ],
   exitGatedBy: { kind: "plate", id: "slot-plate" },
   exit: { id: "exit", min: { x: 3.4, y: 0, z: 32.8 }, max: { x: SIX_HALF, y: CEILING, z: SIX_DEPTH } },
+  // Thirty-four metres was the room; thirty-four metres back was homework.
+  // His slot is his light, and taking it ends the errand for both of them.
+  echoExit: { at: { x: 0, z: 30.95 }, radius: 1.0 },
 };
 
 const sixShell: RoomShell = {
@@ -627,6 +630,9 @@ export const UNKEPT: RoomDefinition = {
   ],
   exitGatedBy: { kind: "hold", id: "slot-grip" },
   exit: { id: "exit", min: { x: 3.4, y: 0, z: 15.4 }, max: { x: SEVEN_HALF, y: CEILING, z: SEVEN_DEPTH } },
+  // The tape's tail carries him through the door he is holding — where he
+  // walks into the light is where the record was always going to end.
+  echoExit: { at: { x: 0, z: 13.5 }, radius: 1.0 },
 };
 
 const sevenShell: RoomShell = {

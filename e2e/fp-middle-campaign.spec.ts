@@ -96,7 +96,7 @@ test("rooms 04 through 08 stay playable and tell the truth about each pass", asy
   // ---- 05 Long Standing: the tape is a two-stop schedule, not a sprint.
   await advanceTo(page, "long-standing");
   await act(page, "setLook", 0, 0);
-  await expectPrompt("왼쪽 발판으로");
+  await expectPrompt("왼쪽 푸른 발판으로");
   await walkUntil(page, ["KeyW"], (state) => state.z > 5.7);
   await act(page, "setLook", -Math.PI / 2, 0);
   await walkUntil(page, ["KeyW"], (state) => state.x < -3.6);
@@ -121,7 +121,7 @@ test("rooms 04 through 08 stay playable and tell the truth about each pass", asy
   // ---- 06 Giving Back: the plate belongs to the second pass.
   await advanceTo(page, "giving-back");
   await act(page, "setLook", 0, 0);
-  await expectPrompt("오른쪽 발판은 2회차에 밟습니다");
+  await expectPrompt("호박색 발판은 2회차에 밟습니다");
   await expectPrompt("닫힌 문 쪽으로 걸어 두세요");
   await walkUntil(page, ["KeyW"], (state) => state.z > 28, 35_000);
   await act(page, "press", "KeyW");
@@ -141,9 +141,9 @@ test("rooms 04 through 08 stay playable and tell the truth about each pass", asy
     await waitInPage(page, "s.plates.find((p) => p.id === 'amber-plate')?.active === true", 10_000);
   };
   await takeAmberPlate();
-  await waitInPage(page, "s.exitOpen === true", 35_000);
-  await walkUntil(page, ["KeyW", "KeyD"], (state) => state.x > 4);
-  await walkUntil(page, ["KeyW"], (state) => state.phase === "success", 35_000);
+  // The long walk ends on his light and the room ends with it: the player
+  // holds the amber plate and never walks the corridor back.
+  await waitInPage(page, 's.phase === "success"', 45_000);
 
   // ---- 07 Unkept: the final recorded frame must keep walking and holding E.
   await advanceTo(page, "unkept");
@@ -164,8 +164,9 @@ test("rooms 04 through 08 stay playable and tell the truth about each pass", asy
   await takeAmberPlate();
   await waitInPage(page, "s.holds.find((h) => h.id === 'slot-grip')?.heldBy.includes('past') === true", 25_000);
   expect((await read(page)).exitOpen).toBe(true);
-  await walkUntil(page, ["KeyW", "KeyD"], (state) => state.x > 3.7, 20_000);
-  await walkUntil(page, ["KeyW"], (state) => state.phase === "success", 30_000);
+  // The tape's tail carries him through the door and into the light, and his
+  // arrival ends the room — the player does not move at all.
+  await waitInPage(page, 's.phase === "success"', 30_000);
 
   // ---- 08 Silence: no new tape, just accept the person already standing.
   await advanceTo(page, "silence");

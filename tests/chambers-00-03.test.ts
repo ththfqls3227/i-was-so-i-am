@@ -116,14 +116,15 @@ describe("each chamber needs the echo to do its half", () => {
     expect(simulation.state.exitOpen).toBe(false);
   });
 
-  it("03: stepping off the plate shuts the doorway behind him", () => {
+  it("03: his arrival in the alcove ends the room by itself", () => {
     const simulation = play(GOLDENS["hand-not-body"] as Golden);
-    // He is in the alcove, past a doorway that is closed again.
+    // He is in the alcove, on his light — and that IS the solve now. The sim
+    // freezes on success, so the golden's old walk-out tail never runs: the
+    // player is still on their plate, the doorway still held open for him.
     const echo = actorOf(simulation.state, "past");
     expect(echo.z).toBeGreaterThan(9.6);
-    expect(doorOpen(simulation.state, "partition-door")).toBe(false);
-    // And the floor he is standing on is what let the player leave.
-    expect(simulation.state.plates.find((plate) => plate.id === "alcove-plate")?.active).toBe(true);
+    expect(simulation.state.phase).toBe("success");
+    expect(simulation.state.success).toBe(true);
   });
 });
 

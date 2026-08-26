@@ -237,7 +237,15 @@ export class Simulation {
     if (phaseBefore === "recording") {
       if (this.frames.length >= this.room.tapeDurationTicks) this.beginReplay();
     } else {
-      if (present && state.exitOpen && this.reachedExit(present.x, present.y, present.z)) {
+      // His arrival can end the room on its own: in the rooms that opt in, the
+      // second pass reaching its light IS the solve, and marching the present
+      // down a corridor afterwards taught the same lesson twice.
+      const echoExit = this.room.echoExit;
+      const past = echoExit === undefined ? undefined : state.actors.find((actor) => actor.id === "past");
+      const echoArrived = echoExit !== undefined && past !== undefined
+        && (past.x - echoExit.at.x) * (past.x - echoExit.at.x)
+          + (past.z - echoExit.at.z) * (past.z - echoExit.at.z) <= echoExit.radius * echoExit.radius;
+      if ((present && state.exitOpen && this.reachedExit(present.x, present.y, present.z)) || echoArrived) {
         state.phase = "success";
         state.success = true;
         state.lastError = null;

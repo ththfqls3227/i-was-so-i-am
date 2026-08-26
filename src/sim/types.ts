@@ -167,6 +167,12 @@ export interface RoomDefinition {
    * folded in for as long as the player takes, and the run cannot fail on time.
    */
   echoPersists?: boolean;
+  /**
+   * The echo finishing its errand finishes the room: success fires the moment
+   * the second pass reaches this spot, and the present never has to walk out
+   * afterwards. The geometry that gates the spot is what proves the solve.
+   */
+  echoExit?: { at: { x: number; z: number }; radius: number };
 }
 
 export interface ActorState {

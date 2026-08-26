@@ -553,7 +553,19 @@ export class Hud {
         // Say why the standing matters, or it reads as a goal in itself — a
         // judge who was not on the plate obeyed this line for a whole cycle,
         // standing in the middle of the room waiting for permission to move.
-        return [{ key: null, label: "그대로 밟고 계세요. 잔상이 문을 지나면 출구가 열립니다", tone: "echo" }];
+        return [{
+          key: null,
+          label: view.echoFinishes
+            ? "그대로 밟고 계세요. 잔상이 저 빛에 닿으면 이 방은 끝납니다"
+            : "그대로 밟고 계세요. 잔상이 문을 지나면 출구가 열립니다",
+          tone: "echo",
+        }];
+      }
+      // Where his light ends the room there is no walk to coach — once the way
+      // is open for him, the only instruction left is to watch him take it.
+      // Before that, the duty coaching below this block still applies.
+      if (view.echoFinishes && view.doorOpen) {
+        return [{ key: null, label: "잔상이 빛에 닿으면 이 방은 끝납니다 — 지켜보세요", tone: "echo" }];
       }
       // "Walk into the light" cost one judge six tries and another ten,
       // because the brightest thing on screen was the wrong door both times —

@@ -130,10 +130,13 @@ describe("each chamber needs the echo to do its half", () => {
     expect(waited).toBeLessThan(220);
   });
 
-  it("06: stepping off the plate shuts the doorway behind him", () => {
+  it("06: his arrival at the slot ends the room by itself", () => {
     const simulation = play(GOLDENS["giving-back"] as Golden);
+    // The long walk ends on his light and the room ends with it — no
+    // thirty-four metres back for the player, no doorway ceremony after.
     expect(actorOf(simulation.state, "past").z).toBeGreaterThan(29.6);
-    expect(doorOpen(simulation.state, "slot-door")).toBe(false);
+    expect(simulation.state.phase).toBe("success");
+    expect(simulation.state.success).toBe(true);
   });
 
   it("07: he takes the grip because the slot points him at it", () => {

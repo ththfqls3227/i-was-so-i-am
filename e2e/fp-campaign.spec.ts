@@ -115,11 +115,7 @@ test("the opening four rooms can be played through in order", async ({ page }) =
   // 9.2, not 9.6: plates count the body's edge now, so the alcove answers
   // 0.36 m of walking earlier than when only the centre point counted.
   expect(through.pastZ ?? 0, "he reaches the alcove and opens the way out").toBeGreaterThan(9.2);
-  // Aimed at the middle of the way out rather than straight ahead. Leaving the
-  // plate puts the player about ten centimetres inside the near edge of the
-  // exit's footprint, so walking forward from there either just makes it or
-  // just misses depending on where the plate let go of them.
-  await act(page, "setLook", Math.atan2(1.2, 6.7), 0);
-  await walkInPage(page, ["KeyW"], 's.phase === "success"', 30000);
-  expect((await read(page)).doors[0], "the doorway shuts behind him").toBe(false);
+  // His arrival IS the success now: it lands while the player is still holding
+  // the plate for him, the doorway still open, and no walk out is owed.
+  await waitInPage(page, 's.phase === "success"', 30000);
 });

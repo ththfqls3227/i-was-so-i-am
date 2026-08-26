@@ -250,10 +250,11 @@ try {
   // plates now count the body's edge (PLAYER_RADIUS), so the moment arrives
   // 0.36 m of walking earlier than it did when only the centre counted.
   check("03 he reaches the alcove and opens the way out", through.pastZ !== null && through.pastZ > 9.2);
-  await walkUntil(["KeyW"], (s) => s.phase === "success", 20000);
-  const done = await read();
+  // His arrival is the success now — it lands while the player still holds
+  // the plate for him, and no walk out is owed.
+  await until((s) => s.phase === "success", 20000);
   check("03 can be finished", true);
-  check("03 the doorway shut behind him", done.doors[0] === false);
+  check("03 his arrival ends the room by itself", (await read()).phase === "success");
   // ---- 04 Two People's Worth
   await advanceTo("two-of-us");
   check("advancing reaches 04", (await read()).chamber === "two-of-us");
@@ -312,8 +313,9 @@ try {
   await until((s) => s.exitOpen === true, 30000);
   const waited = (Date.now() - waitStart) / 1000;
   check("06 the wait on the plate is about six seconds", waited > 4 && waited < 9, `${waited.toFixed(1)} s`);
-  await walkUntil(["KeyW", "KeyD"], (s) => s.x > 4);
-  await walkUntil(["KeyW"], (s) => s.phase === "success", 30000);
+  // His slot is his light: taking it ends the room, and the thirty-four
+  // metres back are nobody's homework.
+  await until((s) => s.phase === "success", 30000);
   check("06 can be finished", true);
 
   // ---- 07 The Stacks Nobody Keeps
@@ -328,9 +330,9 @@ try {
   await walkUntil(["KeyW", "KeyD"], (s) => s.plateById["amber-plate"] === true, 15000);
   await until((s) => s.holdById["slot-grip"] === true, 20000);
   check("07 he walks the slot and takes the grip", (await read()).exitOpen === true);
-  // Around the partition, which only spans the middle of the hall.
-  await walkUntil(["KeyW", "KeyD"], (s) => s.x > 3.7, 15000);
-  await walkUntil(["KeyW"], (s) => s.phase === "success", 25000);
+  // The tape's tail carries him through the door and into the light, and his
+  // arrival ends the room — the player does not have to move.
+  await until((s) => s.phase === "success", 25000);
   check("07 can be finished", true);
 
   // ---- 08 Silence. Nothing is recorded here and nothing can go wrong.
