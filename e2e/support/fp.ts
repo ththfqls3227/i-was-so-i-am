@@ -134,13 +134,30 @@ export function waitInPage(page: Page, expression: string, ms = 20000): Promise<
   );
 }
 
+async function setKeys(page: Page, method: "press" | "release", keys: string[]): Promise<void> {
+  await withHandle(page, () => page.evaluate(
+    ([action, codes]) => {
+      const fp = window.__I_WAS_SO_I_AM_FP__;
+      if (!fp) throw new Error("The page has no test handle");
+      for (const code of codes) {
+        if (action === "press") fp.press(code);
+        else fp.release(code);
+      }
+    },
+    [method, keys] as const,
+  ));
+}
+
 /** Hold keys until the page says to stop. Position-steered, never duration-guessed. */
 export async function walkInPage(page: Page, keys: string[], expression: string, ms = 25000): Promise<void> {
-  for (const key of keys) await act(page, "press", key);
+  await setKeys(page, "press", keys);
   try {
     await waitInPage(page, expression, ms);
   } finally {
-    for (const key of keys) await act(page, "release", key);
+    // Clear diagonal input in one browser task. Separate Playwright round trips
+    // can leave one direction active for a slow render frame and carry the
+    // actor straight off the small plate that ended the wait.
+    await setKeys(page, "release", keys);
   }
 }
 
@@ -169,11 +186,11 @@ export async function walkUntil(
   predicate: (s: Snapshot) => boolean,
   ms = 25000,
 ): Promise<Snapshot> {
-  for (const key of keys) await act(page, "press", key);
+  await setKeys(page, "press", keys);
   try {
     return await until(page, predicate, ms);
   } finally {
-    for (const key of keys) await act(page, "release", key);
+    await setKeys(page, "release", keys);
   }
 }
 
