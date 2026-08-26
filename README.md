@@ -1,8 +1,8 @@
 # I WAS, SO I AM
 
-A browser-native, cinematic 2.5D single-player self-cooperation puzzle game. Record one past performance, reset the chamber, then work beside that input-driven echo in the live shared world.
+A browser-native, cinematic first-person single-player self-cooperation puzzle game. Record one past performance, end the recording, then work beside that input-driven afterimage in the same live world.
 
-The contest journey is playable from title to ending: `Awakening → Second Self → Crossing → Hand, Not Body → Trace Weight → Handoff → Last Hold`. The three prologue rooms teach one idea each — the plate, the echo's weight, ending a recording — and every later room combines what came before under the same record-then-cooperate rule. A chamber select on the title screen unlocks each cleared room and the next one. `ECHOFOLD` was the planning codename; the public-facing title is `I WAS, SO I AM`.
+The current contest journey is ten rooms plus an ending corridor: `Awakening → Second Self → The Hand That Holds → Hand, Not Body → Two People's Worth → The One Who Stood a Long Time → The Hand That Gives Back → The Stacks Nobody Keeps → Silence → The Last Hold → The Long Gallery`. Each room adds or reinterprets one part of the same record-then-cooperate rule, ending in a farewell to the self who stayed behind. A chamber select on the title screen unlocks cleared rooms and the next room. `ECHOFOLD` was the planning codename; the public-facing title is `I WAS, SO I AM`.
 
 ## Play locally
 
@@ -11,9 +11,9 @@ npm install
 npm run dev
 ```
 
-Use the arrow keys or WASD to move, `Space` or `E` to act, and `R` to rerecord. Recording waits for the player's first meaningful input. Touch controls appear on coarse-pointer and narrow screens.
+Use WASD to move, the mouse to look, `Space` or `E` to act, `Enter` to end a recording, `R` to rerecord, `Esc` to pause, and `M` to mute. The current first-person campaign is desktop-only; touch-only devices receive an explanatory card instead of a broken game.
 
-The presentation uses Babylon.js as a render-only adapter over the deterministic core. The ancient vault, chasm, bridge, winch, movable weight, nested exit, articulated human, and cyan echo are live 3D meshes with procedural materials and state-driven transforms. No background plate or character/prop sprite is loaded or shipped, and the renderer never feeds physics or positions back into the simulation.
+The presentation uses Babylon.js as a render-only adapter over the deterministic core. The Korean memory archive, wooden stacks, lattice-window light, paper doors, brass mechanisms, current self, and cyan afterimage are live 3D meshes with procedural materials and state-driven transforms. The renderer never feeds physics or positions back into the simulation.
 
 ## Validate
 

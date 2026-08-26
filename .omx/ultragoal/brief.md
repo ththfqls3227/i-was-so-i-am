@@ -1,0 +1,1 @@
+Implement the approved contest-readiness plan on codex/rebuild-improvement-pass while preserving deterministic src/sim boundaries, current ten-room gameplay, owner artifacts, and exact-commit evidence. Source plans: .omx/plans/prd-rebuild-contest-improvement.md and .omx/plans/test-spec-rebuild-contest-improvement.md.

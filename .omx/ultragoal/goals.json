@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "createdAt": "2026-08-26T07:07:55.742Z",
+  "updatedAt": "2026-08-26T07:08:05.124Z",
+  "briefPath": ".omx/ultragoal/brief.md",
+  "goalsPath": ".omx/ultragoal/goals.json",
+  "ledgerPath": ".omx/ultragoal/ledger.jsonl",
+  "codexGoalMode": "aggregate",
+  "goals": [
+    {
+      "id": "G001-middle-campaign-browser-proof",
+      "title": "Middle campaign browser proof",
+      "objective": "Add submission-discovered built-bundle Playwright coverage for rooms 04 through 08, asserting each room mechanic, tutorial-duty honesty, sequential transitions, renderer readiness, and zero browser or asset errors. Reuse existing helpers and do not mutate simulation state directly.",
+      "status": "in_progress",
+      "attempt": 1,
+      "createdAt": "2026-08-26T07:07:55.742Z",
+      "updatedAt": "2026-08-26T07:08:05.124Z",
+      "startedAt": "2026-08-26T07:08:05.124Z"
+    },
+    {
+      "id": "G002-continuity-and-recovery-proof",
+      "title": "Continuity and recovery proof",
+      "objective": "Add visible Continue/localStorage coverage plus rerecord, pointer-lock/Escape held-input recovery, and subtitle-versus-drag-notice regression protection without altering deterministic simulation behavior.",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-08-26T07:07:55.742Z",
+      "updatedAt": "2026-08-26T07:07:55.742Z"
+    },
+    {
+      "id": "G003-current-fp-release-harnesses",
+      "title": "Current FP release harnesses",
+      "objective": "Migrate performance and Playwright MCP smoke from the legacy API to the current FP build with candidate-owned dynamic servers, then harden current FP cross-engine proof to require explicit Chromium, Firefox, and WebKit passes.",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-08-26T07:07:55.742Z",
+      "updatedAt": "2026-08-26T07:07:55.742Z"
+    },
+    {
+      "id": "G004-candidate-verification-and-independe",
+      "title": "Candidate verification and independent review",
+      "objective": "Run targeted and aggregate verification from an exact candidate, perform changed-files ai-slop-cleaner, independent code-reviewer and architect review, prove architecture invariants, and record truthful Ultragoal completion evidence.",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-08-26T07:07:55.742Z",
+      "updatedAt": "2026-08-26T07:07:55.742Z"
+    }
+  ],
+  "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
+  "activeGoalId": "G001-middle-campaign-browser-proof"
+}
