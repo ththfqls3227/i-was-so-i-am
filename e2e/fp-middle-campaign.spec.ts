@@ -150,7 +150,7 @@ test("rooms 04 through 08 stay playable and tell the truth about each pass", asy
   // ---- 07 Unkept: the final recorded frame must keep walking and holding E.
   await advanceTo(page, "unkept");
   await act(page, "setLook", 0, 0);
-  await expectPrompt("E를 쥔 채 닫힌 문으로 걸으세요");
+  await expectPrompt("E를 누른 채 닫힌 문으로 걸어가세요");
   await expectPrompt("멈추지 말고");
   await act(page, "press", "KeyE");
   await act(page, "press", "KeyW");

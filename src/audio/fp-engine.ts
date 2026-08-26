@@ -56,7 +56,9 @@ interface Graph {
  * Every musical voice still runs and still takes its automation, so flipping
  * this back on is the whole undo.
  */
-const MUSIC_ENABLED = false;
+// On again, on the owner's ask. The whole score was written and kept running
+// behind a silent gain; 08's missing-layer beat only reads with it audible.
+const MUSIC_ENABLED = true;
 
 const noteFor = (chamberId: string): (typeof ROOM_NOTES)[number] | undefined =>
   ROOM_NOTES.find((entry) => entry.chamberId === chamberId);

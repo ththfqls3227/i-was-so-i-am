@@ -93,11 +93,14 @@ const hud = new Hud(app, {
     scene.requestPointerLock();
   },
   onRerecord: () => {
+    // The buttons had an authored click that nothing ever called.
+    audio.onUi();
     hud.clearTransient();
     scene.rerecord();
     scene.requestPointerLock();
   },
   onAdvance: () => {
+    audio.onUi();
     hud.clearTransient();
     scene.advanceChamber();
     scene.requestPointerLock();

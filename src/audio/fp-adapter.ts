@@ -96,6 +96,11 @@ export class FpAudioAdapter {
     this.trackAttune(state);
     if (state.roomId === CORRIDOR_ROOM) this.trackCorridor(state);
 
+    // Walking into the light had no sound of its own: the room simply stopped.
+    // The sync chord marks it, because the moment the light is reached is the
+    // moment the two passes agreed.
+    if (state.success && !this.successSeen) this.engine.attune();
+
     if (state.roomId === FINALE_ROOM && state.success && !this.successSeen) {
       // Past the threshold. The handle he is still holding complains behind you.
       if (!this.creaked) {
