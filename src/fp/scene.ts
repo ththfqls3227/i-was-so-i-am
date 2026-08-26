@@ -448,12 +448,19 @@ export class FirstPersonScene {
     this.pipeline.fxaaEnabled = true;
     this.pipeline.samples = 4;
     this.pipeline.bloomEnabled = true;
-    // A white room hits any low threshold on every wall at once. Bloom is for the
-    // emissive signals — the ring, the strips, the exit — and nothing else.
-    this.pipeline.bloomThreshold = 0.82;
-    this.pipeline.bloomWeight = 0.46;
-    this.pipeline.bloomKernel = 52;
-    this.pipeline.bloomScale = 0.6;
+    // The comment this replaces said a white room hits any low threshold on
+    // every wall at once, and that was true while the plaster was beige. It is
+    // not any more: the walls are a dark neutral now and the paper is the only
+    // thing in the building with a bright value, so the threshold has somewhere
+    // to sit that it never had before — under the salchang and over the wall.
+    //
+    // Which is the whole trick of the key art. The panels are not lit surfaces
+    // there, they are the light, and they bleed past their own muntins. At 0.82
+    // bloom was reserved for emissives and the paper was never in it.
+    this.pipeline.bloomThreshold = 0.55;
+    this.pipeline.bloomWeight = 1.1;
+    this.pipeline.bloomKernel = 88;
+    this.pipeline.bloomScale = 0.7;
     // A light sharpen after FXAA. The AA pass is what keeps edges calm and it
     // pays for that in micro-contrast; this buys the texture detail back
     // without inviting the halos a heavier amount draws on the muntins.
