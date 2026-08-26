@@ -2705,7 +2705,21 @@ export class FirstPersonScene {
       const dest = this.chamber.echoDestination;
       const nearDest = dest !== undefined
         && Math.hypot(echoActor.x - dest.at.x, echoActor.z - dest.at.z) < 4.5;
-      if (nearDest && dest) {
+      // The authored framing engages only once it can actually see him — from
+      // behind a still-closed door leaf it framed timber while he walked.
+      let arrivalClear = this.observerArrivalShot;
+      if (nearDest && dest && !arrivalClear) {
+        const at = new Vector3(dest.camera.at.x, dest.camera.at.y, dest.camera.at.z);
+        const toCam = at.subtract(head);
+        const span = toCam.length();
+        const sight = this.scene.pickWithRay(
+          new Ray(head, toCam.scale(1 / span), span - 0.15),
+          (mesh: AbstractMesh) =>
+            mesh.isPickable && mesh.isEnabled() && !mesh.name.startsWith("echo") && !mesh.name.includes("beacon"),
+        );
+        arrivalClear = !sight?.hit;
+      }
+      if (nearDest && dest && arrivalClear) {
         observe = true;
         const at = dest.camera.at;
         if (!this.observerArrivalShot) {

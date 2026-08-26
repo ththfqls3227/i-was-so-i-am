@@ -67,6 +67,8 @@ export class Simulation {
   private current: SimState;
   private frames: Frame[] = [];
   private tape: Tape | null = null;
+  /** Consecutive replay ticks the echo has stood inside its exit light. */
+  private echoExitDwellTicks = 0;
   /** Derived once: the room's mechanisms never move. */
   private readonly interactables: InteractableSpec[];
 
@@ -162,6 +164,7 @@ export class Simulation {
   }
 
   private beginReplay(): void {
+    this.echoExitDwellTicks = 0;
     const tape = createTape(this.room, this.frames);
     const invalid = validateTape(this.room, tape);
     if (invalid) {
@@ -239,12 +242,16 @@ export class Simulation {
     } else {
       // His arrival can end the room on its own: in the rooms that opt in, the
       // second pass reaching its light IS the solve, and marching the present
-      // down a corridor afterwards taught the same lesson twice.
+      // down a corridor afterwards taught the same lesson twice. The dwell is
+      // for the eyes: he stands IN the light for a breath before the card, or
+      // the room reads as ending a step short of it.
       const echoExit = this.room.echoExit;
       const past = echoExit === undefined ? undefined : state.actors.find((actor) => actor.id === "past");
-      const echoArrived = echoExit !== undefined && past !== undefined
+      const inLight = echoExit !== undefined && past !== undefined
         && (past.x - echoExit.at.x) * (past.x - echoExit.at.x)
           + (past.z - echoExit.at.z) * (past.z - echoExit.at.z) <= echoExit.radius * echoExit.radius;
+      this.echoExitDwellTicks = inLight ? this.echoExitDwellTicks + 1 : 0;
+      const echoArrived = inLight && this.echoExitDwellTicks >= 18;
       if ((present && state.exitOpen && this.reachedExit(present.x, present.y, present.z)) || echoArrived) {
         state.phase = "success";
         state.success = true;
