@@ -413,10 +413,9 @@ export class Hud {
         // the room is built to refuse. Say whose turn it is, and what THIS
         // pass is for: "record your steps" told a judge nothing about which
         // steps, and cost five tries.
-        // 오른쪽, not 이: at spawn the plate is out of frame in every room
-        // that uses this line (03, 06, 07 all keep it to the right), and a
-        // deictic with no referent sent an auditor hunting before the walk.
-        prompts.push({ key: null, label: "오른쪽 발판은 2회차에 밟습니다 — 지금은 닫힌 문 쪽으로 걸어 두세요", tone: "plain" });
+        // 호박색, not 오른쪽: the colour is the actor language and it travels
+        // with the plate, where a direction word was only true from spawn.
+        prompts.push({ key: null, label: "호박색 발판은 2회차에 밟습니다 — 지금은 닫힌 문 쪽으로 걸어 두세요", tone: "plain" });
         if (view.canFold) prompts.push({ key: "⏎", label: "기록 끝내기", tone: "plain" });
       } else if (view.hasPlate) {
         // "Stand still on it", not "walk to it": two judges walked straight
@@ -479,7 +478,7 @@ export class Hud {
               ? "발판이 오른쪽에 있습니다 — 직접 밟으세요"
               : view.plateBearing === "behind"
                 ? "발판을 지나쳤습니다 — 뒤로 돌아 밟으세요"
-                : "오른쪽 발판을 직접 밟으세요 — 당신의 발이 문을 엽니다")
+                : "호박색 발판을 직접 밟으세요 — 당신의 발이 문을 엽니다")
           : view.plateForEchoOnly
             ? "이 발판은 잔상의 것입니다 — 문이 열릴 때까지 기다리세요"
             : "문이 열리기를 기다리거나, 직접 발판을 밟으세요");

@@ -60,7 +60,7 @@ export const SECOND_SELF_CHAMBER: Chamber = {
   // who does the right thing never witnesses the rule change — the owner and
   // two judges all asked what the difference even was. The naming-the-echo
   // beat this line used to carry lives in 00's replay line now.
-  subtitleOnEntry: "이 방의 발판은 잔상만 알아봅니다. 지금의 발에는 무게가 없습니다 — 기록을 끝내고, 조금 전의 당신에게 맡기세요.",
+  subtitleOnEntry: "이 방의 푸른 발판은 잔상만 알아봅니다. 지금의 발에는 무게가 없습니다 — 기록을 끝내고, 조금 전의 당신에게 맡기세요.",
   dressing: standardDressing(ROOM_SHELL, { seedBase: 1700 }),
 };
 
@@ -247,7 +247,7 @@ export const HAND_NOT_BODY_CHAMBER: Chamber = {
   ],
   // The rule up front, not four failure cards deep: a judge who met it only
   // as escalating hints spent five tries re-deriving it and quit one short.
-  subtitleOnEntry: "안내: 오른쪽 발판은 2회차의 당신이 직접 밟습니다. 기록에는 닫힌 문을 향해 걷는 걸음을 담으세요.",
+  subtitleOnEntry: "안내: 호박색 발판은 2회차의 당신이 직접 밟습니다. 기록에는 닫힌 문을 향해 걷는 걸음을 담으세요.",
   // The echo treading against the shut partition is the room's whole idea —
   // and it reads as a bug until this sentence lands.
   echoAtDoorLine: "잔상이 닫힌 문 앞에서 걷고 있습니다 — 오른쪽 발판이 저 문을 엽니다.",

@@ -38,6 +38,10 @@ export const PALETTE = {
   hanji: new Color3(1, 0.882, 0.694),
   cyan: new Color3(0.24, 0.78, 0.95),
   amber: new Color3(1, 0.62, 0.24),
+  // The third actor colour: his is cyan, yours is amber, and a mechanism
+  // either of you can work wears the mix. Sits between the two on purpose —
+  // a judge should be able to derive it without being taught.
+  violet: new Color3(0.62, 0.42, 0.98),
 } as const;
 
 

@@ -1407,17 +1407,17 @@ export class FirstPersonScene {
   private buildPlates(root: TransformNode, brass: StandardMaterial, timber: StandardMaterial): PlateVisual[] {
     const visuals: PlateVisual[] = [];
     for (const plate of this.chamber.sim.plates) {
-      // Three states, and the third one is the absence of a colour: cyan is his
-      // alone, amber is mine alone, and a plate either of us can stand on wears
-      // plain brass. 00's plate is pressed by me on the recording pass and by
-      // him on the replay, so either colour would have been a lie in the one
-      // room whose whole job is teaching the language the other rooms speak.
-      const signal = plate.requiredActor !== undefined;
+      // Three states, three colours: cyan is his alone, amber is mine alone,
+      // and a plate either of us can stand on wears the mix of the two. This
+      // replaced "no colour for shared" after the owner's playtest — plain
+      // brass read as "not a mechanism", and 00's shared plate is the first
+      // thing the game ever asks anyone to stand on.
+      const signal = true;
       const accent = plate.requiredActor === "present"
         ? PALETTE.amber
         : plate.requiredActor === "past"
           ? PALETTE.cyan
-          : PALETTE.brass;
+          : PALETTE.violet;
       const centre = new Vector3(plate.centre.x, 0, plate.centre.z);
       // Brass is lit metal, not an emitter — the signal materials are unlit and
       // go through the glow layer, and putting a no-colour plate through the
@@ -1577,13 +1577,24 @@ export class FirstPersonScene {
       collar.material = brass;
       collar.isPickable = false;
       collar.parent = root;
+      // The ring the hand closes on speaks the actor language the plates
+      // speak: cyan for his hand, amber for yours, the mix for either. The
+      // collar under it stays brass — the colour is the permission, not the
+      // instrument.
+      const accent = hold.requiredActor === "present"
+        ? PALETTE.amber
+        : hold.requiredActor === "past"
+          ? PALETTE.cyan
+          : PALETTE.violet;
+      const gripSignal = signalMaterial(this.scene, `grip-signal-${hold.id}`, accent.scale(0.8));
       const handle = MeshBuilder.CreateTorus(`grip-handle-${hold.id}`, { diameter: 0.4, thickness: 0.055, tessellation: 28 }, this.scene);
       handle.position = base.add(new Vector3(0, hold.at.y, 0));
       handle.rotation.x = Math.PI / 2;
-      handle.material = brass;
+      handle.material = gripSignal;
       handle.isPickable = false;
       handle.parent = root;
       this.cast(handle);
+      this.glow.addIncludedOnlyMesh(handle);
       const cap = MeshBuilder.CreateCylinder(`grip-cap-${hold.id}`, { diameter: 0.3, height: 0.07, tessellation: 24 }, this.scene);
       cap.position = base.add(new Vector3(0, hold.at.y + 0.1, 0));
       cap.material = brass;

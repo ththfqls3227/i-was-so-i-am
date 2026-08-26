@@ -410,7 +410,7 @@ export const LONG_STANDING_CHAMBER: Chamber = {
   // and stood at a door that never opened. The tape here is a schedule of
   // standing, and these four lines are the only place that can be said.
   recordingScript: {
-    toFirst: "왼쪽 발판으로 — 여기 서 있는 시간이 그대로 기록됩니다",
+    toFirst: "왼쪽 푸른 발판으로 — 여기 서 있는 시간이 그대로 기록됩니다",
     onFirst: "그대로 서 계세요. 오래 설수록, 재생에서 첫 문이 오래 열립니다",
     toSecond: "이제 오른쪽 발판으로 가서 서세요 — 끝의 문을 여는 자리입니다",
     onSecond: "서 계세요. 충분하다 싶으면 ⏎ 기록 끝내기",
