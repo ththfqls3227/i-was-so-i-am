@@ -10,8 +10,6 @@ import type { StandardMaterial } from "@babylonjs/core/Materials/standardMateria
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
 import { Vector3, Vector4 } from "@babylonjs/core/Maths/math.vector";
 import { UniversalCamera } from "@babylonjs/core/Cameras/universalCamera";
-import { Ray } from "@babylonjs/core/Culling/ray";
-import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import { Viewport } from "@babylonjs/core/Maths/math.viewport";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
@@ -191,17 +189,11 @@ export interface RoomEchoes {
 
 /** The last echo's two colours, and the two rims that go with them. */
 /**
- * Candidate observer perches, in preference order, relative to the echo's
- * feet. Sight-checked head-to-perch each round; the straight-down view closes
- * the list because no room here hangs furniture in mid-air.
+ * How far over the echo's head the observer rides, before the room's own
+ * ceiling has its say. Enough to clear the shelving he walks between and see
+ * the floor ahead of him, not so much that he becomes a dot.
  */
-const OBSERVER_PERCHES = [
-  new Vector3(2.1, 2.7, -2.5),
-  new Vector3(-2.1, 2.7, -2.5),
-  new Vector3(2.1, 2.7, 2.5),
-  new Vector3(-2.1, 2.7, 2.5),
-  new Vector3(0, 3.3, 0.06),
-];
+const OBSERVER_LIFT = 2.4;
 
 const ECHO_CYAN = new Color3(0.42, 0.86, 1);
 const ECHO_WARM = new Color3(1, 0.72, 0.36);
@@ -369,14 +361,9 @@ export class FirstPersonScene {
   private routeArrows: { past: Mesh[]; present: Mesh[] } = { past: [], present: [] };
   /** The cyan shaft over the spot the echo's replay ends at. His, not a gate. */
   private echoBeacon: Mesh | null = null;
-  /** The observer that shadows the echo from over its shoulder, and whether it is up. */
+  /** The observer that rides over the echo's head, and whether it is up. */
   private observerCamera: UniversalCamera | null = null;
   private observerOn = false;
-  /** Which of the candidate perches currently has a clear line to him. */
-  private observerPerchIndex = 0;
-  private observerSightClock = 0;
-  /** The authored arrival framing is up — his light, and him walking into it. */
-  private observerArrivalShot = false;
   /** How many of the corridor's closing lines have been said, and the gap left. */
   private approachSpoken = 0;
   private approachWait = 1.2;
@@ -1320,10 +1307,6 @@ export class FirstPersonScene {
     beacon.isPickable = false;
     beacon.parent = root;
     this.glow.addIncludedOnlyMesh(beacon);
-    if (this.observerCamera) {
-      this.observerCamera.position.set(dest.camera.at.x, dest.camera.at.y, dest.camera.at.z);
-      this.observerCamera.setTarget(new Vector3(dest.camera.lookAt.x, dest.camera.lookAt.y, dest.camera.lookAt.z));
-    }
     return beacon;
   }
 
@@ -2686,10 +2669,18 @@ export class FirstPersonScene {
       this.echoBeacon.visibility = (near ? 0.72 : 0.3) + Math.sin(this.clock * 2.4) * 0.09;
     }
 
-    // The observer follows him from over the shoulder, and only speaks up when
-    // the player cannot see him directly: eyes on the echo, the corner view is
-    // redundant; eyes forward, it is the only witness. Hysteresis on the look
-    // angle so a glance across him does not flicker the frame.
+    // The observer rides straight over his head, tipped down the way he is
+    // facing: his head holds the near edge of the frame and the route he is
+    // taking fills the rest. It only speaks up when the player cannot see him
+    // directly — eyes on the echo, the corner view is redundant; eyes forward,
+    // it is the only witness. Hysteresis on the look angle so a glance across
+    // him does not flicker the frame.
+    //
+    // This replaced a ring of fixed perches that sight-checked themselves
+    // against the shelving every fifth of a second and cut between whichever
+    // was clear. It framed timber often enough to be worth losing, and a lens
+    // that is always in the same place relative to him is a view a player can
+    // learn to read.
     const echoActor = state.actors.find((actor) => actor.id === "past");
     let observe = false;
     if (echoActor && state.phase === "replay" && !this.paused && !this.ended && this.observerCamera) {
@@ -2698,74 +2689,18 @@ export class FirstPersonScene {
       const angle = Math.acos(Math.min(1, Math.max(-1,
         Vector3.Dot(toEcho.normalize(), this.camera.getDirection(Vector3.Forward())))));
       observe = this.observerOn ? angle > 0.42 : angle > 0.62;
-      // The arrival is the one beat this camera exists to show. Near his
-      // destination the follow perch cannot enter the slots he walks into, so
-      // the view cuts to the room's authored arrival framing, tracks his head,
-      // and stays up regardless of where the player is looking.
-      const dest = this.chamber.echoDestination;
-      const nearDest = dest !== undefined
-        && Math.hypot(echoActor.x - dest.at.x, echoActor.z - dest.at.z) < 4.5;
-      // The authored framing engages only once it can actually see him — from
-      // behind a still-closed door leaf it framed timber while he walked.
-      let arrivalClear = this.observerArrivalShot;
-      if (nearDest && dest && !arrivalClear) {
-        const at = new Vector3(dest.camera.at.x, dest.camera.at.y, dest.camera.at.z);
-        const toCam = at.subtract(head);
-        const span = toCam.length();
-        const sight = this.scene.pickWithRay(
-          new Ray(head, toCam.scale(1 / span), span - 0.15),
-          (mesh: AbstractMesh) =>
-            mesh.isPickable && mesh.isEnabled() && !mesh.name.startsWith("echo") && !mesh.name.includes("beacon"),
-        );
-        arrivalClear = !sight?.hit;
-      }
-      if (nearDest && dest && arrivalClear) {
-        observe = true;
-        const at = dest.camera.at;
-        if (!this.observerArrivalShot) {
-          this.observerArrivalShot = true;
-          this.observerCamera.position.set(at.x, at.y, at.z);
-        }
-        this.observerCamera.setTarget(head);
-      } else {
-        this.observerArrivalShot = false;
-      // Diagonal, above his head — but never from behind a shelf. The corner
-      // view sometimes framed timber instead of him, so every fifth of a
-      // second each perch is sight-checked from his head and the first clear
-      // one wins; straight down is the perch of last resort, because nothing
-      // in these rooms hangs mid-air.
-      this.observerSightClock += deltaSeconds;
-      if (this.observerSightClock > 0.2 || !this.observerOn) {
-        this.observerSightClock = 0;
-        const occludes = (mesh: AbstractMesh): boolean =>
-          mesh.isPickable && mesh.isEnabled() && !mesh.name.startsWith("echo") && !mesh.name.includes("beacon");
-        let index = this.observerPerchIndex;
-        for (let tried = 0; tried < OBSERVER_PERCHES.length; tried += 1) {
-          const offset = OBSERVER_PERCHES[index];
-          if (!offset) break;
-          const candidate = new Vector3(echoActor.x + offset.x, echoActor.y + offset.y, echoActor.z + offset.z);
-          const toPerch = candidate.subtract(head);
-          const span = toPerch.length();
-          const hit = this.scene.pickWithRay(new Ray(head, toPerch.scale(1 / span), span - 0.15), occludes);
-          if (!hit?.hit) break;
-          index = (index + 1) % OBSERVER_PERCHES.length;
-        }
-        if (index !== this.observerPerchIndex) {
-          this.observerPerchIndex = index;
-          // A cut, not a swoop: easing between perches would drag the lens
-          // through the very shelf the cut exists to escape.
-          const offset = OBSERVER_PERCHES[index];
-          if (offset) this.observerCamera.position.set(echoActor.x + offset.x, echoActor.y + offset.y, echoActor.z + offset.z);
-        }
-      }
-      const chosen = OBSERVER_PERCHES[this.observerPerchIndex];
-      if (chosen) {
-        const perch = new Vector3(echoActor.x + chosen.x, echoActor.y + chosen.y, echoActor.z + chosen.z);
-        if (!this.observerOn) this.observerCamera.position.copyFrom(perch);
-        else Vector3.LerpToRef(this.observerCamera.position, perch, Math.min(1, deltaSeconds * 6), this.observerCamera.position);
-      }
-      this.observerCamera.setTarget(head);
-      }
+      const yaw = radiansFromYawUnits(echoActor.yawUnits);
+      const forwardX = Math.sin(yaw);
+      const forwardZ = Math.cos(yaw);
+      // Under the ceiling, whichever floor he is on. 04 puts his head at 4.5 m
+      // on the gallery deck, and a fixed lift from there is outside the roof.
+      const lift = Math.min(head.y + OBSERVER_LIFT, this.chamber.shell.height - 0.35);
+      // Half a pace behind him, so the head stays in shot instead of sitting
+      // directly under the lens where nothing of it reads.
+      const perch = new Vector3(head.x - forwardX * 0.8, lift, head.z - forwardZ * 0.8);
+      if (!this.observerOn) this.observerCamera.position.copyFrom(perch);
+      else Vector3.LerpToRef(this.observerCamera.position, perch, Math.min(1, deltaSeconds * 8), this.observerCamera.position);
+      this.observerCamera.setTarget(new Vector3(head.x + forwardX * 2.4, head.y - 0.5, head.z + forwardZ * 2.4));
     }
     if (observe !== this.observerOn && this.observerCamera) {
       this.observerOn = observe;
