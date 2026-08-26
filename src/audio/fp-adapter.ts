@@ -42,6 +42,7 @@ export type FpAudioVoice = Pick<
   FpAudioEngine,
   "start" | "setMuted" | "setPaused" | "setSilenced" | "setRoom" | "bendRoomDown"
   | "sinkAndReturn" | "footstep" | "trigger" | "attune" | "corridorNote" | "resetCorridor" | "creak"
+  | "beginEndingMusic"
   | "started" | "isMuted" | "masterGain"
 >;
 

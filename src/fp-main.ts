@@ -148,7 +148,11 @@ scene.attach({
     hud.beginSeal(seconds);
     audio.onSealing();
   },
-  onEnding: () => hud.showEnding(scene.tapes.count, scene.totalRerecords),
+  onEnding: () => {
+    hud.showEnding(scene.tapes.count, scene.totalRerecords);
+    // The monologue gets its music: the only moment the score is allowed back.
+    audio.engine.beginEndingMusic();
+  },
   onLine: (line) => hud.say(line, performance.now(), 5200),
 });
 

@@ -193,6 +193,30 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
   transform: translateX(-50%) translateY(0);
   transition-duration: 160ms;
 }
+
+/* The goodbye is a monologue, not a scene: no portrait, no name, the line
+   alone in the dark, centred where a voice would be. */
+.subtitle[data-monologue="true"] {
+  bottom: 44vh;
+  justify-content: center;
+  text-align: center;
+  transition: opacity 900ms ease, transform 900ms ease;
+}
+.subtitle[data-monologue="true"] .vn-portrait,
+.subtitle[data-monologue="true"] .vn-name {
+  display: none;
+}
+.subtitle[data-monologue="true"] .vn-panel {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  padding: 0;
+  font: 300 1.35rem/1.85 Georgia, "Times New Roman", serif;
+  letter-spacing: 0.02em;
+  color: #e8e2d4;
+  text-shadow: 0 1px 16px #000d;
+}
 .vn-portrait { flex: 0 0 104px; width: 104px; height: 122px; filter: drop-shadow(0 6px 18px #000a); }
 .vn-portrait svg { width: 100%; height: 100%; display: block; }
 .vn-panel {

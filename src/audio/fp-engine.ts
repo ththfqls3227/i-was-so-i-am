@@ -67,6 +67,8 @@ export class FpAudioEngine {
   private muted: boolean;
   private paused = false;
   private silenced = false;
+  /** The one wire the owner's "no music" runs through, kept for the goodbye. */
+  private musicGain: GainNode | null = null;
   private roomHz = ROOM_NOTES[ROOM_NOTES.length - 1]?.droneHz ?? 73.42;
 
   constructor(muted = false) {
@@ -175,6 +177,18 @@ export class FpAudioEngine {
       osc.frequency.linearRampToValueAtTime(target, now + FP_SCORE.door.sinkSeconds);
       osc.frequency.linearRampToValueAtTime(hz, now + FP_SCORE.door.sinkSeconds + FP_SCORE.door.sinkReturnSeconds);
     }
+  }
+
+  /**
+   * The owner's "no music" stands for the whole game except the goodbye: at
+   * the ending the corridor's own chords come back, from silence, slowly.
+   */
+  beginEndingMusic(): void {
+    if (!this.musicGain || !this.context) return;
+    const now = this.context.currentTime;
+    this.musicGain.gain.cancelScheduledValues(now);
+    this.musicGain.gain.setValueAtTime(this.musicGain.gain.value, now);
+    this.musicGain.gain.linearRampToValueAtTime(1, now + 4.5);
   }
 
   footstep(walker: Walker, surface: Surface): void {
@@ -322,6 +336,7 @@ export class FpAudioEngine {
     const music = context.createGain();
     music.gain.value = MUSIC_ENABLED ? 1 : 0;
     music.connect(master);
+    this.musicGain = music;
 
     const white = noiseBuffer(context, false);
     const brown = noiseBuffer(context, true);

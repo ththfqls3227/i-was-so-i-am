@@ -655,6 +655,11 @@ export class Hud {
     this.subtitleText = text;
     this.sayStartedAt = now;
     this.sayInstant = instant;
+    // Instant lines are the ending's, and the ending is a monologue: the same
+    // element, worn without the portrait or the name, alone in the dark.
+    if (this.subtitle.dataset.monologue !== String(instant)) {
+      this.subtitle.dataset.monologue = String(instant);
+    }
     this.revealedCount = 0;
     // However long the caller asked for, the line stays at least long enough
     // to finish being written and be read once.
@@ -814,20 +819,21 @@ export class Hud {
       }, 1150),
       ...(recordsReclaimed > 0 ? [beat(2050, `회수된 기록: ${recordsReclaimed}건.`, 3300)] : []),
       beat(5900, "회수되지 않은 기록: 1건.", 3300),
-      beat(9800, "당신이 지나간 자리마다, 당신이 남아 있었습니다.", 4600),
-      beat(15000, "과거의 당신이 있었기에 —", 3000),
-      beat(18400, "지금의 당신이 있습니다.", 4200),
+      beat(9800, "당신이 지나간 자리마다, 당신이 남아 있었습니다.", 4300),
+      beat(14400, "문을 붙들던 손도, 발판 위의 기다림도, 전부 조금 전의 나였습니다.", 4200),
+      beat(18900, "과거의 내가 있었기에,", 2700),
+      beat(21800, "지금의 내가 있습니다.", 3600),
       window.setTimeout(() => {
         this.clearTransient();
         this.finale.hidden = false;
         this.finale.dataset.on = "true";
-      }, 23300),
+      }, 25600),
       window.setTimeout(() => {
         if (tapesKept > 0) {
           this.finaleEpilogue.textContent = `이 보관소에는 당신의 잔상 ${tapesKept}개가 잠들어 있습니다.`;
         }
         this.finaleEpilogue.dataset.on = "true";
-      }, 25900),
+      }, 28200),
     ];
   }
 
