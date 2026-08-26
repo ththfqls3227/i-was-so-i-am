@@ -466,16 +466,18 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
 .title > .title-art,
 .title > .title-scrim { position: absolute; inset: 0; z-index: 0; }
 .title-art {
-  inset: -4%;
+  inset: -5%;
   background-position: center;
   background-size: cover;
   background-repeat: no-repeat;
-  animation: title-drift 26s ease-in-out infinite alternate;
+  animation: title-drift 16s ease-in-out infinite;
 }
 .title-scrim { background: linear-gradient(rgba(4, 7, 11, 0.42), rgba(2, 4, 7, 0.72)); }
+/* In and right, then out and left: a visible breath, not a frozen still. */
 @keyframes title-drift {
-  from { transform: scale(1.05) translate(-0.7%, -0.5%); }
-  to { transform: scale(1.12) translate(0.7%, 0.6%); }
+  0% { transform: scale(1.07) translate(-1.8%, -0.8%); }
+  50% { transform: scale(1.18) translate(1.8%, 0.9%); }
+  100% { transform: scale(1.07) translate(-1.8%, -0.8%); }
 }
 @media (prefers-reduced-motion: reduce) {
   .title-art { animation: none; }
