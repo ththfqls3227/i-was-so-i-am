@@ -500,6 +500,21 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
   pointer-events: none;
 }
 
+/* R, for the length of a replay. One line under the silence mark's corner so a
+ * muted replay can wear both without either moving. */
+.retry-hint {
+  position: absolute;
+  right: 20px;
+  top: 48px;
+  font-size: 0.86rem;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  color: #93a0ad;
+  opacity: 0.85;
+  text-shadow: 0 1px 10px #000a;
+  pointer-events: none;
+}
+
 .diagnostic {
   position: absolute;
   right: 20px;

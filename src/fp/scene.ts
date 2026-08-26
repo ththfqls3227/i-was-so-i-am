@@ -1306,7 +1306,10 @@ export class FirstPersonScene {
     const beacon = MeshBuilder.CreateCylinder("exit-beacon", {
       diameterTop: 0.42, diameterBottom: 0.95, height: 2.9, tessellation: 24,
     }, this.scene);
-    beacon.position = new Vector3((exit.min.x + exit.max.x) / 2, 1.45, (exit.min.z + exit.max.z) / 2);
+    // From the exit's own floor, not the ground: 04 leaves from the upstairs
+    // deck, and a pillar planted at ground height stood buried inside that
+    // deck — the room ended with no light to walk into.
+    beacon.position = new Vector3((exit.min.x + exit.max.x) / 2, exit.min.y + 1.45, (exit.min.z + exit.max.z) / 2);
     beacon.material = signalMaterial(this.scene, "exit-beacon-light", new Color3(1, 0.93, 0.78), 0.9);
     beacon.isPickable = false;
     beacon.parent = root;
@@ -2088,8 +2091,9 @@ export class FirstPersonScene {
       if (event.repeat) return;
       if (this.pressed.has(code)) return;
       this.pressed.add(code);
-      // Space or Enter on the success card moves on, like the N it sits next
-      // to — but only a fresh press, and only once the card has been up for a
+      // Space or Enter on the success card moves on — Space is what the card
+      // advertises, N stays as a quiet alias — but only a fresh press, and
+      // only once the card has been up for a
       // beat. The held-Space guard above and the delay are the same lesson
       // twice: a judge once jumped into the light and was advanced out of a
       // card they never saw.

@@ -124,7 +124,7 @@ export class Hud {
   private readonly resultBody = element("p");
   private readonly resultHint = element("p", "hint");
   private readonly again = element("button", undefined, "R · 다시 기록");
-  private readonly onward = element("button", undefined, "N · 다음 방");
+  private readonly onward = element("button", undefined, "Space · 다음 방");
   /** Picks the campaign back up mid-roster. Only ever shown when a save exists. */
   private readonly continueButton = element("button");
   /**
@@ -152,6 +152,9 @@ export class Hud {
    * control panel; this is a mark that appears when something is off.
    */
   private readonly mutedMark = element("div", "muted-mark", "무음");
+  /** R, kept in the corner for the length of a replay — the moment a player
+   * sees the tape go wrong is the moment they look for the take-back. */
+  private readonly retryHint = element("div", "retry-hint", "R · 다시 기록");
   private readonly notice = element("p", "notice");
 
   private promptSignature = "";
@@ -200,7 +203,7 @@ export class Hud {
     this.title.append(
       startButton,
       this.continueButton,
-      element("p", "hint", "W A S D 이동 · 마우스 시점 · Space 점프 · E 잡기\n⏎ 기록 끝내기 · R 다시 기록 · N 다음 방 · Esc 멈춤 · M 음소거"),
+      element("p", "hint", "W A S D 이동 · 마우스 시점 · Space 점프 · E 잡기\n⏎ 기록 끝내기 · R 다시 기록 · N 방 건너뛰기 · Esc 멈춤 · M 음소거"),
       this.buildColourLegend(),
     );
     // The same legend waits behind Esc, because the place a player wonders
@@ -231,6 +234,7 @@ export class Hud {
     this.notice.textContent = "마우스 왼쪽 버튼을 누른 채 움직여 시점을 돌리세요";
     this.notice.hidden = true;
     this.mutedMark.hidden = true;
+    this.retryHint.hidden = true;
 
     this.pauseNote.hidden = true;
     {
@@ -253,6 +257,7 @@ export class Hud {
       this.finale,
       ...(this.showDiagnostic ? [this.diagnostic] : []),
       this.mutedMark,
+      this.retryHint,
       this.title,
       this.result,
     );
@@ -291,6 +296,11 @@ export class Hud {
     this.crosshair.hidden = !playing;
     const pausedShown = view.started && view.paused && !this.ended;
     if (this.pauseNote.hidden !== !pausedShown) this.pauseNote.hidden = !pausedShown;
+    // Only while a replay runs. During recording R is a no-op by design, and
+    // the failure and success cards carry their own R — the corner would lie
+    // in the one case and stutter in the others.
+    const retryShown = playing && !this.ended && view.phase === "replay" && view.recordingEnabled;
+    if (this.retryHint.hidden !== !retryShown) this.retryHint.hidden = !retryShown;
     // A room that takes no recording has no tape to show and no pass to be on.
     // Hiding these is the honesty rule again: a gauge that cannot move and a
     // badge that cannot change are two more things that would be lying.
