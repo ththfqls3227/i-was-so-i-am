@@ -116,7 +116,6 @@ export class Hud {
   private readonly blackout = element("div", "blackout");
   private readonly finale = element("div", "finale");
   private readonly finaleTitle = element("h1", undefined, "I WAS, SO I AM.");
-  private readonly finaleSeal = element("div", "finale-seal", "봉인");
   /** What the player leaves in the building, counted. Shown after the title. */
   private readonly finaleEpilogue = element("p", "finale-epilogue");
   private endingTimers: number[] = [];
@@ -234,7 +233,7 @@ export class Hud {
     });
     this.result.append(this.onward, this.again, this.resultHint);
     this.result.hidden = true;
-    this.finale.append(this.finaleSeal, this.finaleTitle, this.finaleEpilogue);
+    this.finale.append(this.finaleTitle, this.finaleEpilogue);
     this.blackout.hidden = true;
     this.finale.hidden = true;
 
@@ -447,7 +446,9 @@ export class Hud {
       if (view.phase === "success") return [];
       if (!view.wayAheadOpen) {
         if (view.hasPlate && view.plateActive) return [{ key: null, label: "발판이 눌렸습니다. 곧 문이 열립니다", tone: "go" }];
-        if (view.hasPlate) return [{ key: null, label: "빈 발판에 올라서세요", tone: "plain" }];
+        // The confirmation above stays either way — it is feedback, not an
+        // answer. This one is the answer, so an uncoached room keeps it.
+        if (view.hasPlate) return view.coached ? [{ key: null, label: "빈 발판에 올라서세요", tone: "plain" }] : [];
         return [{ key: null, label: "문이 열리기를 기다리세요", tone: "plain" }];
       }
       return [{ key: null, label: "빛으로 나가세요", tone: "echo" }];
@@ -461,6 +462,20 @@ export class Hud {
       // for something to hold in rooms that have nothing to grab.
       if (view.focusIsHold && !view.holding) {
         prompts.push({ key: "E", label: "길게 눌러 잡기", tone: "go" });
+      }
+      // A puzzle room keeps the control affordances and drops the answers. What
+      // belongs on this tape is the question it is asking; every line below
+      // this point answers it. The hint ladder still gives the method away
+      // once someone has spent real tries earning it.
+      if (!view.coached) {
+        if (view.canFold) {
+          prompts.push({
+            key: "⏎",
+            label: view.holding ? "잡은 채로 기록 끝내기" : "기록 끝내기",
+            tone: view.holding ? "go" : "plain",
+          });
+        }
+        return prompts;
       }
       if (view.recordingCueLine) {
         // A scripted room speaks for itself. The generic plate coaching below
@@ -525,6 +540,12 @@ export class Hud {
       return prompts;
     }
     if (view.phase === "replay") {
+      // Same bargain on the second pass. The way out, once it is open, is not
+      // an answer — it is the room telling you that you already found one.
+      if (!view.coached) {
+        if (view.echoFinishes || !view.wayAheadOpen) return [];
+        return [{ key: null, label: "빛으로 나가세요", tone: "echo" }];
+      }
       // "step on it yourself" is a lie in a room whose plate only answers the
       // echo — a judge stood on 01's plate, read that line, and concluded the
       // game was broken when nothing happened.

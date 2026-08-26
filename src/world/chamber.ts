@@ -310,6 +310,22 @@ export interface Chamber {
    */
   lightLift?: number;
   /**
+   * Whether the interface talks the player through the move, or only names the
+   * goal and lets them find it.
+   *
+   * True everywhere by default, and that is right for the teaching rooms: they
+   * exist to make a rule legible, and a rule you had to guess is a rule you are
+   * not sure you learned. The back half sets it false. Those rooms had the same
+   * running commentary, which meant the game explained its own answer in every
+   * chamber and never once asked a question — five hours of tutorial with no
+   * game after it.
+   *
+   * Uncoached does not mean silent. The room still says what counts as solved,
+   * the colours still say whose a thing is, and the hint ladder still hands
+   * over the method once someone has spent real tries on it.
+   */
+  coached?: boolean;
+  /**
    * Seconds the fold is held before it takes, with everything frozen.
    *
    * Only the finale sets it. You watch your own hand stop being yours before

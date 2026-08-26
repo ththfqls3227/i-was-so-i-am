@@ -544,7 +544,14 @@ export const GIVING_BACK_CHAMBER: Chamber = {
   sim: GIVING_BACK,
   shell: sixShell,
   number: "06",
-  subtitleOnEntry: "그 편이 빠릅니다.",
+  // The goal, and nothing about how. 06 is where the teaching stops.
+  subtitleOnEntry: "잔상이 저 끝 슬롯의 빛에 닿으면 이 방은 끝납니다. 그 편이 빠릅니다.",
+  coached: false,
+  hints: [
+    { after: 2, line: "이 방의 발판은 색이 서로 다릅니다. 색은 그것이 누구 것인지를 말합니다." },
+    { after: 4, line: "오렌지 발판은 당신의 발로만 눌립니다. 그리고 그 발판이 여는 문은, 잔상이 지나갈 문입니다." },
+    { after: 6, line: "기록에는 닫힌 문을 향해 걷는 긴 걸음을 담으세요. 2회차에 오렌지 발판을 밟으면 문이 열리고, 잔상은 걷던 대로 계속 걸어 들어갑니다." },
+  ],
   // 03's shape: the amber plate is the second pass's job (it holds the slot
   // door open while he walks). Without this flag the arrival chip said "stand
   // on the plate" — a tape of standing at a plate the echo cannot press, and
@@ -567,17 +574,11 @@ export const GIVING_BACK_CHAMBER: Chamber = {
     // Thirty-four metres of identical shelving. Without a line on the floor the
     // far end is not a destination, it is just where the room stops being
     // visible — and the whole room is the walk to it and back.
+    // One line, and it only says how far the room goes. The other two used to
+    // draw the second pass's whole route on the floor — walk here, then around
+    // there — which is the answer, painted, before the question was asked.
     routes: [
-      route("the-long-walk", [{ x: 0, z: 2.4 }, { x: 0, z: SIX_PARTITION_Z - 1.4 }], 1, "past"),
-      route("to-plate", [{ x: 0, z: 2.4 }, { x: 3, z: 4 }], 0.55),
-      // Around the east wing, not through the doorway. The partition only spans
-      // the middle of the hall, and the way out is past the end of it — which
-      // is the fact the room is built on and the one you cannot see from here.
-      route("around", [
-        { x: 0, z: SIX_PARTITION_Z - 1.4 },
-        { x: 4.2, z: SIX_PARTITION_Z - 1.4 },
-        { x: 4.2, z: SIX_DEPTH - 1 },
-      ], 0.5),
+      route("the-long-walk", [{ x: 0, z: 2.4 }, { x: 0, z: SIX_PARTITION_Z - 1.4 }], 0.55, "past"),
     ],
   }),
 };
@@ -662,13 +663,15 @@ export const UNKEPT_CHAMBER: Chamber = {
     at: { x: 0, z: 13.5 },
     camera: { at: { x: 0, y: 2.35, z: 13.1 }, lookAt: { x: 0, y: 0.8, z: 9.6 } },
   },
-  // The room's answer is the tape's tail. Said outright, because the natural
-  // move — stop, then fold — records the stop, and a stopped echo stands at
-  // the door forever. The owner hit exactly that and called the room broken.
-  recordingCue: "E를 누른 채 닫힌 문으로 걸어가세요. 멈추지 말고, 걷는 도중에 Enter를 누르세요.",
+  // The answer used to be printed here, because the natural move — stop, then
+  // fold — records the stop and leaves a stopped echo at the door forever. It
+  // still is the answer; it just waits behind two failures now, where a room
+  // that hands it over on arrival was never a room, only a caption.
+  coached: false,
   hints: [
     { after: 2, line: "기록이 끝날 때의 모습이 잔상의 계속입니다. 걷는 채로 끝내야 그가 계속 걷습니다." },
     { after: 4, line: "E를 누른 채로 기록을 끝내세요. 문 너머 슬롯 끝에 그가 잡을 것이 있습니다." },
+    { after: 6, line: "E를 누른 채 닫힌 문으로 걸어가면서 Enter를 누르세요. 2회차에는 오렌지 발판을 밟아 그 문을 열어 주세요." },
   ],
   dressing: standardDressing(sevenShell, {
     seedBase: 7700,

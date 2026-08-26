@@ -70,7 +70,14 @@ export const SILENCE_CHAMBER: Chamber = {
   sim: SILENCE,
   shell: ROOM_SHELL,
   number: "08",
-  subtitleOnEntry: "이 구역은 기록이 허가되지 않습니다.",
+  // The rule, not the move: the door wants both plates down at once, and this
+  // is the one room that will not let you record anything to help with that.
+  subtitleOnEntry: "이 구역은 기록이 허가되지 않습니다. 저 문은 두 발판이 동시에 눌려 있어야 열립니다.",
+  coached: false,
+  hints: [
+    { after: 2, line: "발판 하나는 이미 눌려 있습니다. 누가 눌러 두었는지 보세요." },
+    { after: 4, line: "남은 발판은 하나뿐이고, 여기서 움직일 수 있는 사람도 당신 하나뿐입니다." },
+  ],
   // The same plate the room forces down, so the man and the reason the plate is
   // down cannot drift apart.
   archivalFigure: { fromChamberId: "second-self", at: OLD_ECHO_PLATE },

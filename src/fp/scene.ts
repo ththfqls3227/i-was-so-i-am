@@ -142,6 +142,8 @@ export interface ViewModel {
   finalBeat: string | null;
   /** Lines this room is willing to offer after repeated identical failures. */
   hints: readonly { after: number; line: string }[];
+  /** Whether this room talks the move through, or only names what counts as solved. */
+  coached: boolean;
   /**
    * The closing lines have started. Wayfinding prompts stop: "빛으로 나가세요"
    * under the last thing the game says is the game talking over itself.
@@ -3232,6 +3234,7 @@ export class FirstPersonScene {
         ? this.chamber.finalBeat.prompt
         : null,
       hints: this.chamber.hints ?? [],
+      coached: this.chamber.coached !== false,
       pointerLockDenied: this.pointerLockDenied && !this.pointerLocked,
       dragLookLearned: this.dragTurned >= DRAG_LOOK_LEARNED,
     };

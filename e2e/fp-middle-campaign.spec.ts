@@ -123,8 +123,11 @@ test("rooms 04 through 08 stay playable and tell the truth about each pass", asy
   // ---- 06 Giving Back: the plate belongs to the second pass.
   await advanceTo(page, "giving-back");
   await act(page, "setLook", 0, 0);
-  await expectPrompt("오렌지 발판은 2회차에 밟습니다");
-  await expectPrompt("닫힌 문 쪽으로 걸어 두세요");
+  // 06 is where the teaching stops: the room names what counts as solved and
+  // says nothing about the move. The old prompt spelled the answer out on
+  // arrival, so its absence is the thing worth asserting.
+  await expect(page.locator(".subtitle")).toContainText("슬롯의 빛에 닿으면", { timeout: 10_000 });
+  await expect(prompts).not.toContainText("2회차에 밟습니다");
   await walkUntil(page, ["KeyW"], (state) => state.z > 28, 35_000);
   await act(page, "press", "KeyW");
   try {
@@ -134,7 +137,7 @@ test("rooms 04 through 08 stay playable and tell the truth about each pass", asy
     await act(page, "release", "KeyW");
   }
   await waitInPage(page, 's.phase === "replay"');
-  await expectPrompt("직접 밟으세요");
+  await expect(prompts).not.toContainText("직접 밟으세요");
   const takeAmberPlate = async (): Promise<void> => {
     await act(page, "setLook", Math.PI / 2, 0);
     await walkUntil(page, ["KeyW"], (state) => state.x > 2.8, 20_000);
@@ -150,8 +153,9 @@ test("rooms 04 through 08 stay playable and tell the truth about each pass", asy
   // ---- 07 Unkept: the final recorded frame must keep walking and holding E.
   await advanceTo(page, "unkept");
   await act(page, "setLook", 0, 0);
-  await expectPrompt("E를 누른 채 닫힌 문으로 걸어가세요");
-  await expectPrompt("멈추지 말고");
+  // Uncoached too: the tail-of-the-tape answer now waits behind two failures
+  // in the hint ladder instead of arriving with the room.
+  await expect(prompts).not.toContainText("멈추지 말고");
   await act(page, "press", "KeyE");
   await act(page, "press", "KeyW");
   try {
@@ -162,7 +166,7 @@ test("rooms 04 through 08 stay playable and tell the truth about each pass", asy
     await act(page, "release", "KeyE");
   }
   await waitInPage(page, 's.phase === "replay"');
-  await expectPrompt("직접 밟으세요");
+  await expect(prompts).not.toContainText("직접 밟으세요");
   await takeAmberPlate();
   await waitInPage(page, "s.holds.find((h) => h.id === 'slot-grip')?.heldBy.includes('past') === true", 25_000);
   expect((await read(page)).exitOpen).toBe(true);
@@ -176,7 +180,8 @@ test("rooms 04 through 08 stay playable and tell the truth about each pass", asy
   expect(silence.canFold).toBe(false);
   expect(silence.plateById["old-plate"]).toBe(true);
   expect(silence.doorById["inner-door"]).toBe(false);
-  await expectPrompt("빈 발판에 올라서세요");
+  await expect(page.locator(".subtitle")).toContainText("두 발판이 동시에", { timeout: 10_000 });
+  await expect(prompts).not.toContainText("빈 발판에 올라서세요");
   await expect(prompts).not.toContainText("기록 끝내기");
   await expect(prompts).not.toContainText("다시 기록");
   await act(page, "setLook", 0, 0);
