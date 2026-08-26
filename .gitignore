@@ -11,3 +11,4 @@ captures/
 .omx/tmux-hook.json
 .omc/
 .bkit/
+dist-e2e-*/

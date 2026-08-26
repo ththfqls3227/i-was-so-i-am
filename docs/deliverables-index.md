@@ -73,6 +73,7 @@ A first-person co-op puzzle where your partner is your own past. Record what you
 ## 6. Codex 원형·컨셉아트·검증 증빙
 
 - Codex 협업 설명: `docs/codex-collaboration.md`
+- Deep Interview 질문 사다리와 스킬·도구 연혁: `docs/codex-planning-process.md`
 - 원형 컨셉 기준 이미지: `.omx/artifacts/visual-ralph/humanoid-redesign/reference-v1.png`
 - 원형 실제 협동 화면: `.omx/artifacts/visual-ralph/humanoid-redesign/actual-cooperation.png`
 - 원형 튜토리얼 화면: `.omx/artifacts/visual-ralph/humanoid-redesign/tutorial-crossing.png`
@@ -90,4 +91,3 @@ A first-person co-op puzzle where your partner is your own past. Record what you
 4. 데모 영상의 스포일러 범위와 무음 제출 여부 확정.
 5. 공개 URL과 백업 URL 배포 후 로그인 없이 처음부터 끝까지 완주.
 6. 오너 최종 플레이와 최소 한 명의 신선한 눈 플레이테스트.
-
