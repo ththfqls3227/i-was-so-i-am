@@ -109,7 +109,7 @@ export const HOLDING_HAND_CHAMBER: Chamber = {
   sim: HOLDING_HAND,
   shell: ROOM_SHELL,
   number: "02",
-  subtitleOnEntry: "잔상의 손은 성실합니다. 기록이 끝날 때까지, 잡은 것을 놓지 않습니다.",
+  subtitleOnEntry: "잔상은 잡은 것을 놓지 않습니다. 기록이 끝날 때까지, 그 손은 거기에 있습니다.",
   // Four windows rather than the standard three, evenly spaced. 01 and 02 were
   // running the same window row, which put the same three bands on the same
   // three patches of floor in both rooms — and 02 is the one room whose subject
