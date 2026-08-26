@@ -189,7 +189,7 @@ export const TWO_OF_US_CHAMBER: Chamber = {
     spawnZ: 1.6,
   } satisfies RoomShell,
   number: "04",
-  subtitleOnEntry: "일부 설비는 두 사람 몫의 힘을 요구합니다. 보관소에는 당신이 두 명 있습니다.",
+  subtitleOnEntry: "일부 장치는 두 사람 몫의 힘을 요구합니다. 보관소에는 당신이 두 명 있습니다.",
   // The grab's whole effect is a door behind and above the player. Both passes
   // get one sentence saying it worked, because a playtest owner held the grip
   // for a full tape while reading the room as broken.
@@ -204,7 +204,7 @@ export const TWO_OF_US_CHAMBER: Chamber = {
       holdId: "ground-grip",
       phase: "replay",
       holder: "past",
-      line: "잔상이 손잡이를 잡았습니다. 계단으로 — 위층 문이 열려 있습니다.",
+      line: "잔상이 손잡이를 잡았습니다. 계단으로 가세요. 위층 문이 열려 있습니다.",
     },
   ],
   // Delivered a beat after arrival upstairs, so the warm band lands first and
@@ -218,8 +218,8 @@ export const TWO_OF_US_CHAMBER: Chamber = {
   replayWait: {
     axis: "y",
     at: DECK_Y - 0.4,
-    before: "잔상이 버티는 동안 — 계단으로 올라가세요",
-    after: "난간 곁의 손잡이를 잡으세요 — 나가는 길이 열립니다",
+    before: "잔상이 버티는 동안 계단으로 올라가세요",
+    after: "난간 곁의 손잡이를 잡으세요. 나가는 길이 열립니다",
   },
   lightLift: 1.3,
   dressing: standardDressing(
@@ -410,20 +410,20 @@ export const LONG_STANDING_CHAMBER: Chamber = {
   // and stood at a door that never opened. The tape here is a schedule of
   // standing, and these four lines are the only place that can be said.
   recordingScript: {
-    toFirst: "왼쪽 푸른 발판으로 — 여기 서 있는 시간이 그대로 기록됩니다",
+    toFirst: "왼쪽 푸른 발판으로 가세요. 여기 서 있는 시간이 그대로 기록됩니다",
     onFirst: "그대로 서 계세요. 오래 설수록, 재생에서 첫 문이 오래 열립니다",
-    toSecond: "이제 오른쪽 발판으로 가서 서세요 — 끝의 문을 여는 자리입니다",
+    toSecond: "이제 오른쪽 발판으로 가서 서세요. 끝의 문을 여는 자리입니다",
     onSecond: "서 계세요. 충분하다 싶으면 ⏎ 기록 끝내기",
   },
   replayWait: {
     axis: "z",
     at: PASSAGE_FROM,
-    before: "그가 첫 발판에 서 있는 동안만 문이 열립니다 — 열리면 바로 안으로",
-    after: "그가 다음 발판으로 옮겨 서면 앞이 열립니다 — 안에서 기다리세요",
+    before: "그가 첫 발판에 서 있는 동안만 문이 열립니다. 열리면 바로 안으로 들어가세요",
+    after: "그가 다음 발판으로 옮겨 서면 앞이 열립니다. 안에서 기다리세요",
   },
   hints: [
     { after: 2, line: "첫 발판에 더 오래 서 있도록 기록하세요. 들어갈 시간은 딱 그 길이입니다." },
-    { after: 4, line: "기록의 뒷부분은 오른쪽 발판 위여야 합니다 — 끝의 문은 그 자리만 압니다." },
+    { after: 4, line: "기록의 뒷부분은 오른쪽 발판 위여야 합니다. 끝의 문은 그 자리만 압니다." },
   ],
   dressing: standardDressing(fiveShell, {
     seedBase: 5500,
@@ -522,7 +522,7 @@ export const GIVING_BACK: RoomDefinition = {
   exit: { id: "exit", min: { x: 3.4, y: 0, z: 32.8 }, max: { x: SIX_HALF, y: CEILING, z: SIX_DEPTH } },
   // Thirty-four metres was the room; thirty-four metres back was homework.
   // His slot is his light, and taking it ends the errand for both of them.
-  echoExit: { at: { x: 0, z: 30.95 }, radius: 1.0 },
+  echoExit: { at: { x: 0, z: 30.95 }, radius: 0.6 },
 };
 
 const sixShell: RoomShell = {
@@ -632,7 +632,7 @@ export const UNKEPT: RoomDefinition = {
   exit: { id: "exit", min: { x: 3.4, y: 0, z: 15.4 }, max: { x: SEVEN_HALF, y: CEILING, z: SEVEN_DEPTH } },
   // The tape's tail carries him through the door he is holding — where he
   // walks into the light is where the record was always going to end.
-  echoExit: { at: { x: 0, z: 13.5 }, radius: 1.0 },
+  echoExit: { at: { x: 0, z: 13.5 }, radius: 0.6 },
 };
 
 const sevenShell: RoomShell = {
@@ -668,7 +668,7 @@ export const UNKEPT_CHAMBER: Chamber = {
   recordingCue: "E를 쥔 채 닫힌 문으로 걸으세요. 멈추지 말고, 걷는 도중에 ⏎.",
   hints: [
     { after: 2, line: "기록이 끝날 때의 모습이 잔상의 계속입니다. 걷는 채로 끝내야 그가 계속 걷습니다." },
-    { after: 4, line: "E를 쥔 채로 끝내세요 — 문 너머 슬롯 끝에 그가 잡을 것이 있습니다." },
+    { after: 4, line: "E를 쥔 채로 끝내세요. 문 너머 슬롯 끝에 그가 잡을 것이 있습니다." },
   ],
   dressing: standardDressing(sevenShell, {
     seedBase: 7700,

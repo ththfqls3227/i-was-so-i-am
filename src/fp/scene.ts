@@ -10,6 +10,8 @@ import type { StandardMaterial } from "@babylonjs/core/Materials/standardMateria
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
 import { Vector3, Vector4 } from "@babylonjs/core/Maths/math.vector";
 import { UniversalCamera } from "@babylonjs/core/Cameras/universalCamera";
+import { Ray } from "@babylonjs/core/Culling/ray";
+import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import { Viewport } from "@babylonjs/core/Maths/math.viewport";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
@@ -188,6 +190,19 @@ export interface RoomEchoes {
 }
 
 /** The last echo's two colours, and the two rims that go with them. */
+/**
+ * Candidate observer perches, in preference order, relative to the echo's
+ * feet. Sight-checked head-to-perch each round; the straight-down view closes
+ * the list because no room here hangs furniture in mid-air.
+ */
+const OBSERVER_PERCHES = [
+  new Vector3(2.1, 2.7, -2.5),
+  new Vector3(-2.1, 2.7, -2.5),
+  new Vector3(2.1, 2.7, 2.5),
+  new Vector3(-2.1, 2.7, 2.5),
+  new Vector3(0, 3.3, 0.06),
+];
+
 const ECHO_CYAN = new Color3(0.42, 0.86, 1);
 const ECHO_WARM = new Color3(1, 0.72, 0.36);
 const ECHO_RIM_COOL = new Color3(0.26, 0.3, 0.34);
@@ -350,11 +365,18 @@ export class FirstPersonScene {
   private readonly ambientRest = new Color3(0.111, 0.105, 0.093);
   /** The shaft of light in the way out, lit only while leaving would work. */
   private exitBeacon: Mesh | null = null;
+  /** Floor chevrons, split by whose turn they coach: his tape, or your feet. */
+  private routeArrows: { past: Mesh[]; present: Mesh[] } = { past: [], present: [] };
   /** The cyan shaft over the spot the echo's replay ends at. His, not a gate. */
   private echoBeacon: Mesh | null = null;
   /** The observer that shadows the echo from over its shoulder, and whether it is up. */
   private observerCamera: UniversalCamera | null = null;
   private observerOn = false;
+  /** Which of the candidate perches currently has a clear line to him. */
+  private observerPerchIndex = 0;
+  private observerSightClock = 0;
+  /** The authored arrival framing is up — his light, and him walking into it. */
+  private observerArrivalShot = false;
   /** How many of the corridor's closing lines have been said, and the gap left. */
   private approachSpoken = 0;
   private approachWait = 1.2;
@@ -1026,6 +1048,7 @@ export class FirstPersonScene {
   private clearRoom(): void {
     this.exitBeacon = null;
     this.echoBeacon = null;
+    this.routeArrows = { past: [], present: [] };
     // A room switch mid-replay would otherwise leave the observer viewport up
     // over a room that has no observer.
     if (this.observerOn) {
@@ -1325,6 +1348,35 @@ export class FirstPersonScene {
     return beacon;
   }
 
+  /**
+   * A chevron planted flat on the floor, vertex pointing along `heading`. An
+   * arrow reads at a glance where a dash needed the next dash to say which way
+   * it meant — and these only light while it is that actor's turn to walk.
+   */
+  private plantChevron(
+    root: TransformNode,
+    material: StandardMaterial,
+    name: string,
+    x: number,
+    z: number,
+    heading: number,
+    glows: boolean,
+    into: Mesh[],
+  ): void {
+    for (const side of [-1, 1]) {
+      const wingHeading = heading + Math.PI + side * 0.55;
+      const wing = MeshBuilder.CreateBox(`${name}-w${side > 0 ? "r" : "l"}`, { width: 0.07, height: 0.012, depth: 0.3 }, this.scene);
+      wing.position = new Vector3(x + Math.sin(wingHeading) * 0.14, 0.011, z + Math.cos(wingHeading) * 0.14);
+      wing.rotation.y = wingHeading;
+      wing.material = material;
+      wing.isPickable = false;
+      wing.parent = root;
+      if (glows) this.glow.addIncludedOnlyMesh(wing);
+      wing.setEnabled(false);
+      into.push(wing);
+    }
+  }
+
   private buildRouteLines(root: TransformNode): void {
     const shell = this.chamber.shell;
     const past = signalMaterial(this.scene, "route-past", PALETTE.cyan.scale(0.4), 0.8);
@@ -1334,20 +1386,17 @@ export class FirstPersonScene {
     const dashesTo = shell.plateCentreZ - shell.plateRadius - 0.2;
     const dashCount = Math.max(1, Math.round((dashesTo - dashesFrom) / 0.62));
     for (let index = 0; index < dashCount; index += 1) {
-      const dash = MeshBuilder.CreateBox(`route-past-${index}`, { width: 0.1, height: 0.01, depth: 0.32 }, this.scene);
-      dash.position = new Vector3(0, 0.022, dashesFrom + (index + 0.5) * ((dashesTo - dashesFrom) / dashCount));
-      dash.material = past;
-      dash.isPickable = false;
-      dash.parent = root;
-      this.glow.addIncludedOnlyMesh(dash);
+      const z = dashesFrom + (index + 0.5) * ((dashesTo - dashesFrom) / dashCount);
+      this.plantChevron(root, past, `route-past-${index}`, 0, z, 0, true, this.routeArrows.past);
     }
 
-    const line = MeshBuilder.CreateBox("route-present", { width: 0.08, height: 0.01, depth: shell.depth - shell.plateCentreZ - 0.7 }, this.scene);
-    line.position = new Vector3(0, 0.022, (shell.plateCentreZ + shell.plateRadius + shell.depth) / 2 - 0.1);
-    line.material = present;
-    line.isPickable = false;
-    line.parent = root;
-    this.glow.addIncludedOnlyMesh(line);
+    const lineFrom = (shell.plateCentreZ + shell.plateRadius + shell.depth) / 2 - 0.1 - (shell.depth - shell.plateCentreZ - 0.7) / 2;
+    const lineSpan = shell.depth - shell.plateCentreZ - 0.7;
+    const lineCount = Math.max(1, Math.round(lineSpan / 0.62));
+    for (let index = 0; index < lineCount; index += 1) {
+      const z = lineFrom + (index + 0.5) * (lineSpan / lineCount);
+      this.plantChevron(root, present, `route-present-${index}`, 0, z, 0, true, this.routeArrows.present);
+    }
   }
 
   /**
@@ -2633,12 +2682,60 @@ export class FirstPersonScene {
       const angle = Math.acos(Math.min(1, Math.max(-1,
         Vector3.Dot(toEcho.normalize(), this.camera.getDirection(Vector3.Forward())))));
       observe = this.observerOn ? angle > 0.42 : angle > 0.62;
-      // Diagonal, above his head, eased so the frame breathes rather than
-      // jitters with the tick; snapped when the view first opens.
-      const perch = new Vector3(echoActor.x + 2.1, echoActor.y + 2.7, echoActor.z - 2.5);
-      if (!this.observerOn) this.observerCamera.position.copyFrom(perch);
-      else Vector3.LerpToRef(this.observerCamera.position, perch, Math.min(1, deltaSeconds * 6), this.observerCamera.position);
+      // The arrival is the one beat this camera exists to show. Near his
+      // destination the follow perch cannot enter the slots he walks into, so
+      // the view cuts to the room's authored arrival framing, tracks his head,
+      // and stays up regardless of where the player is looking.
+      const dest = this.chamber.echoDestination;
+      const nearDest = dest !== undefined
+        && Math.hypot(echoActor.x - dest.at.x, echoActor.z - dest.at.z) < 4.5;
+      if (nearDest && dest) {
+        observe = true;
+        const at = dest.camera.at;
+        if (!this.observerArrivalShot) {
+          this.observerArrivalShot = true;
+          this.observerCamera.position.set(at.x, at.y, at.z);
+        }
+        this.observerCamera.setTarget(head);
+      } else {
+        this.observerArrivalShot = false;
+      // Diagonal, above his head — but never from behind a shelf. The corner
+      // view sometimes framed timber instead of him, so every fifth of a
+      // second each perch is sight-checked from his head and the first clear
+      // one wins; straight down is the perch of last resort, because nothing
+      // in these rooms hangs mid-air.
+      this.observerSightClock += deltaSeconds;
+      if (this.observerSightClock > 0.2 || !this.observerOn) {
+        this.observerSightClock = 0;
+        const occludes = (mesh: AbstractMesh): boolean =>
+          mesh.isPickable && mesh.isEnabled() && !mesh.name.startsWith("echo") && !mesh.name.includes("beacon");
+        let index = this.observerPerchIndex;
+        for (let tried = 0; tried < OBSERVER_PERCHES.length; tried += 1) {
+          const offset = OBSERVER_PERCHES[index];
+          if (!offset) break;
+          const candidate = new Vector3(echoActor.x + offset.x, echoActor.y + offset.y, echoActor.z + offset.z);
+          const toPerch = candidate.subtract(head);
+          const span = toPerch.length();
+          const hit = this.scene.pickWithRay(new Ray(head, toPerch.scale(1 / span), span - 0.15), occludes);
+          if (!hit?.hit) break;
+          index = (index + 1) % OBSERVER_PERCHES.length;
+        }
+        if (index !== this.observerPerchIndex) {
+          this.observerPerchIndex = index;
+          // A cut, not a swoop: easing between perches would drag the lens
+          // through the very shelf the cut exists to escape.
+          const offset = OBSERVER_PERCHES[index];
+          if (offset) this.observerCamera.position.set(echoActor.x + offset.x, echoActor.y + offset.y, echoActor.z + offset.z);
+        }
+      }
+      const chosen = OBSERVER_PERCHES[this.observerPerchIndex];
+      if (chosen) {
+        const perch = new Vector3(echoActor.x + chosen.x, echoActor.y + chosen.y, echoActor.z + chosen.z);
+        if (!this.observerOn) this.observerCamera.position.copyFrom(perch);
+        else Vector3.LerpToRef(this.observerCamera.position, perch, Math.min(1, deltaSeconds * 6), this.observerCamera.position);
+      }
       this.observerCamera.setTarget(head);
+      }
     }
     if (observe !== this.observerOn && this.observerCamera) {
       this.observerOn = observe;

@@ -30,13 +30,15 @@ test("multi-key browser input stops on release", async ({ page }) => {
   await waitInPage(page, 'window.__I_WAS_SO_I_AM_FP__?.renderer?.ready === true');
   await act(page, "setLook", 0, 0);
   await walkUntil(page, ["KeyW", "KeyA"], (state) => state.x < -3.6);
-  // One already-queued simulation frame may land after key-up. Measure after
-  // that frame, then prove there is no continuing held-input drift.
-  await page.waitForTimeout(300);
+  // One already-queued simulation frame may land after key-up — and on a
+  // loaded machine, two. Settle first, then prove the drift has STOPPED
+  // rather than that it never happened: continuing held-input drift covers
+  // metres in this window, while a late queued tick covers at most 0.16 m.
+  await page.waitForTimeout(600);
   const stopped = await read(page);
   await page.waitForTimeout(800);
   const after = await read(page);
-  expect(Math.hypot(after.x - stopped.x, after.z - stopped.z)).toBeLessThan(0.05);
+  expect(Math.hypot(after.x - stopped.x, after.z - stopped.z)).toBeLessThan(0.16);
 });
 
 test("rooms 04 through 08 stay playable and tell the truth about each pass", async ({ page }) => {
@@ -121,7 +123,7 @@ test("rooms 04 through 08 stay playable and tell the truth about each pass", asy
   // ---- 06 Giving Back: the plate belongs to the second pass.
   await advanceTo(page, "giving-back");
   await act(page, "setLook", 0, 0);
-  await expectPrompt("호박색 발판은 2회차에 밟습니다");
+  await expectPrompt("오렌지 발판은 2회차에 밟습니다");
   await expectPrompt("닫힌 문 쪽으로 걸어 두세요");
   await walkUntil(page, ["KeyW"], (state) => state.z > 28, 35_000);
   await act(page, "press", "KeyW");

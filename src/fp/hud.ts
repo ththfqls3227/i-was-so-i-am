@@ -132,7 +132,7 @@ export class Hud {
    * a judge lost pointer lock, watched every gauge vanish, and reported the
    * HUD as broken rather than the game as waiting.
    */
-  private readonly pauseNote = element("div", "pause-note", "일시 정지 — 클릭해서 계속");
+  private readonly pauseNote = element("div", "pause-note", "일시 정지 · 클릭해서 계속");
   /** The frame around the observer viewport, with its label and rec dot. */
   private readonly observerFrame = element("div", "observer-frame");
   /**
@@ -200,6 +200,13 @@ export class Hud {
       this.continueButton.blur();
       this.callbacks.onContinue();
     });
+    // The owner's key art, under the buttons: the title screen and the store
+    // card make the same promise. Served from public/, so the world itself
+    // stays procedural. Its own layer, because a still that large reads as a
+    // frozen screenshot — the CSS gives it a slow drift.
+    const titleArt = element("div", "title-art");
+    titleArt.style.backgroundImage = "url('./assets/title-art.jpg')";
+    this.title.append(titleArt, element("div", "title-scrim"));
     this.title.append(
       startButton,
       this.continueButton,
@@ -238,7 +245,7 @@ export class Hud {
 
     this.pauseNote.hidden = true;
     {
-      const observerLabel = element("span", "observer-label", "관측 — 잔상");
+      const observerLabel = element("span", "observer-label", "잔상 관측");
       observerLabel.prepend(element("span", "observer-dot"));
       this.observerFrame.append(observerLabel);
     }
@@ -383,7 +390,7 @@ export class Hud {
     // full bar labelled "time left" that never moves reads as a stuck timer —
     // a judge decided the clock ran at two speeds rather than not at all.
     const leftLabel = view.phase === "recording"
-      ? (view.tapeArmed ? "남은 기록 시간" : "기록 대기 — 움직이면 시작됩니다")
+      ? (view.tapeArmed ? "남은 기록 시간" : "기록 대기 · 움직이면 시작됩니다")
       : "잔상 시간";
     if (this.tapeLeft.textContent !== leftLabel) this.tapeLeft.textContent = leftLabel;
     const rightLabel = `${remaining.toFixed(1)}s`;
@@ -410,9 +417,9 @@ export class Hud {
   private buildColourLegend(): HTMLElement {
     const legend = element("p", "legend");
     const entries: readonly [string, string][] = [
-      ["#3dc7f2", "푸른 설비 — 잔상의 것"],
-      ["#ff9e3d", "호박색 — 당신의 것"],
-      ["#9e6bfa", "보라색 — 둘 다"],
+      ["#3dc7f2", "푸른색 · 잔상 전용"],
+      ["#ff9e3d", "오렌지 · 사람 전용"],
+      ["#9e6bfa", "보라색 · 둘 다 사용 가능"],
     ];
     for (const [colour, label] of entries) {
       const item = element("span", "legend-item");
@@ -439,7 +446,7 @@ export class Hud {
       // room they had not solved. Only the corridor is walked and nothing else.
       if (view.phase === "success") return [];
       if (!view.wayAheadOpen) {
-        if (view.hasPlate && view.plateActive) return [{ key: null, label: "발판이 눌렸습니다 — 곧 문이 열립니다", tone: "go" }];
+        if (view.hasPlate && view.plateActive) return [{ key: null, label: "발판이 눌렸습니다. 곧 문이 열립니다", tone: "go" }];
         if (view.hasPlate) return [{ key: null, label: "빈 발판에 올라서세요", tone: "plain" }];
         return [{ key: null, label: "문이 열리기를 기다리세요", tone: "plain" }];
       }
@@ -470,7 +477,7 @@ export class Hud {
         // steps, and cost five tries.
         // 호박색, not 오른쪽: the colour is the actor language and it travels
         // with the plate, where a direction word was only true from spawn.
-        prompts.push({ key: null, label: "호박색 발판은 2회차에 밟습니다 — 지금은 닫힌 문 쪽으로 걸어 두세요", tone: "plain" });
+        prompts.push({ key: null, label: "오렌지 발판은 2회차에 밟습니다. 지금은 닫힌 문 쪽으로 걸어 두세요. 문 앞까지 갔으면 ⏎로 끝내세요", tone: "plain" });
         if (view.canFold) prompts.push({ key: "⏎", label: "기록 끝내기", tone: "plain" });
       } else if (view.hasPlate) {
         // "Stand still on it", not "walk to it": two judges walked straight
@@ -481,7 +488,7 @@ export class Hud {
         // rounds of drifting judges looped on it with the plate at their elbow.
         const approach =
           view.plateBearing === "behind"
-            ? "발판을 지나쳤습니다 — 한 걸음 뒤로"
+            ? "발판을 지나쳤습니다. 한 걸음 뒤로"
             : view.plateBearing === "left"
               ? "발판이 왼쪽에 있습니다"
               : view.plateBearing === "right"
@@ -497,7 +504,7 @@ export class Hud {
           prompts.push({ key: null, label: "발판 위입니다", tone: "go" });
           prompts.push({ key: "⏎", label: "기록 끝내기", tone: "go" });
         } else if (view.plateActive) {
-          prompts.push({ key: null, label: "발판 위입니다 — 잠시 그대로", tone: "go" });
+          prompts.push({ key: null, label: "발판 위입니다. 잠시 그대로 계세요", tone: "go" });
         } else if (view.canFold) {
           // Say where the player is NOT. From first person the disc fills the
           // bottom of the frame while you are still short of it — a judge read
@@ -528,14 +535,14 @@ export class Hud {
         ? "문이 열리기를 기다리세요"
         : view.plateDutyInReplay
           ? (view.plateBearing === "left"
-            ? "발판이 왼쪽에 있습니다 — 직접 밟으세요"
+            ? "발판이 왼쪽에 있습니다. 직접 밟으세요"
             : view.plateBearing === "right"
-              ? "발판이 오른쪽에 있습니다 — 직접 밟으세요"
+              ? "발판이 오른쪽에 있습니다. 직접 밟으세요"
               : view.plateBearing === "behind"
-                ? "발판을 지나쳤습니다 — 뒤로 돌아 밟으세요"
-                : "호박색 발판을 직접 밟으세요 — 당신의 발이 문을 엽니다")
+                ? "발판을 지나쳤습니다. 뒤로 돌아 밟으세요"
+                : "오렌지 발판을 직접 밟으세요. 당신의 발이 문을 엽니다")
           : view.plateForEchoOnly
-            ? "이 발판은 잔상의 것입니다 — 문이 열릴 때까지 기다리세요"
+            ? "이 발판은 잔상 전용입니다. 문이 열릴 때까지 기다리세요"
             : "문이 열리기를 기다리거나, 직접 발판을 밟으세요");
       // In 03 the first door opens while the way out is still shut: the player
       // is holding it open with their foot. "Walk into the light" at that
@@ -547,7 +554,7 @@ export class Hud {
       // Not in a room whose plate ignores the living foot — there the same
       // words would be the exact lie the echo-only copy exists to prevent.
       if (view.plateActive && !view.doorOpen && !view.plateForEchoOnly) {
-        return [{ key: null, label: "발판이 눌렸습니다 — 곧 문이 열립니다", tone: "go" }];
+        return [{ key: null, label: "발판이 눌렸습니다. 곧 문이 열립니다", tone: "go" }];
       }
       if (view.doorOpen && !view.exitOpen && view.plateActive) {
         // Say why the standing matters, or it reads as a goal in itself — a
@@ -565,7 +572,7 @@ export class Hud {
       // is open for him, the only instruction left is to watch him take it.
       // Before that, the duty coaching below this block still applies.
       if (view.echoFinishes && view.doorOpen) {
-        return [{ key: null, label: "잔상이 빛에 닿으면 이 방은 끝납니다 — 지켜보세요", tone: "echo" }];
+        return [{ key: null, label: "잔상이 빛에 닿으면 이 방은 끝납니다. 그대로 지켜보세요", tone: "echo" }];
       }
       // "Walk into the light" cost one judge six tries and another ten,
       // because the brightest thing on screen was the wrong door both times —
@@ -573,8 +580,8 @@ export class Hud {
       // exactly as long as the echo's hand holds, so that clause stays.
       const dir = view.exitBearing === "ahead" ? "앞" : view.exitBearing === "left" ? "왼쪽" : view.exitBearing === "right" ? "오른쪽" : "뒤";
       const out = view.hasPlate
-        ? `출구는 ${dir}입니다 — 빛으로 나가세요`
-        : `잔상이 잡아 주는 동안입니다 — ${dir}의 출구로 나가세요`;
+        ? `출구는 ${dir}입니다. 빛으로 나가세요`
+        : `잔상이 잡아 주는 동안입니다. ${dir}의 출구로 나가세요`;
       // Where the exit has its own gate, the doors stop mattering the moment
       // it opens: in 03 leaving the plate shuts the first door behind the
       // echo, and requiring it open again sent the coaching back to "step on
@@ -744,10 +751,10 @@ export class Hud {
             // The generic line says "press the plate and leave" — in the
             // role-reversal room that reads as one move when it is two, and a
             // judge took the two halves for a contradiction.
-            ? "문이 닫힌 채였습니다. 2회차에 오른쪽 발판을 밟고 있어야 잔상이 지나갑니다 — 출구는 발판 너머 동쪽 통로 끝에 있습니다."
+            ? "문이 닫힌 채였습니다. 2회차에 오렌지 발판을 밟고 있어야 잔상이 지나갑니다. 잔상이 골방의 빛에 닿으면 방이 끝납니다."
             : view.lastError === "out-of-time"
             ? (view.exitOpen
-              ? "시간이 다 되었습니다. 출구는 열려 있었으니 — 다음에는 길이 열리는 순간 나가세요."
+              ? "시간이 다 되었습니다. 다음에는 길이 열리는 순간 바로 나가세요."
               : "시간이 다 되었습니다. 출구는 끝내 열리지 않았습니다.")
             : FAILURE_COPY[view.lastError])
         : "이번 재생은 끝났습니다.";
@@ -786,11 +793,8 @@ export class Hud {
 
     // The seal comes down, and this one is allowed to linger — everywhere else
     // it is an impact and here it is the last thing that happens in the world.
-    this.seal.dataset.on = "false";
-    void this.seal.offsetWidth;
-    this.seal.textContent = "봉인";
-    this.seal.dataset.wet = "true";
-    this.seal.dataset.on = "true";
+    // The stamp is retired on the owner's call; the fall to black carries the
+    // beat alone until the closing gesture is redesigned.
 
     for (const timer of this.endingTimers) clearTimeout(timer);
     // Stamp, fall — and then the archivist speaks into the dark, three lines
@@ -839,11 +843,7 @@ export class Hud {
     // Force a reflow so the animation restarts on a second fold.
     void this.flash.offsetWidth;
     this.flash.dataset.on = "true";
-    // The archive stamps the record closed. Under reduced motion the seal still
-    // appears and still says the same thing — it just does not travel to say it.
-    this.seal.dataset.on = "false";
-    void this.seal.offsetWidth;
-    this.seal.textContent = "봉인";
-    this.seal.dataset.on = "true";
+    // The stamp is retired on the owner's call — the flash alone closes a
+    // record until the sealing gesture is redesigned.
   }
 }

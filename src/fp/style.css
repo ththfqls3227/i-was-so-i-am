@@ -436,6 +436,27 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
 .result {
   background: radial-gradient(ellipse at 50% 46%, #04070b47 0%, #04070b9e 58%, #020407c9 100%);
 }
+/* The key art breathes behind the title. Content rides above both layers. */
+.title { overflow: hidden; }
+.title > * { position: relative; z-index: 1; }
+.title > .title-art,
+.title > .title-scrim { position: absolute; inset: 0; z-index: 0; }
+.title-art {
+  inset: -4%;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  animation: title-drift 26s ease-in-out infinite alternate;
+}
+.title-scrim { background: linear-gradient(rgba(4, 7, 11, 0.42), rgba(2, 4, 7, 0.72)); }
+@keyframes title-drift {
+  from { transform: scale(1.05) translate(-0.7%, -0.5%); }
+  to { transform: scale(1.12) translate(0.7%, 0.6%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .title-art { animation: none; }
+}
+
 .overlay h1 {
   margin: 0;
   font: 300 clamp(2rem, 5.2vw, 3.4rem)/1.05 Georgia, "Times New Roman", serif;

@@ -60,7 +60,7 @@ export const SECOND_SELF_CHAMBER: Chamber = {
   // who does the right thing never witnesses the rule change — the owner and
   // two judges all asked what the difference even was. The naming-the-echo
   // beat this line used to carry lives in 00's replay line now.
-  subtitleOnEntry: "이 방의 푸른 발판은 잔상만 알아봅니다. 지금의 발에는 무게가 없습니다 — 기록을 끝내고, 조금 전의 당신에게 맡기세요.",
+  subtitleOnEntry: "이 방의 푸른 발판은 잔상 전용입니다. 지금의 발에는 무게가 없으니, 기록을 끝내고 조금 전의 당신에게 맡기세요.",
   dressing: standardDressing(ROOM_SHELL, { seedBase: 1700 }),
 };
 
@@ -213,8 +213,10 @@ export const HAND_NOT_BODY: RoomDefinition = {
   exitGatedBy: { kind: "plate", id: "alcove-plate" },
   exit: { id: "exit", min: { x: 3.4, y: 0, z: 12.4 }, max: { x: 6, y: 4, z: 14 } },
   // His plate is his light: the moment he takes it the room is done, and the
-  // player who held the door for him no longer walks a victory lap.
-  echoExit: { at: { x: 0, z: 10.6 }, radius: 1.0 },
+  // player who held the door for him no longer walks a victory lap. The
+  // radius hugs the beacon itself — at 1.0 the room ended a step past the
+  // doorway, before he had visibly entered anything.
+  echoExit: { at: { x: 0, z: 10.6 }, radius: 0.55 },
 };
 
 /**
@@ -246,15 +248,17 @@ export const HAND_NOT_BODY_CHAMBER: Chamber = {
   hints: [
     { after: 1, line: "재생 중에는 당신의 발이 자유롭습니다. 바닥의 금색 선을 따라가, 오른쪽의 발판을 직접 밟으세요." },
     { after: 2, line: "발판을 밟은 채 기다리면 잔상이 열린 문을 지나 막다른 방의 빛까지 걸어갑니다. 잔상이 그 빛에 닿으면 이 방은 끝납니다." },
-    { after: 3, line: "기록이 짧으면 잔상의 걸음도 짧습니다 — 문을 향해 걷는 시간을 더 길게 담으세요." },
+    { after: 3, line: "기록이 짧으면 잔상의 걸음도 짧습니다. 문을 향해 걷는 시간을 더 길게 담으세요." },
   ],
   // The rule up front, not four failure cards deep: a judge who met it only
   // as escalating hints spent five tries re-deriving it and quit one short.
-  subtitleOnEntry: "안내: 호박색 발판은 2회차의 당신이 직접 밟습니다. 기록에는 닫힌 문을 향해 걷는 걸음을 담으세요.",
+  subtitleOnEntry: "안내: 오렌지 발판은 2회차의 당신이 직접 밟습니다. 기록에는 닫힌 문을 향해 걷는 걸음을 담으세요.",
   // The echo treading against the shut partition is the room's whole idea —
   // and it reads as a bug until this sentence lands.
-  echoAtDoorLine: "잔상이 닫힌 문 앞에서 걷고 있습니다 — 오른쪽 발판이 저 문을 엽니다.",
+  echoAtDoorLine: "잔상이 닫힌 문 앞에서 걷고 있습니다. 오렌지 발판이 저 문을 엽니다.",
   plateDutyInReplay: true,
+  // The recording's one job, said plainly while it is being made.
+  recordingCue: "정면의 닫힌 문을 향해 걸으세요. 걷는 도중에 ⏎를 눌러 기록을 끝냅니다.",
   // His plate is behind the partition, so his arrival — the room's whole
   // payoff — happens off screen. The cyan shaft says whose light that is,
   // and the observer view lets the player watch him take it.
