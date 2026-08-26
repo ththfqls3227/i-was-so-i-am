@@ -180,6 +180,33 @@ window.addEventListener("keydown", (event) => {
   applyMute(!audio.engine.isMuted);
 });
 
+// Tab and H live on this lane for the same reason M does: nothing wired here
+// reaches the simulation, so nothing pressed here can land on a tape, move a
+// checksum, or be replayed back at the player. Tab especially — a key that
+// both moves focus and gets recorded would be two bugs at once.
+window.addEventListener("keydown", (event) => {
+  if (event.code === "Tab") {
+    // Not on the title card. There are real buttons to reach there and taking
+    // Tab away from them would strand anyone playing without a mouse; in a room
+    // there is nothing to traverse to, so the default is only ever in the way.
+    if (!scene.hasStarted) return;
+    event.preventDefault();
+    // A held key is not a new press, and the plate is already up.
+    if (event.repeat) return;
+    hud.showStageMap(scene.currentChamber.sim.id);
+    return;
+  }
+  if (event.code === "KeyH" && !event.repeat) hud.revealHint();
+});
+window.addEventListener("keyup", (event) => {
+  if (event.code !== "Tab") return;
+  if (scene.hasStarted) event.preventDefault();
+  hud.hideStageMap();
+});
+// Tab is the key people switch windows with. Held down through a cmd-Tab there
+// is no keyup to come back to, and the plate would still be there on return.
+window.addEventListener("blur", () => hud.hideStageMap());
+
 scene.start();
 
 // Clicking the canvas after Escape puts you straight back in. Pointerdown for the

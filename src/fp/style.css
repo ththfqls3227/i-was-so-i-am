@@ -580,12 +580,15 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
   pointer-events: none;
 }
 
-/* R, for the length of a replay. One line under the silence mark's corner so a
- * muted replay can wear both without either moving. */
+/* R and H, for the length of a replay. Stacked above the silence mark's corner
+ * so a muted replay can wear all three without any of them moving. */
 .retry-hint {
   position: absolute;
   right: 20px;
   bottom: 48px;
+  display: grid;
+  gap: 7px;
+  justify-items: end;
   font-size: 0.86rem;
   line-height: 1;
   letter-spacing: 0.04em;
@@ -593,6 +596,135 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
   opacity: 0.85;
   text-shadow: 0 1px 10px #000a;
   pointer-events: none;
+}
+
+/*
+ * What the room said when it was asked. Under the pass badge, because the top
+ * left corner is already where this interface answers "where am I and what is
+ * this pass for" — a hint is the next sentence of the same answer, not a new
+ * kind of thing on screen.
+ *
+ * A rule down the margin rather than a box: a card here would be a dialogue
+ * open over a running tape, and the tape is still running.
+ */
+.hint-note {
+  position: absolute;
+  left: 28px;
+  top: 54px;
+  width: min(31em, 44vw);
+  display: grid;
+  gap: 9px;
+  padding: 9px 30px 10px 11px;
+  border-left: 2px solid #f0a95c5c;
+  /* A wash that runs out before the text does, rather than a card with an edge.
+     It has to be here at all because 03's sunbeam crosses this corner and the
+     tail of a hint was landing inside it, unreadable at the one moment the
+     player had just asked to be told. */
+  background: linear-gradient(90deg, #05080cdb 0%, #05080cc4 58%, #05080c00 100%);
+  font-size: 0.78rem;
+  line-height: 1.65;
+  letter-spacing: 0.01em;
+  color: #ccd7e3;
+  /* The archivist's own panel breaks Korean this way. Without it the browser
+     breaks between syllables and a hint comes apart mid-word. */
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  text-shadow: 0 1px 10px #000c;
+  pointer-events: none;
+}
+.hint-note p { margin: 0; }
+/* The drawer is empty, or has been emptied. Said quieter than the help itself. */
+.hint-note p.hint-note-end { color: #808d9b; }
+
+/*
+ * 기억 보관소의 배열 — where you are in the ten, while Tab is held.
+ *
+ * Centre of the screen and nowhere near an edge, because it is read once and
+ * let go of. No border, no card: a wash of the room's own dark that fades out
+ * at the rim, so it reads as light falling on the wall rather than a panel
+ * opening over the room. Nothing here is pressable and nothing here waits.
+ */
+.stage {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  justify-items: center;
+  gap: 13px;
+  padding: 30px 46px;
+  text-align: center;
+  background: radial-gradient(ellipse at 50% 50%, #04070bf2 0%, #04070be3 44%, #04070b00 100%);
+  /* The wash alone loses at the rim, and the plate is centred on whatever the
+     player happens to be facing — which in half the rooms is a lit doorway. */
+  text-shadow: 0 1px 3px #000, 0 0 16px #000c;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 130ms ease, visibility 0s 130ms;
+}
+.stage[data-on="true"] {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 130ms ease;
+}
+.stage .kicker {
+  margin: 0;
+  font-size: 0.66rem;
+  letter-spacing: 0.4em;
+  text-indent: 0.4em;
+  color: var(--cyan);
+  opacity: 0.72;
+}
+/* The masthead's face at a room's size: this is the same sentence the entrance
+   board carries, so it is set the way the title sets Korean. */
+.stage-now {
+  margin: 0;
+  font: 300 clamp(1.05rem, 2.6vw, 1.5rem)/1.35 Georgia, "Apple SD Gothic Neo", "Noto Sans KR", serif;
+  letter-spacing: 0.14em;
+  text-indent: 0.14em;
+  color: #f1f6fa;
+  word-break: keep-all;
+}
+/* One slip per room, filed in order. */
+.stage-rail {
+  display: flex;
+  align-items: flex-end;
+  gap: 7px;
+  margin: 2px 0 1px;
+}
+.stage-mark {
+  width: 7px;
+  height: 13px;
+  border-radius: 1px;
+  background: #ffffff17;
+  box-shadow: inset 0 0 0 1px #ffffff2b;
+}
+/* The seam chamberLabel names: five rooms of being taught, then five of being
+   asked. A breath in the rail, not a label. */
+.stage-mark[data-seam="true"] { margin-left: 13px; }
+/* Walked. Filed, and the colour of paper rather than of anything still live. */
+.stage-mark[data-state="done"] { background: #c3d0dd; box-shadow: none; }
+/* Here — the raised tab in a card drawer, standing a little proud of the rest. */
+.stage-mark[data-state="here"] {
+  height: 19px;
+  background: var(--cyan);
+  box-shadow: 0 0 11px #6fd9f299;
+}
+.stage-count {
+  margin: 0;
+  /* em, not ch: ch is the width of a Latin digit and 30 of those is half a line
+     of Korean — the sentence was breaking 「네 / 개입니다」 across two lines. */
+  max-width: min(30em, 76vw);
+  font-size: 0.79rem;
+  line-height: 1.7;
+  letter-spacing: 0.05em;
+  color: #a3b1c0;
+  word-break: keep-all;
+}
+@media (prefers-reduced-motion: reduce) {
+  .stage { transition: none; }
+  .stage[data-on="true"] { transition: none; }
 }
 
 .diagnostic {

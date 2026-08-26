@@ -1,4 +1,5 @@
 import type { ViewModel } from "./scene";
+import { ROSTER } from "../world/roster";
 import type { FailureCode } from "../sim/types";
 
 export interface HudCallbacks {
@@ -105,6 +106,14 @@ export function chamberLabel(number: string, name: string): string {
   return `퍼즐 ${stage - 4}단계 · ${name}`;
 }
 
+/**
+ * Rooms counted the way a Korean speaker counts them: 「열 개의 방」, not
+ * 「10개의 방」. The campaign is ten rooms long and will not grow, so a table
+ * is enough; anything past it falls back to digits rather than to a wrong word.
+ */
+const ROOM_COUNT = ["한", "두", "세", "네", "다섯", "여섯", "일곱", "여덟", "아홉", "열"];
+const ROOM_ORDER = ["첫째", "둘째", "셋째", "넷째", "다섯째", "여섯째", "일곱째", "여덟째", "아홉째", "열째"];
+
 export class Hud {
   private readonly root = element("div", "hud");
   private readonly crosshair = element("div", "crosshair");
@@ -178,14 +187,46 @@ export class Hud {
    */
   private readonly mutedMark = element("div", "muted-mark", "무음");
   /** R, kept in the corner for the length of a replay — the moment a player
-   * sees the tape go wrong is the moment they look for the take-back. */
-  private readonly retryHint = element("div", "retry-hint", "R · 다시 기록");
+   * sees the tape go wrong is the moment they look for the take-back. And H
+   * beside it, because the moment a player wants the take-back is also the
+   * moment they would take an answer if one were offered. */
+  private readonly retryHint = element("div", "retry-hint");
   private readonly notice = element("p", "notice");
+
+  /**
+   * Where this room sits in the ten, while Tab is held.
+   *
+   * Nothing here pauses and nothing here dims the room: the tape keeps running
+   * under it, and an overlay that darkened a live recording would be asking the
+   * player to pay for looking.
+   */
+  private readonly stage = element("div", "stage");
+  private readonly stageNow = element("p", "stage-now");
+  private readonly stageCount = element("p", "stage-count");
+  private readonly stageMarks: HTMLElement[] = [];
+  /**
+   * The numbered stages, in play order. The corridor is on the roster and is
+   * not one of these — it carries 「—」 for a number and is the walk out rather
+   * than a room to solve, so it is the one entry with no slip on the rail.
+   */
+  private readonly stageOrder = ROSTER.all.filter((chamber) => Number.isFinite(Number(chamber.number)));
+  private stageShown = false;
+
+  /** What this room will say when asked outright, and how much has been asked for. */
+  private readonly hintNote = element("div", "hint-note");
+  private currentHints: readonly { after: number; line: string }[] = [];
+  /** Tries spent in this room, as the simulation counts them. See hintFor. */
+  private currentAttempts = 0;
+  private revealedHints = 0;
+  private hintNoticeLine = "";
+  private hintChamber = "";
+  private hintSignature = "";
 
   private promptSignature = "";
   private subtitleText = "";
   private subtitleUntil = 0;
   private lastEntryLine: string | null = null;
+  private started = false;
 
   constructor(parent: HTMLElement, private readonly callbacks: HudCallbacks) {
     for (let index = 0; index < 4; index += 1) this.crosshair.append(element("span"));
@@ -240,7 +281,11 @@ export class Hud {
     this.title.append(
       startButton,
       this.continueButton,
-      element("p", "hint", "W A S D 이동 · 마우스 시점 · Space 점프 · E 잡기\n⏎ 기록 끝내기 · R 다시 기록 · N 방 건너뛰기 · Esc 멈춤 · M 음소거"),
+      // Three lines, not two: Tab and H are affordances nobody will find by
+      // guessing, and a key that exists and is never named is a key that does
+      // not exist. Held Tab says where you are; H hands over the room's next
+      // hint without making you fail for it first.
+      element("p", "hint", "W A S D 이동 · 마우스 시점 · Space 점프 · E 잡기\n⏎ 기록 끝내기 · R 다시 기록 · N 방 건너뛰기\nTab 지금 위치 · H 안내 · Esc 멈춤 · M 음소거"),
       this.buildColourLegend(),
     );
     // The same legend waits behind Esc, because the place a player wonders
@@ -271,7 +316,27 @@ export class Hud {
     this.notice.textContent = "마우스 왼쪽 버튼을 누른 채 움직여 시점을 돌리세요";
     this.notice.hidden = true;
     this.mutedMark.hidden = true;
+    // Two keys, one under the other, in the corner the replay already owns.
+    this.retryHint.append(
+      element("span", undefined, "R · 다시 기록"),
+      element("span", undefined, "H · 안내"),
+    );
     this.retryHint.hidden = true;
+    this.hintNote.hidden = true;
+
+    {
+      // One slip per numbered stage, laid out the way the archive files them.
+      // The gap after the fifth is the seam chamberLabel names: five rooms of
+      // being taught, then five of being asked.
+      const rail = element("div", "stage-rail");
+      for (const chamber of this.stageOrder) {
+        const mark = element("span", "stage-mark");
+        if (Number(chamber.number) === 5) mark.dataset.seam = "true";
+        this.stageMarks.push(mark);
+        rail.append(mark);
+      }
+      this.stage.append(element("p", "kicker", "기억 보관소"), this.stageNow, rail, this.stageCount);
+    }
 
     this.pauseNote.hidden = true;
     {
@@ -295,6 +360,8 @@ export class Hud {
       ...(this.showDiagnostic ? [this.diagnostic] : []),
       this.mutedMark,
       this.retryHint,
+      this.hintNote,
+      this.stage,
       this.title,
       this.result,
     );
@@ -326,12 +393,132 @@ export class Hud {
     this.mutedMark.hidden = !muted;
   }
 
+  /**
+   * Held Tab: which of the ten this is, and how many are left.
+   *
+   * Not a menu and not a pause. The tape is still running while this is up, so
+   * it takes no key to dismiss, offers nothing to press, and dims none of the
+   * room it is standing over — a player checking their place should not have to
+   * spend a recording on the answer.
+   */
+  showStageMap(chamberId: string): void {
+    if (!this.started || this.ended) return;
+    const chamber = ROSTER.byIdOrNull(chamberId);
+    if (!chamber) return;
+    // -1 in the corridor, which is on the roster and is not a stage.
+    const index = this.stageOrder.findIndex((entry) => entry.sim.id === chamberId);
+    this.stageNow.textContent = chamberLabel(chamber.number, chamber.sim.name);
+    for (const [slot, mark] of this.stageMarks.entries()) {
+      mark.dataset.state = slot === index ? "here" : index < 0 || slot < index ? "done" : "todo";
+    }
+    this.stageCount.textContent = this.stageCountLine(index);
+    this.stageShown = true;
+    this.stage.dataset.on = "true";
+  }
+
+  /** The key came up, or the window went away with it still down. */
+  hideStageMap(): void {
+    if (!this.stageShown) return;
+    this.stageShown = false;
+    this.stage.dataset.on = "false";
+  }
+
+  /**
+   * H: the next rung of this room's ladder, now, instead of after the failing.
+   *
+   * The failure cards keep the ladder they already had — this is a way past the
+   * waiting, not a replacement for it. What it hands over stays on screen until
+   * the room changes, because a hint you have to hold a key to re-read is a hint
+   * you will read once and misremember.
+   */
+  revealHint(): void {
+    if (!this.started || this.ended) return;
+    if (this.currentHints.length === 0) {
+      // Most rooms have no approved line for this. Saying nothing would read as
+      // the key being broken rather than the drawer being empty.
+      this.hintNoticeLine = "이 방에 준비된 안내가 없습니다.";
+      return;
+    }
+    // Spent tries have their own claim on this ladder, and a rung the failure
+    // cards already handed over is not unrevealed. Counting only the asked-for
+    // ones made the first H in a room somebody had failed twice hand back a
+    // line they were looking at, which reads as the key doing nothing.
+    let earned = 0;
+    this.currentHints.forEach((hint, index) => {
+      if (this.currentAttempts >= hint.after) earned = index + 1;
+    });
+    const held = Math.max(this.revealedHints, earned);
+    if (held >= this.currentHints.length) {
+      this.hintNoticeLine = "안내는 여기까지입니다.";
+      return;
+    }
+    this.revealedHints = held + 1;
+    this.hintNoticeLine = "";
+  }
+
+  /**
+   * How far in, and how much is left, in words.
+   *
+   * The rail above says the same thing at a glance; this says it exactly,
+   * because a row of ten marks is a shape and a player deciding whether to stop
+   * for the night wants a number.
+   */
+  private stageCountLine(index: number): string {
+    const total = this.stageOrder.length;
+    // A numeral and its counter are one word. The space between them is a
+    // no-break space so no width can split 「네 개입니다」 down the middle.
+    const rooms = (count: number): string => `${ROOM_COUNT[count - 1] ?? String(count)}\u00a0개`;
+    const whole = rooms(total);
+    if (index < 0) return `${whole}의 방을 모두 지났습니다.`;
+    if (index === total - 1) return `${whole}의 방 가운데 마지막입니다.`;
+    const here = ROOM_ORDER[index] ?? `${index + 1}번째`;
+    return `${whole}의 방 가운데 ${here}, 남은 방은 ${rooms(total - index - 1)}입니다.`;
+  }
+
+  /**
+   * The lines this room has handed over on request, stacked where the pass badge
+   * already answers "where am I".
+   *
+   * Only while a room is actually being played: on a success or failure card the
+   * panel is carrying its own copy of the ladder, and the same sentence in two
+   * places at once reads as the interface stuttering.
+   */
+  private renderHintNote(view: ViewModel, playing: boolean): void {
+    const given = this.currentHints.slice(0, this.revealedHints);
+    const inRoom = view.phase === "recording" || view.phase === "replay";
+    const shown = playing && !this.ended && inRoom && (given.length > 0 || this.hintNoticeLine !== "");
+    const signature = shown ? `${given.map((hint) => hint.line).join("//")}##${this.hintNoticeLine}` : "";
+    if (signature === this.hintSignature) return;
+    this.hintSignature = signature;
+    if (this.hintNote.hidden !== !shown) this.hintNote.hidden = !shown;
+    if (!shown) {
+      this.hintNote.replaceChildren();
+      return;
+    }
+    const lines = given.map((hint) => element("p", undefined, hint.line));
+    if (this.hintNoticeLine !== "") lines.push(element("p", "hint-note-end", this.hintNoticeLine));
+    this.hintNote.replaceChildren(...lines);
+  }
+
   /** Called once per rendered frame; everything below diffs before it touches the DOM. */
   update(view: ViewModel, now: number): void {
     const playing = view.started && !view.paused;
+    this.started = view.started;
+    this.currentHints = view.hints;
+    this.currentAttempts = view.attempts;
+    // A new room is a new ladder. What 03 was willing to say has nothing to do
+    // with what 05 is, and a hint carried across a doorway is worse than none.
+    // Numbers are unique across the roster, so this is an exact test.
+    if (this.hintChamber !== view.chamberNumber) {
+      this.hintChamber = view.chamberNumber;
+      this.revealedHints = 0;
+      this.hintNoticeLine = "";
+    }
     this.title.hidden = view.started;
-    this.crosshair.hidden = !playing;
-    const pausedShown = view.started && view.paused && !this.ended;
+    // While the stage plate is up the crosshair sits in the middle of it. The
+    // player is reading, not aiming, and it comes straight back on release.
+    this.crosshair.hidden = !playing || this.stageShown;
+    const pausedShown = view.started && view.paused && !this.ended && !this.stageShown;
     if (this.pauseNote.hidden !== !pausedShown) this.pauseNote.hidden = !pausedShown;
     // Only while a replay runs. During recording R is a no-op by design, and
     // the failure and success cards carry their own R — the corner would lie
@@ -424,6 +611,7 @@ export class Hud {
     // hint under the last thing the game says is the game talking over itself.
     this.renderPrompts(view.closing ? [] : this.promptsFor(view));
     this.renderSubtitle(view, now);
+    this.renderHintNote(view, playing);
     this.renderResult(view);
 
     if (this.showDiagnostic) {
@@ -751,11 +939,16 @@ export class Hud {
    * judge who kept aborting early — the exact player the hint was for.
    */
   private hintFor(view: ViewModel): string {
-    let offered = "";
-    for (const hint of view.hints) {
-      if (view.attempts >= hint.after) offered = hint.line;
-    }
-    return offered;
+    let earned = -1;
+    view.hints.forEach((hint, index) => {
+      if (view.attempts >= hint.after) earned = index;
+    });
+    // H climbs the same ladder, on request instead of by failing, so the card
+    // shows whichever rung is higher. Without this a player who asked outright
+    // and then failed was handed back a hint they were already reading, and the
+    // key looked like it had done nothing while a card was up.
+    const rung = Math.max(earned, this.revealedHints - 1);
+    return rung >= 0 ? view.hints[rung]?.line ?? "" : "";
   }
 
   private renderResult(view: ViewModel): void {
@@ -856,6 +1049,10 @@ export class Hud {
     this.notice.hidden = true;
     this.result.hidden = true;
     this.prompts.textContent = "";
+    // Whatever was being held or asked for on the way in, the ending answers
+    // nothing and offers nothing. Both of these are hidden for good from here.
+    this.hideStageMap();
+    this.hintNote.hidden = true;
     // The frame counter is a development read-out and it was surviving onto the
     // last card in the game.
     this.diagnostic.hidden = true;
