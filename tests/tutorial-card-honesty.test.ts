@@ -100,7 +100,11 @@ describe("Trace Weight card keeps its promise under generous timing", () => {
     const later = replayTraceWeightWithWillingPresent(tooEarly);
     expect(later.state.forceObject?.x).toBe(TRACE_WEIGHT_CHAMBER.forceObject?.maxX);
     expect(later.state.success).toBe(true);
-  });
+    // Sixty seconds, not the 15 s default: this sweep replays the room once
+    // per offered tick and is pure determinism — the only thing that ever
+    // fails it is wall clock on a loaded machine, which it did, twice, in the
+    // middle of two otherwise green freeze chains.
+  }, 60_000);
 
   it("keeps the echo pushing when the fold lands late, and when ⏎ is never pressed", () => {
     const late = recordTraceWeightByCard({ dwellTicks: 12, reactionTicks: 20, fold: true });
