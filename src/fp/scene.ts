@@ -16,6 +16,9 @@ import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
+// Constants, not Engine: Engine.ALPHA_ADD type-checks but drags the whole
+// engine class into the bundle for the sake of one integer.
+import { Constants } from "@babylonjs/core/Engines/constants";
 import { DefaultRenderingPipeline } from "@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline";
 import { Scene } from "@babylonjs/core/scene";
 
@@ -973,6 +976,7 @@ export class FirstPersonScene {
     }
 
     this.buildLightBands(root);
+    this.buildLightShafts(root);
     this.buildRouteLines(root);
     this.buildSign(root, timber);
     this.buildDioramas(root, timber);
@@ -1141,6 +1145,102 @@ export class FirstPersonScene {
       x >= brush.min.x && x <= brush.max.x
       && y >= brush.min.y && y <= brush.max.y
       && z >= brush.min.z && z <= brush.max.z);
+  }
+
+  /**
+   * The sun, made visible in the air between the slats.
+   *
+   * One additive slab per gap, swept along the key light's own direction so a
+   * shaft and the band it ends in cannot drift apart when the sun is re-aimed.
+   */
+  private buildLightShafts(root: TransformNode): void {
+    const shell = this.chamber.shell;
+    const sillY = SHELF_HEIGHT + 0.24;
+    const windowHeight = shell.height - SHELF_HEIGHT - 0.52;
+    const direction = new Vector3(0.86, -0.46, 0.22).normalize();
+    // A frame local to the light: X down the beam, Z across the slats, Y the
+    // short way through the slab.
+    const across = Vector3.Cross(direction, Vector3.Up()).normalize();
+    const through = Vector3.Cross(across, direction).normalize();
+    const rotation = Vector3.RotationFromAxis(direction, through, across);
+
+    const slatPitch = 0.17;
+    // A fourteenth of full strength. Eighteen additive slabs across one window
+    // sum, and at anything readable on a single slab the rank of them welds
+    // into a solid amber wall filling half the frame. What wants to be visible
+    // is the edge of each slab, not its body.
+    const haze = signalMaterial(this.scene, "light-shaft", new Color3(0.27, 0.182, 0.099), 0.999);
+    // Additive, and it does not write depth: overlapping slabs have to build up
+    // rather than z-fight, and nothing behind one may be erased by it. Depth
+    // testing stays on, so the floor still cuts the far end off.
+    haze.alphaMode = Constants.ALPHA_ADD;
+    haze.disableDepthWrite = true;
+
+    for (const window of this.chamber.dressing.salchang) {
+      if (!window.castsBands) continue;
+      const gaps = Math.max(3, Math.round(window.width / slatPitch));
+      const slabs: Mesh[] = [];
+      for (let index = 0; index < gaps; index += 1) {
+        const z = window.centreZ - window.width / 2 + (index + 0.5) * (window.width / gaps);
+        // How far the top of the window has to travel before it is on the floor.
+        const reach = (sillY + windowHeight) / 0.46;
+        const slab = MeshBuilder.CreateBox(`light-shaft-${window.id}-${index}`, {
+          width: reach,
+          height: windowHeight * 0.92,
+          depth: slatPitch * 0.3,
+        }, this.scene);
+        const start = new Vector3(window.x + 0.1, sillY + windowHeight / 2, z);
+        slab.position = start.add(direction.scale(reach / 2));
+        slab.rotation = rotation.clone();
+        slab.isPickable = false;
+        // Bright where it leaves the window, gone by the time it is floor. A
+        // shaft that keeps its strength all the way across is fog, not a shaft.
+        //
+        // The rank tapers at its own two ends as well. Every slab at full
+        // strength gives the set a flat vertical edge where the window stops,
+        // which from inside the room reads as the side of a pane of glass
+        // standing in the air — the one artefact that gives the trick away.
+        const fromEdge = Math.min(index + 0.5, gaps - index - 0.5) / gaps;
+        this.fadeAlongLength(slab, Math.min(1, fromEdge * 4.5), 0);
+        slabs.push(slab);
+      }
+      const merged = Mesh.MergeMeshes(slabs, true, true, undefined, false, false);
+      if (!merged) continue;
+      merged.name = `light-shafts-${window.id}`;
+      merged.material = haze;
+      merged.isPickable = false;
+      merged.parent = root;
+      // Behind everything else transparent, so the echo standing in one still
+      // reads as being inside the light rather than behind it.
+      merged.renderingGroupId = 0;
+      merged.alphaIndex = 0;
+    }
+  }
+
+  /** Vertex-colour ramp down a mesh's local X, for the shafts to fade along. */
+  private fadeAlongLength(mesh: Mesh, atStart: number, atEnd: number): void {
+    const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
+    if (!positions) return;
+    let low = Infinity;
+    let high = -Infinity;
+    for (let index = 0; index < positions.length; index += 3) {
+      const x = positions[index] ?? 0;
+      if (x < low) low = x;
+      if (x > high) high = x;
+    }
+    const span = high - low || 1;
+    const colours = new Float32Array((positions.length / 3) * 4);
+    for (let index = 0; index < positions.length / 3; index += 1) {
+      const t = ((positions[index * 3] ?? 0) - low) / span;
+      // Squared, because a linear ramp on an additive slab still reads as a
+      // hard bar landing on the floor.
+      const value = (atStart + (atEnd - atStart) * t) ** 2;
+      colours[index * 4] = value;
+      colours[index * 4 + 1] = value;
+      colours[index * 4 + 2] = value;
+      colours[index * 4 + 3] = 1;
+    }
+    mesh.setVerticesData(VertexBuffer.ColorKind, colours, false);
   }
 
   /**
