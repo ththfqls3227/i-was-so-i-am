@@ -242,16 +242,22 @@ export class Simulation {
     } else {
       // His arrival can end the room on its own: in the rooms that opt in, the
       // second pass reaching its light IS the solve, and marching the present
-      // down a corridor afterwards taught the same lesson twice. The dwell is
-      // for the eyes: he stands IN the light for a breath before the card, or
-      // the room reads as ending a step short of it.
+      // down a corridor afterwards taught the same lesson twice.
+      //
+      // The dwell only rejects a one-frame graze of the circle's edge. It
+      // cannot ask for a "breath": at WALK_SPEED he covers 0.15 m a tick, so a
+      // 0.55 m light is about seven ticks wide even straight through the
+      // middle. An 18-tick dwell was only ever satisfiable by a tape that
+      // happened to END there — the unit tapes did, a played one walks on
+      // through, and two gate specs sat waiting for a success that could not
+      // come. Depth is the radius's job; this is only the graze filter.
       const echoExit = this.room.echoExit;
       const past = echoExit === undefined ? undefined : state.actors.find((actor) => actor.id === "past");
       const inLight = echoExit !== undefined && past !== undefined
         && (past.x - echoExit.at.x) * (past.x - echoExit.at.x)
           + (past.z - echoExit.at.z) * (past.z - echoExit.at.z) <= echoExit.radius * echoExit.radius;
       this.echoExitDwellTicks = inLight ? this.echoExitDwellTicks + 1 : 0;
-      const echoArrived = inLight && this.echoExitDwellTicks >= 18;
+      const echoArrived = inLight && this.echoExitDwellTicks >= 3;
       if ((present && state.exitOpen && this.reachedExit(present.x, present.y, present.z)) || echoArrived) {
         state.phase = "success";
         state.success = true;
