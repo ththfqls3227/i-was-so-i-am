@@ -285,6 +285,13 @@ export interface Chamber {
    */
   recordingScript?: { toFirst: string; onFirst: string; toSecond: string; onSecond: string };
   /**
+   * One standing line for the whole recording pass. 07 is why: its answer is
+   * the tape's tail — fold while still walking with E held, so the last frame
+   * keeps him walking down the opened slot — and no generic copy can teach a
+   * move whose whole point is that stopping to think records the stop.
+   */
+  recordingCue?: string;
+  /**
    * Multiplier on the room's fill light — hemispheric sky and scene ambient.
    * 04 sets it: a two-storey room on a one-storey room's fill reads as a
    * basement upstairs. The key light is never lifted with it, because the sun

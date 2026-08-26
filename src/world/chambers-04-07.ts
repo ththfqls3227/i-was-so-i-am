@@ -648,6 +648,14 @@ export const UNKEPT_CHAMBER: Chamber = {
   // Same trap as 06, one room later: the plate is replay duty, the recording
   // is the slot walk and the grab at the end of it.
   plateDutyInReplay: true,
+  // The room's answer is the tape's tail. Said outright, because the natural
+  // move — stop, then fold — records the stop, and a stopped echo stands at
+  // the door forever. The owner hit exactly that and called the room broken.
+  recordingCue: "E를 쥔 채 닫힌 문으로 걸으세요. 멈추지 말고, 걷는 도중에 ⏎.",
+  hints: [
+    { after: 2, line: "기록이 끝날 때의 모습이 잔상의 계속입니다. 걷는 채로 끝내야 그가 계속 걷습니다." },
+    { after: 4, line: "E를 쥔 채로 끝내세요 — 문 너머 슬롯 끝에 그가 잡을 것이 있습니다." },
+  ],
   dressing: standardDressing(sevenShell, {
     seedBase: 7700,
     corridor: false,

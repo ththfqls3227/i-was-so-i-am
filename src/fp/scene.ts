@@ -2045,6 +2045,10 @@ export class FirstPersonScene {
   private answerEmptyGrab(): void {
     if (!this.started || this.paused || this.ended) return;
     if (this.chamber.sim.holds.length === 0) return;
+    // Not in a room whose scripted answer IS holding E with nothing in reach:
+    // 07 asks for exactly that, and "nothing to grab here" would talk the
+    // player out of the one move the room wants from them.
+    if (this.chamber.recordingCue) return;
     const state = this.simulation.state;
     if (state.phase !== "recording" && state.phase !== "replay") return;
     const present = state.actors.find((actor) => actor.id === "present");
@@ -2208,8 +2212,10 @@ export class FirstPersonScene {
    * second. While a plate is underfoot the line holds the player there.
    */
   private recordingCueLine(state: Readonly<SimState>): string | null {
+    if (state.phase !== "recording") return null;
+    if (this.chamber.recordingCue) return this.chamber.recordingCue;
     const script = this.chamber.recordingScript;
-    if (!script || state.phase !== "recording") return null;
+    if (!script) return null;
     if (state.plates[0]?.pressedBy.includes("present")) return script.onFirst;
     if (state.plates[1]?.pressedBy.includes("present")) return script.onSecond;
     return this.firstStandTicks >= 90 ? script.toSecond : script.toFirst;
