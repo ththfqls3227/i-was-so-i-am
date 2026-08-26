@@ -180,9 +180,16 @@ const BEATS = {
   "03": async () => {
     beat("03 hand not body");
     await jumpTo("hand-not-body");
+    // Establish the room before walking into a wall. W is camera-relative, so
+    // the treadmill cannot be filmed from an angle — turning turns the walk —
+    // and the old beat spent three of its four seconds on a rectangle of door
+    // paper filling the frame. The look happens first, and the press-in is cut
+    // to what the lesson needs rather than what the tape can hold.
+    await smoothLook(-0.55, 0.05, 900);
+    await smoothLook(0, 0.02, 700);
     // Walk into the shut door and keep walking. The treadmill is the lesson.
-    await hold(["KeyW"], 4500);
-    await page.waitForTimeout(600);
+    await hold(["KeyW"], 3200);
+    await page.waitForTimeout(500);
     await act("fold");
     await until((s) => s.phase === "replay");
     await smoothLook(Math.PI / 2, 0, 700);
