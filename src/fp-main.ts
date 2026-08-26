@@ -139,7 +139,10 @@ scene.attach({
     // Not in the corridor. There is nothing stored at the end of it and the
     // facility has already said everything it is going to say; a filing
     // confirmation on top of the closing lines turns them into a receipt.
-    if (phase === "success" && !scene.currentChamber.finalBeat) {
+    // Nor on the card that hands the game over at the end of 04. That card is
+    // the archive speaking at length about what stops here; a one-word filing
+    // receipt spoken underneath it puts the same voice in two places at once.
+    if (phase === "success" && !scene.currentChamber.finalBeat && !scene.currentChamber.handoff) {
       hud.say("보관 완료.", performance.now(), 4200);
     }
   },

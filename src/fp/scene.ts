@@ -144,6 +144,12 @@ export interface ViewModel {
   hasNextChamber: boolean;
   /** What the fold key offers at the last door, or null anywhere else. */
   finalBeat: string | null;
+  /**
+   * The card this room wants shown in place of the filing receipt, once it is
+   * finished. Only 04 has one: the seam between the rooms that teach and the
+   * rooms that ask.
+   */
+  handoff: { heading: string; body: string; button: string } | null;
   /** Lines this room is willing to offer after repeated identical failures. */
   hints: readonly { after: number; line: string }[];
   /** Whether this room talks the move through, or only names what counts as solved. */
@@ -3415,6 +3421,10 @@ export class FirstPersonScene {
       finalBeat: this.chamber.finalBeat && state.success && !this.ended
         ? this.chamber.finalBeat.prompt
         : null,
+      // Offered on the same terms as the card it replaces: only once the room
+      // is actually finished, so a room still being played never shows the
+      // sentence that closes it.
+      handoff: this.chamber.handoff && state.success ? this.chamber.handoff : null,
       hints: this.chamber.hints ?? [],
       coached: this.chamber.coached !== false,
       pointerLockDenied: this.pointerLockDenied && !this.pointerLocked,

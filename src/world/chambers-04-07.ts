@@ -222,6 +222,27 @@ export const TWO_OF_US_CHAMBER: Chamber = {
     after: "난간 곁의 손잡이를 잡으세요. 나가는 길이 열립니다",
   },
   lightLift: 1.3,
+  /**
+   * The border card. 04 is the last room that talks the move through, so its
+   * success card is where the archive hands the rest over.
+   *
+   * The body says back the four things the first five rooms taught and then
+   * says what stops. It does not say 「튜토리얼」: that word is the HUD's, on a
+   * badge in the corner, and the archive has never once called its own rooms a
+   * lesson. It also does not say what to do in 05 — naming the next room's
+   * answer here would be the coaching this card exists to end.
+   */
+  handoff: {
+    heading: "안내 종료",
+    body: "행동은 기록되고, 기록이 끝나면 잔상이 그 길을 다시 걷습니다. "
+      + "잔상의 손은 기록이 끝난 자세 그대로 남습니다. "
+      + "어떤 장치는 두 사람 몫의 힘을 받아야 움직입니다. "
+      + "푸른 발판은 잔상의 것, 오렌지는 당신의 것, 보라는 둘 다의 것.\n\n"
+      + "여기부터 보관소는 방법을 말하지 않습니다. "
+      + "무엇이 끝난 것으로 치는지는 그대로 알려 드리고, 몇 번 어긋나면 도움말도 따라붙습니다. "
+      + "길은 당신이 찾으십시오.",
+    button: "Space · 다음 구역으로",
+  },
   dressing: standardDressing(
     {
       halfWidth: FOUR_HALF,

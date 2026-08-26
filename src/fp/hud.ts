@@ -37,6 +37,16 @@ const FAILURE_COPY: Record<FailureCode, string> = {
 };
 
 /**
+ * What the advance button says on an ordinary room card.
+ *
+ * A constant because 04's handoff card borrows the button and has to give it
+ * back: the panel is built once for the whole campaign, so the label lives in
+ * two places — where it is set and where it is restored — and two copies of a
+ * string that must match is one copy too many.
+ */
+const ONWARD_LABEL = "Space · 다음 방";
+
+/**
  * 사서 — the archive's keeper, drawn in ink. Every line the facility says now
  * comes from her, visual-novel style: portrait low on the screen, a name on a
  * seal, and words that arrive at a hand's pace. No asset pipeline; she is a
@@ -139,7 +149,7 @@ export class Hud {
   private readonly resultBody = element("p");
   private readonly resultHint = element("p", "hint");
   private readonly again = element("button", undefined, "R · 다시 기록");
-  private readonly onward = element("button", undefined, "Space · 다음 방");
+  private readonly onward = element("button", undefined, ONWARD_LABEL);
   /** Picks the campaign back up mid-roster. Only ever shown when a save exists. */
   private readonly continueButton = element("button");
   /**
@@ -764,6 +774,25 @@ export class Hud {
       this.again.textContent = "R · 다시 해보기";
       this.offer(this.onward, view.hasNextChamber);
       this.resultHint.textContent = view.hasNextChamber ? "" : "여기까지가 지금 열려 있는 구역입니다";
+      if (view.handoff) {
+        // The seam between the half that teaches and the half that asks. Same
+        // panel, same key: only the words change, and the advance button says
+        // where it goes rather than 「다음 방」, because the next room is not
+        // just another room.
+        this.result.dataset.kind = "handoff";
+        this.resultHeading.textContent = view.handoff.heading;
+        this.resultBody.textContent = view.handoff.body;
+        this.onward.textContent = view.handoff.button;
+        // No rerecord here. R is offered on a success card as a way to go back
+        // and make a tidier tape of a room you already understand; under a card
+        // that has just said the teaching is over it reads as an instruction to
+        // do 04 again, which is the one thing this screen is not asking for.
+        this.offer(this.again, false);
+      } else if (this.onward.textContent !== ONWARD_LABEL) {
+        // Put the room card's own label back. The button is one element for the
+        // whole campaign, so a borrowed label outlives the card that borrowed it.
+        this.onward.textContent = ONWARD_LABEL;
+      }
       if (view.finalBeat) {
         // Not a room you have run out of, so not a room card. The last door
         // gets the key and nothing else — no heading, no buttons, no summary.

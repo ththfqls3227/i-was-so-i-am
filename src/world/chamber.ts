@@ -370,6 +370,22 @@ export interface Chamber {
    */
   hints?: readonly { after: number; line: string }[];
   /**
+   * What this room's success card says instead of the filing receipt.
+   *
+   * Only 04 has one, because only 04 is a border: the five rooms behind it
+   * exist to make the rules legible and the five ahead set `coached` false and
+   * stop saying how. Advancing out of 04 landed the player in 05 with the same
+   * 「보관 완료」 card they had seen four times, and the half of the game that
+   * changed said nothing about changing — a playtester read 05's silence as
+   * the coaching having broken rather than having ended.
+   *
+   * Space still advances, exactly as it does on every other card. This is a
+   * different sentence on the same panel, not a new gate and not a new key:
+   * a card that took a key of its own would be the one screen in the campaign
+   * the player has to learn twice.
+   */
+  handoff?: { heading: string; body: string; button: string };
+  /**
    * The last door, and what the fold key does at it.
    *
    * Only the corridor has one. Every recording you have ever made ended with

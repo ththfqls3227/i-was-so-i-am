@@ -94,6 +94,17 @@ test("rooms 04 through 08 stay playable and tell the truth about each pass", asy
   }
   expect((await read(page)).doorById["way-out"]).toBe(true);
   await walkUntil(page, ["KeyW"], (state) => state.phase === "success", 25_000);
+  // 04 is the border, so its success card is the handoff rather than the filing
+  // receipt every other room shows. Asserted by kind and by which buttons are
+  // offered, never by the sentences: this card is the copy most likely to be
+  // rewritten, and an assertion that pins its wording is an assertion that
+  // fails the gate for a change that was correct.
+  await expect(page.locator(".result")).toHaveAttribute("data-kind", "handoff", { timeout: 10_000 });
+  // The way on is still offered, and still on Space. Advancing is what must
+  // survive the card; a screen the player cannot leave the normal way is the
+  // one failure this whole beat could introduce.
+  await expect(page.locator("#advance-button")).toBeVisible();
+  await expect(page.locator("#rerecord-button")).toBeHidden();
 
   // ---- 05 Long Standing: the tape is a two-stop schedule, not a sprint.
   // First room of the puzzle half, so the four-line recording script and the

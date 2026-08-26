@@ -12,3 +12,4 @@ captures/
 .omc/
 .bkit/
 dist-e2e-*/
+.claude/

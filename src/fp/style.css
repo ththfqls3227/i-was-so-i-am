@@ -543,6 +543,24 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
   color: #f4f7fa;
 }
 .result[data-kind="fail"] h2 { color: #ffcf9c; }
+/*
+ * The card at the end of the teaching half. A room card is a two-line receipt
+ * and this is a page: at the shared 46ch body width the same copy broke into
+ * nine ragged centred lines, which is a shape nobody reads. Wider, set left,
+ * and with its own paragraph break — the blank line is where what you know
+ * stops and what changes begins, and centred text hides that seam.
+ */
+.result[data-kind="handoff"] p:not(.hint) {
+  max-width: 31em;
+  text-align: left;
+  white-space: pre-line;
+  color: #b8c4d1;
+  /* The archivist's own panel already breaks Korean this way, and this card is
+     her at length. Without it the browser breaks between syllables: the last
+     sentence of the teaching half came apart as 「찾으십시 / 오.」 */
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
 
 /*
  * The silence mark. Top right, small, and absent unless it has something to
