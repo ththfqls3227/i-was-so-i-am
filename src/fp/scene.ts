@@ -10,6 +10,7 @@ import type { StandardMaterial } from "@babylonjs/core/Materials/standardMateria
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
 import { Vector3, Vector4 } from "@babylonjs/core/Maths/math.vector";
 import { UniversalCamera } from "@babylonjs/core/Cameras/universalCamera";
+import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import { Viewport } from "@babylonjs/core/Maths/math.viewport";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
@@ -328,6 +329,8 @@ export class FirstPersonScene {
   private doorLeaves: { slab: Mesh; home: number; travel: number; offset: number }[] = [];
   private plates: PlateVisual[];
   private shadows: ShadowGenerator | null = null;
+  /** The two lights every surface in a room is entitled to. See focusLocalLights. */
+  private globalLights: Light[] = [];
   /** One band material per salchang, so a single window can be lit on its own. */
   private bandMaterials = new Map<string, StandardMaterial>();
   /**
@@ -1023,6 +1026,9 @@ export class FirstPersonScene {
 
     this.worldRoot = root;
     this.roomLights = this.scene.lights.filter((light) => !lightsBefore.has(light));
+    // Last, because it needs every mesh the room has: which lamp reaches which
+    // surface cannot be answered until the surfaces exist.
+    this.focusLocalLights(this.globalLights);
 
     return {
       doorLeaves,
@@ -1130,6 +1136,72 @@ export class FirstPersonScene {
       && z >= brush.min.z && z <= brush.max.z);
   }
 
+  /**
+   * Give every surface the two lamps nearest to it, and switch off the ones no
+   * surface is near.
+   *
+   * StandardMaterial takes the first four entries of a mesh's lightSources and
+   * drops the rest, and lightSources is scene order with no distance term in
+   * it. This building runs sixteen lights and every surface in it was lit by
+   * the same four: the hemispheric, the sun, and whichever two point lights
+   * happened to be constructed first. Every plate light, lamp and door spill
+   * further into the room was contributing to nothing — which is why the fill
+   * had to be cranked to keep a room readable, and a cranked flat fill is what
+   * a flat frame is made of.
+   *
+   * Found by the light candidate of the four-look pass. It is a bug rather than
+   * a look, so it lands on its own and none of that candidate's grading choices
+   * came with it.
+   */
+  private focusLocalLights(globals: readonly Light[]): void {
+    const locals = this.scene.lights.filter(
+      (light): light is PointLight => light instanceof PointLight && !globals.includes(light),
+    );
+    if (locals.length === 0) return;
+    const claimed = new Map<PointLight, AbstractMesh[]>();
+    for (const light of locals) {
+      claimed.set(light, []);
+      // A point light's specular defaults to white, and a white highlight is a
+      // white light: it is the plate rings' cyan and amber arriving at the
+      // boards as the same grey sheen. A lamp's highlight is its own colour.
+      const { r, g, b } = light.specular;
+      if (r === 1 && g === 1 && b === 1) light.specular = light.diffuse.scale(1.35);
+    }
+
+    for (const mesh of this.scene.meshes) {
+      const material = mesh.material;
+      if (!material || (material as StandardMaterial).disableLighting) continue;
+      // The room was built this frame and nothing has rendered yet, so a mesh's
+      // world bounds are still the identity ones it was created with: without
+      // this every surface in the building sits at the origin and every lamp in
+      // it is ranked by its distance from the door.
+      mesh.computeWorldMatrix(true);
+      const bounds = mesh.getBoundingInfo().boundingSphere;
+      // Surface distance, not centre distance: the floor is one plane the width
+      // of the room, and by its centre every lamp in the building is equidistant
+      // from it.
+      const ranked = locals
+        .map((light) => ({
+          light,
+          gap: Vector3.Distance(bounds.centerWorld, light.position) - bounds.radiusWorld,
+        }))
+        .filter((entry) => entry.gap <= entry.light.range)
+        .sort((a, b) => a.gap - b.gap);
+      // Two, because the room's own rig — the sky wash and the sun — has
+      // already taken the other two slots a StandardMaterial can hold.
+      for (const entry of ranked.slice(0, 2)) claimed.get(entry.light)?.push(mesh);
+    }
+
+    for (const light of locals) {
+      const meshes = claimed.get(light) ?? [];
+      // An empty list means "no restriction" to Babylon, which is the opposite
+      // of what it says here. A lamp nothing stands near is switched off: it
+      // was contributing to no pixel before, and now it costs no slot either.
+      if (meshes.length === 0) light.setEnabled(false);
+      else light.includedOnlyMeshes = meshes;
+    }
+  }
+
   private buildLighting(root: TransformNode, timber: StandardMaterial): void {
     const shell = this.chamber.shell;
     // Sky is the cool bounce off plaster; ground is the warm one off brick.
@@ -1174,6 +1246,9 @@ export class FirstPersonScene {
     key.orthoRight = reach;
     key.orthoTop = reach;
     key.orthoBottom = -reach;
+    // The two the whole building is entitled to. Everything else is local and
+    // has to earn its slot by being near something. See focusLocalLights.
+    this.globalLights = [sky, key];
     this.shadows = new ShadowGenerator(2048, key);
     // PCF rather than blurred exponential. ESM bleeds through thin occluders,
     // and a 10 cm slat is exactly that — the bands washed out entirely under it.
