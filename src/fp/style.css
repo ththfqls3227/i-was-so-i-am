@@ -273,6 +273,49 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
 
 /* The game is waiting, and says so — a pause that empties the screen instead
    reads as the interface dying. */
+.observer-frame {
+  position: absolute;
+  right: 4%;
+  bottom: 4.5%;
+  width: 29.5%;
+  height: 29.5%;
+  border: 1px solid #4fd7ffaa;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px #00131acc, 0 0 18px #17b7e63a;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+
+.observer-frame[data-on="true"] {
+  opacity: 1;
+}
+
+.observer-label {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  color: #bfeaff;
+  text-shadow: 0 1px 2px #000;
+}
+
+.observer-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ff5340;
+  animation: obs-blink 1.2s infinite;
+}
+
+@keyframes obs-blink {
+  50% { opacity: 0.25; }
+}
+
 .legend {
   display: flex;
   gap: 18px;
@@ -344,7 +387,10 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
   display: grid;
   place-content: center;
   font-family: "Apple SD Gothic Neo", "Noto Sans KR", serif;
-  font-size: 38px;
+  /* Sized for the two syllables of 봉인 — the single hanja this replaced sat
+     at 38px and two glyphs at that size walk out of the stamp. */
+  font-size: 25px;
+  letter-spacing: 0.04em;
   font-weight: 700;
   color: #f3e6c8;
   /* The room's colour, not a fixed one. Red seals a record; the finale seals
@@ -550,7 +596,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
   display: grid;
   place-content: center;
   font-family: "Apple SD Gothic Neo", "Noto Sans KR", serif;
-  font-size: 17px;
+  font-size: 12px;
   font-weight: 700;
   color: #f3e6c8;
   background: #b83b2e;

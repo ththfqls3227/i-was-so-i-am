@@ -292,6 +292,17 @@ export interface Chamber {
    */
   recordingCue?: string;
   /**
+   * The echo's own light, and a window on it. A cyan shaft marks the spot his
+   * replay ends at, and during the second pass a small observer view frames
+   * it. 03, 06 and 07 send him behind a partition — the room's payoff happens
+   * off screen, and an owner playtest read the far warm light as the player's
+   * own and went hunting for it.
+   */
+  echoDestination?: {
+    at: { x: number; z: number };
+    camera: { at: { x: number; y: number; z: number }; lookAt: { x: number; y: number; z: number } };
+  };
+  /**
    * Multiplier on the room's fill light — hemispheric sky and scene ambient.
    * 04 sets it: a two-storey room on a one-storey room's fill reads as a
    * basement upstairs. The key light is never lifted with it, because the sun

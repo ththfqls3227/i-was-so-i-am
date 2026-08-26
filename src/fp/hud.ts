@@ -116,7 +116,7 @@ export class Hud {
   private readonly blackout = element("div", "blackout");
   private readonly finale = element("div", "finale");
   private readonly finaleTitle = element("h1", undefined, "I WAS, SO I AM.");
-  private readonly finaleSeal = element("div", "finale-seal", "封");
+  private readonly finaleSeal = element("div", "finale-seal", "봉인");
   /** What the player leaves in the building, counted. Shown after the title. */
   private readonly finaleEpilogue = element("p", "finale-epilogue");
   private endingTimers: number[] = [];
@@ -133,6 +133,8 @@ export class Hud {
    * HUD as broken rather than the game as waiting.
    */
   private readonly pauseNote = element("div", "pause-note", "일시 정지 — 클릭해서 계속");
+  /** The frame around the observer viewport, with its label and rec dot. */
+  private readonly observerFrame = element("div", "observer-frame");
   /**
    * Frame rate, for whoever is working on the thing.
    *
@@ -145,11 +147,11 @@ export class Hud {
   private readonly showDiagnostic = import.meta.env.DEV || import.meta.env.VITE_E2E === "true";
   private readonly diagnostic = element("div", "diagnostic");
   /**
-   * 默 — shown only while the archive is silenced, and nothing at all otherwise.
-   * A speaker icon that is always there, crossed out or not, is a control panel;
-   * this is a mark that appears when something is off.
+   * 무음 — shown only while the archive is silenced, and nothing at all
+   * otherwise. A speaker icon that is always there, crossed out or not, is a
+   * control panel; this is a mark that appears when something is off.
    */
-  private readonly mutedMark = element("div", "muted-mark", "默");
+  private readonly mutedMark = element("div", "muted-mark", "무음");
   private readonly notice = element("p", "notice");
 
   private promptSignature = "";
@@ -231,6 +233,11 @@ export class Hud {
     this.mutedMark.hidden = true;
 
     this.pauseNote.hidden = true;
+    {
+      const observerLabel = element("span", "observer-label", "관측 — 잔상");
+      observerLabel.prepend(element("span", "observer-dot"));
+      this.observerFrame.append(observerLabel);
+    }
     this.root.append(
       this.crosshair,
       this.pass,
@@ -238,6 +245,7 @@ export class Hud {
       this.subtitle,
       this.notice,
       this.pauseNote,
+      this.observerFrame,
       this.prompts,
       this.flash,
       this.seal,
@@ -330,8 +338,17 @@ export class Hud {
     }
 
     const pass = view.phase === "recording" ? "1회차 · 기록" : view.phase === "replay" ? "2회차 · 재생" : view.phase === "success" ? "보관 완료" : "다시 기록";
-    const phaseName = `${view.chamberNumber} ${view.chamberName} · ${pass}`;
+    // 00 through 07 are the teaching wing and say so. 08 onward is the story,
+    // and the corridor has no number at all — both keep the archive's plates.
+    const stage = Number(view.chamberNumber);
+    const home = Number.isFinite(stage) && stage <= 7
+      ? `튜토리얼 ${stage + 1}단계 · ${view.chamberName}`
+      : `${view.chamberNumber} ${view.chamberName}`;
+    const phaseName = `${home} · ${pass}`;
     if (this.passLabel.textContent !== phaseName) this.passLabel.textContent = phaseName;
+    if (this.observerFrame.dataset.on !== String(view.observerOn)) {
+      this.observerFrame.dataset.on = String(view.observerOn);
+    }
     if (this.pass.dataset.phase !== view.phase) this.pass.dataset.phase = view.phase;
     if (this.tape.dataset.phase !== view.phase) this.tape.dataset.phase = view.phase;
 
@@ -749,7 +766,7 @@ export class Hud {
     // it is an impact and here it is the last thing that happens in the world.
     this.seal.dataset.on = "false";
     void this.seal.offsetWidth;
-    this.seal.textContent = "封";
+    this.seal.textContent = "봉인";
     this.seal.dataset.wet = "true";
     this.seal.dataset.on = "true";
 
@@ -804,7 +821,7 @@ export class Hud {
     // appears and still says the same thing — it just does not travel to say it.
     this.seal.dataset.on = "false";
     void this.seal.offsetWidth;
-    this.seal.textContent = "封";
+    this.seal.textContent = "봉인";
     this.seal.dataset.on = "true";
   }
 }

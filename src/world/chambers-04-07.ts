@@ -547,6 +547,10 @@ export const GIVING_BACK_CHAMBER: Chamber = {
   // on the plate" — a tape of standing at a plate the echo cannot press, and
   // a room that tape can never solve.
   plateDutyInReplay: true,
+  echoDestination: {
+    at: { x: 0, z: 30.95 },
+    camera: { at: { x: 0, y: 2.35, z: 32.1 }, lookAt: { x: 0, y: 0.7, z: 29.4 } },
+  },
   dressing: standardDressing(sixShell, {
     seedBase: 6600,
     corridor: false,
@@ -648,6 +652,10 @@ export const UNKEPT_CHAMBER: Chamber = {
   // Same trap as 06, one room later: the plate is replay duty, the recording
   // is the slot walk and the grab at the end of it.
   plateDutyInReplay: true,
+  echoDestination: {
+    at: { x: 0, z: 13.5 },
+    camera: { at: { x: 0, y: 2.35, z: 13.1 }, lookAt: { x: 0, y: 0.8, z: 9.6 } },
+  },
   // The room's answer is the tape's tail. Said outright, because the natural
   // move — stop, then fold — records the stop, and a stopped echo stands at
   // the door forever. The owner hit exactly that and called the room broken.

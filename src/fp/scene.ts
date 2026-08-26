@@ -10,6 +10,7 @@ import type { StandardMaterial } from "@babylonjs/core/Materials/standardMateria
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
 import { Vector3, Vector4 } from "@babylonjs/core/Maths/math.vector";
 import { UniversalCamera } from "@babylonjs/core/Cameras/universalCamera";
+import { Viewport } from "@babylonjs/core/Maths/math.viewport";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
@@ -112,6 +113,8 @@ export interface ViewModel {
   wayAheadOpen: boolean;
   /** The room's own recording chip, when its tape needs coaching to make. */
   recordingCueLine: string | null;
+  /** The observer viewport is up — the HUD draws its frame and label. */
+  observerOn: boolean;
   /** The way out itself. In 03 the first door and the exit are different gates. */
   exitOpen: boolean;
   echoPresent: boolean;
@@ -345,6 +348,11 @@ export class FirstPersonScene {
   private readonly ambientRest = new Color3(0.111, 0.105, 0.093);
   /** The shaft of light in the way out, lit only while leaving would work. */
   private exitBeacon: Mesh | null = null;
+  /** The cyan shaft over the spot the echo's replay ends at. His, not a gate. */
+  private echoBeacon: Mesh | null = null;
+  /** The fixed observer view of the echo's destination, and whether it is up. */
+  private observerCamera: UniversalCamera | null = null;
+  private observerOn = false;
   /** How many of the corridor's closing lines have been said, and the gap left. */
   private approachSpoken = 0;
   private approachWait = 1.2;
@@ -406,6 +414,17 @@ export class FirstPersonScene {
     // the distance at which geometry opens up.
     this.camera.minZ = 0.04;
     this.camera.maxZ = 70;
+
+    // The observer: a fixed second view, framed on the echo's destination in
+    // the rooms that have one. It renders raw — no pipeline — which is the
+    // right look for a watching instrument rather than a pair of eyes.
+    this.observerCamera = new UniversalCamera("observer-camera", new Vector3(0, 2.2, 0), this.scene);
+    this.observerCamera.inputs.clear();
+    this.observerCamera.rotationQuaternion = null;
+    this.observerCamera.minZ = 0.1;
+    this.observerCamera.maxZ = 70;
+    this.observerCamera.fov = 0.95;
+    this.observerCamera.viewport = new Viewport(0.665, 0.045, 0.295, 0.295);
 
     this.pipeline = new DefaultRenderingPipeline("fp-pipeline", true, this.scene, [this.camera]);
     this.pipeline.fxaaEnabled = true;
@@ -940,6 +959,7 @@ export class FirstPersonScene {
     void grips;
     const doorLeaves = this.buildDoors(root, timber);
     this.exitBeacon = this.buildExitBeacon(root);
+    this.echoBeacon = this.buildEchoBeacon(root);
     if (this.chamber.dressing.corridor) this.buildExit(root, timber);
     else this.buildThreshold(root, timber);
     this.buildOpenBox(root, timber, brass);
@@ -1001,6 +1021,14 @@ export class FirstPersonScene {
   /** Drop the current chamber: its tree, its materials and its lights. */
   private clearRoom(): void {
     this.exitBeacon = null;
+    this.echoBeacon = null;
+    // A room switch mid-replay would otherwise leave the observer viewport up
+    // over a room that has no observer.
+    if (this.observerOn) {
+      this.observerOn = false;
+      this.scene.activeCameras = [];
+      this.scene.activeCamera = this.camera;
+    }
     this.gripLamps.clear();
     for (const light of this.roomLights) light.dispose();
     this.roomLights = [];
@@ -1248,6 +1276,30 @@ export class FirstPersonScene {
    * a bearing in words is no substitute for a landmark in the world. The
    * corridor of the ending stages its own last door and gets none.
    */
+  /**
+   * The echo's own light. Always lit and always cyan: it marks whose errand
+   * ends there, in the rooms whose payoff happens behind a partition. It
+   * swells when he actually arrives, which is the moment the observer view
+   * exists to show.
+   */
+  private buildEchoBeacon(root: TransformNode): Mesh | null {
+    const dest = this.chamber.echoDestination;
+    if (!dest) return null;
+    const beacon = MeshBuilder.CreateCylinder("echo-beacon", {
+      diameterTop: 0.4, diameterBottom: 0.9, height: 2.7, tessellation: 24,
+    }, this.scene);
+    beacon.position = new Vector3(dest.at.x, 1.35, dest.at.z);
+    beacon.material = signalMaterial(this.scene, "echo-beacon-light", PALETTE.cyan.scale(0.85), 0.9);
+    beacon.isPickable = false;
+    beacon.parent = root;
+    this.glow.addIncludedOnlyMesh(beacon);
+    if (this.observerCamera) {
+      this.observerCamera.position.set(dest.camera.at.x, dest.camera.at.y, dest.camera.at.z);
+      this.observerCamera.setTarget(new Vector3(dest.camera.lookAt.x, dest.camera.lookAt.y, dest.camera.lookAt.z));
+    }
+    return beacon;
+  }
+
   private buildExitBeacon(root: TransformNode): Mesh | null {
     if (this.chamber.sim.id === "ending-corridor") return null;
     const exit = this.chamber.sim.exit;
@@ -2549,6 +2601,28 @@ export class FirstPersonScene {
       leaf.slab.position.x = leaf.home + leaf.offset;
     }
 
+    if (this.echoBeacon) {
+      const dest = this.chamber.echoDestination;
+      const walker = state.actors.find((actor) => actor.id === "past");
+      const near = dest && walker
+        ? Math.hypot(walker.x - dest.at.x, walker.z - dest.at.z) < 1.6
+        : false;
+      this.echoBeacon.visibility = (near ? 0.72 : 0.3) + Math.sin(this.clock * 2.4) * 0.09;
+    }
+
+    // The observer view exists exactly while his errand is running.
+    const observe = this.chamber.echoDestination !== undefined
+      && state.phase === "replay" && !this.paused && !this.ended;
+    if (observe !== this.observerOn && this.observerCamera) {
+      this.observerOn = observe;
+      if (observe) {
+        this.scene.activeCameras = [this.camera, this.observerCamera];
+      } else {
+        this.scene.activeCameras = [];
+        this.scene.activeCamera = this.camera;
+      }
+    }
+
     this.driveWarmBand(state, deltaSeconds);
     this.driveGripFeedback(state);
     this.driveUpstairsCue(state, deltaSeconds);
@@ -3048,6 +3122,8 @@ export class FirstPersonScene {
       wayAheadOpen: state.doors.every((door, index) =>
         door.open || (this.chamber.sim.doors[index]?.brush.max.z ?? 0) < (present?.z ?? 0)),
       recordingCueLine: this.recordingCueLine(state),
+      observerOn: this.chamber.echoDestination !== undefined
+        && state.phase === "replay" && !this.paused && !this.ended,
       exitOpen: state.exitOpen,
       echoPresent: state.actors.some((actor) => actor.id === "past"),
       success: state.success,

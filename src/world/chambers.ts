@@ -252,6 +252,13 @@ export const HAND_NOT_BODY_CHAMBER: Chamber = {
   // and it reads as a bug until this sentence lands.
   echoAtDoorLine: "잔상이 닫힌 문 앞에서 걷고 있습니다 — 오른쪽 발판이 저 문을 엽니다.",
   plateDutyInReplay: true,
+  // His plate is behind the partition, so his arrival — the room's whole
+  // payoff — happens off screen. The cyan shaft says whose light that is,
+  // and the observer view lets the player watch him take it.
+  echoDestination: {
+    at: { x: 0, z: 10.6 },
+    camera: { at: { x: 0, y: 2.35, z: 11.35 }, lookAt: { x: 0, y: 0.7, z: 9.4 } },
+  },
   dressing: standardDressing(HAND_SHELL, {
     seedBase: 3300,
     windows: [3, 7, 11],
