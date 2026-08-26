@@ -497,6 +497,21 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
   text-transform: uppercase;
   color: var(--cyan);
 }
+/* The Korean half of the title. Serif and letter-spaced like the line above
+   it, because it is the same sentence in the other language, not a caption
+   about it. Dimmer than the title and brighter than the body: it has to read
+   as a second line of the masthead from across a room. */
+.title-sub {
+  margin: 0;
+  font: 300 clamp(0.92rem, 2vw, 1.18rem)/1.5 Georgia, "Apple SD Gothic Neo", "Noto Sans KR", serif;
+  /* Looser than body text and much tighter than the title above it. At the
+     title's own 0.28em the syllables stopped grouping into words: 과거의 내가
+     있었기에 read as nine separate characters. Korean loses its word shapes to
+     letter-spacing far sooner than a Latin masthead does. */
+  letter-spacing: 0.16em;
+  text-indent: 0.16em;
+  color: rgba(226, 236, 244, 0.82);
+}
 .overlay p {
   margin: 0;
   max-width: 46ch;

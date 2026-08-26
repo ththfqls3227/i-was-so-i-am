@@ -197,6 +197,11 @@ export class Hud {
     this.title.append(
       element("p", "kicker", "기억 보관소 · 00"),
       element("h1", undefined, "I WAS, SO I AM"),
+      // The English title is a clause with its other half missing, and the
+      // ending supplies it: 과거의 내가 있었기에, 지금의 내가 있습니다. Putting
+      // the first half under the title makes the last line of the game a
+      // sentence the player has already been holding since the first screen.
+      element("p", "title-sub", "과거의 내가 있었기에"),
       element(
         "p",
         undefined,
