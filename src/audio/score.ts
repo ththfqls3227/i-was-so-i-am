@@ -276,7 +276,15 @@ export const FP_SCORE = {
      * present, not prominent.
      */
     cyanPartials: [1174.66, 1567.98, 2093.0],
-    cyanGain: 0.0035,
+    /**
+     * Also silenced, and for the same reason: three sine partials above 1 kHz
+     * that never stop. Quiet is not the same as absent, and the instruction was
+     * to take the noise out of the whole game rather than to find a level for
+     * it. 08's beat loses its object; a room that takes away something nobody
+     * can hear has taken nothing, so that beat now needs rebuilding out of
+     * something audible rather than defending at 0.0035.
+     */
+    cyanGain: 0,
     cyanDriftHz: 0.07,
     glideSeconds: 1.7,
     /** 08 fades it out slowly enough that nobody catches the moment. */
@@ -420,7 +428,18 @@ export const FP_SCORE = {
   /** The corridor stack. Each note arrives and stays. */
   corridor: {
     arriveSeconds: 1.1,
-    gain: 0.032,
+    /**
+     * Silenced. This was the noise the owner could still hear after the drone
+     * went, and it was the worst of the two: corridorNote ramps a window's tone
+     * up and never brings it down, by design — "the chord is everywhere you
+     * have been, still sounding". Nine sustained sine tones stack by the end of
+     * the walk, and a nine-note chord that never resolves or decays is a drone
+     * with extra steps, arriving in the last two minutes of the game.
+     *
+     * The idea was good and the execution is a held chord. If it comes back it
+     * has to be struck and allowed to die, like the score above.
+     */
+    gain: 0,
     /** The lowest root gets a little more room. */
     groundGainScale: 1.35,
     groundArriveSeconds: 1.8,
