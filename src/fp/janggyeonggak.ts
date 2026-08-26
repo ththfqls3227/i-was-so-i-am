@@ -30,8 +30,19 @@ import { normalFromHeight, scratchContext, seededRandom } from "./materials";
 export const PALETTE = {
   timber: new Color3(0.226, 0.166, 0.122),
   timberDark: new Color3(0.11, 0.084, 0.066),
-  plaster: new Color3(0.845, 0.796, 0.706),
-  floorBrick: new Color3(0.4, 0.365, 0.322),
+  // Key art B has no beige anywhere in it. The building's bright value is the
+  // paper, not the wall: plaster there is a dark neutral that only ever looks
+  // warm because a lit panel is throwing amber onto it. Carrying that warmth in
+  // the pigment instead put a tan slab in the middle of every frame and held
+  // the black point off the floor, and measured against the reference it was
+  // the loudest single miss — partition slab mean 0.444 against the key art's
+  // 0.171, frame warmth 0.107 against 0.054. Darker, and pulled most of the way
+  // to grey, so the warmth has to be earned from a light.
+  plaster: new Color3(0.42, 0.386, 0.342),
+  // Polished, not fired and left. The floor is the surface both lights land on
+  // at a grazing angle, so it wants to be dark in the pigment and bright in the
+  // highlight rather than an even mid brown.
+  floorBrick: new Color3(0.26, 0.238, 0.212),
   box: new Color3(0.082, 0.068, 0.06),
   brass: new Color3(0.541, 0.416, 0.208),
   seal: new Color3(0.722, 0.231, 0.18),
@@ -144,8 +155,14 @@ export function timberMaterial(
   const surface = new StandardMaterial(name, scene);
   surface.diffuseColor = tint;
   surface.ambientColor = Color3.White();
-  surface.specularColor = new Color3(0.06, 0.05, 0.04);
-  surface.specularPower = 24;
+  // Waxed timber, not raw sawn. A power of 24 spread the response over the
+  // whole board, which is what parked an unlit face in the mid-tones instead of
+  // letting it go to silhouette. Tightened, a slat is black except for the one
+  // edge the paper is behind — the read key art B is built on. The colour is
+  // warm on purpose, so the sheen stays on the amber side and never competes
+  // with the echo for the eye.
+  surface.specularColor = new Color3(0.19, 0.145, 0.098);
+  surface.specularPower = 104;
   surface.diffuseTexture = albedo;
   const relief = normalFromHeight(scene, `${name}-normal`, height.getImageData(0, 0, size, size).data, size, 1.3);
   relief.uScale = options.scale ?? 1;
@@ -160,7 +177,9 @@ export function plasterMaterial(scene: Scene, name: string, seed: number, scale 
   const random = seededRandom(seed);
   const context = scratchContext(size, size);
   const height = scratchContext(size, size);
-  context.fillStyle = "#ddd2bd";
+  // Near-neutral. The old base was a warm beige, and beige multiplied by a warm
+  // fill is exactly the tan slab the palette note above is about.
+  context.fillStyle = "#cfccc6";
   context.fillRect(0, 0, size, size);
   height.fillStyle = "rgb(150, 150, 150)";
   height.fillRect(0, 0, size, size);
@@ -261,7 +280,11 @@ export function brickFloorMaterial(scene: Scene, name: string, seed: number, sca
   surface.specularColor = new Color3(0.04, 0.038, 0.034);
   surface.specularPower = 20;
   surface.diffuseTexture = albedo;
-  const relief = normalFromHeight(scene, `${name}-normal`, height.getImageData(0, 0, size, size).data, size, 1.1);
+  // Halved. Every bump the mortar joints put into the normal chops a highlight
+  // into pieces, and a chopped highlight cannot be long — the floor is where
+  // both lights land at a grazing angle and it needs to be able to carry a
+  // streak, not a field of glints.
+  const relief = normalFromHeight(scene, `${name}-normal`, height.getImageData(0, 0, size, size).data, size, 0.55);
   relief.uScale = scale;
   relief.vScale = scale;
   surface.bumpTexture = relief;
