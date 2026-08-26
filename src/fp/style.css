@@ -273,6 +273,32 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
 
 /* The game is waiting, and says so — a pause that empties the screen instead
    reads as the interface dying. */
+.legend {
+  display: flex;
+  gap: 18px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 10px 0 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.05em;
+  color: #b8c4d4;
+  white-space: normal;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.legend-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
 .pause-note {
   position: absolute;
   left: 50%;

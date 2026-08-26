@@ -199,7 +199,11 @@ export class Hud {
       startButton,
       this.continueButton,
       element("p", "hint", "W A S D 이동 · 마우스 시점 · Space 점프 · E 잡기\n⏎ 기록 끝내기 · R 다시 기록 · N 다음 방 · Esc 멈춤 · M 음소거"),
+      this.buildColourLegend(),
     );
+    // The same legend waits behind Esc, because the place a player wonders
+    // about a colour is the middle of a room, not the title they clicked past.
+    this.pauseNote.append(this.buildColourLegend());
 
     this.result.append(this.resultHeading, this.resultBody);
     // Buttons let go of focus once pressed. A clicked button keeps keyboard
@@ -368,6 +372,30 @@ export class Hud {
       const diagnostic = `${Math.round(view.fps)} fps`;
       if (this.diagnostic.textContent !== diagnostic) this.diagnostic.textContent = diagnostic;
     }
+  }
+
+  /**
+   * The actor colour legend. Three dots, three owners — the rooms teach cyan
+   * and amber by name (01 and 03) but violet is only ever met, so the one
+   * place the whole rule is written out is here, before the first room and
+   * behind every pause.
+   */
+  private buildColourLegend(): HTMLElement {
+    const legend = element("p", "legend");
+    const entries: readonly [string, string][] = [
+      ["#3dc7f2", "푸른 설비 — 잔상의 것"],
+      ["#ff9e3d", "호박색 — 당신의 것"],
+      ["#9e6bfa", "보라색 — 둘 다"],
+    ];
+    for (const [colour, label] of entries) {
+      const item = element("span", "legend-item");
+      const dot = element("span", "legend-dot");
+      dot.style.background = colour;
+      dot.style.boxShadow = `0 0 7px ${colour}`;
+      item.append(dot, document.createTextNode(label));
+      legend.append(item);
+    }
+    return legend;
   }
 
   /**
