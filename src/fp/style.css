@@ -276,7 +276,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
 .observer-frame {
   position: absolute;
   right: 4%;
-  bottom: 4.5%;
+  top: 4.5%;
   width: 29.5%;
   height: 29.5%;
   border: 1px solid #4fd7ffaa;
@@ -490,7 +490,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
 .muted-mark {
   position: absolute;
   right: 20px;
-  top: 20px;
+  bottom: 20px;
   font-size: 0.86rem;
   line-height: 1;
   letter-spacing: 0.04em;
@@ -505,7 +505,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); 
 .retry-hint {
   position: absolute;
   right: 20px;
-  top: 48px;
+  bottom: 48px;
   font-size: 0.86rem;
   line-height: 1;
   letter-spacing: 0.04em;

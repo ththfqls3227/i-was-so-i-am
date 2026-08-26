@@ -350,7 +350,7 @@ export class FirstPersonScene {
   private exitBeacon: Mesh | null = null;
   /** The cyan shaft over the spot the echo's replay ends at. His, not a gate. */
   private echoBeacon: Mesh | null = null;
-  /** The fixed observer view of the echo's destination, and whether it is up. */
+  /** The observer that shadows the echo from over its shoulder, and whether it is up. */
   private observerCamera: UniversalCamera | null = null;
   private observerOn = false;
   /** How many of the corridor's closing lines have been said, and the gap left. */
@@ -415,16 +415,18 @@ export class FirstPersonScene {
     this.camera.minZ = 0.04;
     this.camera.maxZ = 70;
 
-    // The observer: a fixed second view, framed on the echo's destination in
-    // the rooms that have one. It renders raw — no pipeline — which is the
-    // right look for a watching instrument rather than a pair of eyes.
+    // The observer: a second view that shadows the echo through its replay.
+    // It renders raw — no pipeline — which is the right look for a watching
+    // instrument rather than a pair of eyes.
     this.observerCamera = new UniversalCamera("observer-camera", new Vector3(0, 2.2, 0), this.scene);
     this.observerCamera.inputs.clear();
     this.observerCamera.rotationQuaternion = null;
     this.observerCamera.minZ = 0.1;
     this.observerCamera.maxZ = 70;
     this.observerCamera.fov = 0.95;
-    this.observerCamera.viewport = new Viewport(0.665, 0.045, 0.295, 0.295);
+    // Top-right, owner's call: the corner the eye already visits for the room
+    // name, not the corner the coaching text lives in.
+    this.observerCamera.viewport = new Viewport(0.665, 0.66, 0.295, 0.295);
 
     this.pipeline = new DefaultRenderingPipeline("fp-pipeline", true, this.scene, [this.camera]);
     this.pipeline.fxaaEnabled = true;
@@ -2614,9 +2616,25 @@ export class FirstPersonScene {
       this.echoBeacon.visibility = (near ? 0.72 : 0.3) + Math.sin(this.clock * 2.4) * 0.09;
     }
 
-    // The observer view exists exactly while his errand is running.
-    const observe = this.chamber.echoDestination !== undefined
-      && state.phase === "replay" && !this.paused && !this.ended;
+    // The observer follows him from over the shoulder, and only speaks up when
+    // the player cannot see him directly: eyes on the echo, the corner view is
+    // redundant; eyes forward, it is the only witness. Hysteresis on the look
+    // angle so a glance across him does not flicker the frame.
+    const echoActor = state.actors.find((actor) => actor.id === "past");
+    let observe = false;
+    if (echoActor && state.phase === "replay" && !this.paused && !this.ended && this.observerCamera) {
+      const head = new Vector3(echoActor.x, echoActor.y + 1.1, echoActor.z);
+      const toEcho = head.subtract(this.camera.position);
+      const angle = Math.acos(Math.min(1, Math.max(-1,
+        Vector3.Dot(toEcho.normalize(), this.camera.getDirection(Vector3.Forward())))));
+      observe = this.observerOn ? angle > 0.42 : angle > 0.62;
+      // Diagonal, above his head, eased so the frame breathes rather than
+      // jitters with the tick; snapped when the view first opens.
+      const perch = new Vector3(echoActor.x + 2.1, echoActor.y + 2.7, echoActor.z - 2.5);
+      if (!this.observerOn) this.observerCamera.position.copyFrom(perch);
+      else Vector3.LerpToRef(this.observerCamera.position, perch, Math.min(1, deltaSeconds * 6), this.observerCamera.position);
+      this.observerCamera.setTarget(head);
+    }
     if (observe !== this.observerOn && this.observerCamera) {
       this.observerOn = observe;
       if (observe) {
@@ -3126,8 +3144,7 @@ export class FirstPersonScene {
       wayAheadOpen: state.doors.every((door, index) =>
         door.open || (this.chamber.sim.doors[index]?.brush.max.z ?? 0) < (present?.z ?? 0)),
       recordingCueLine: this.recordingCueLine(state),
-      observerOn: this.chamber.echoDestination !== undefined
-        && state.phase === "replay" && !this.paused && !this.ended,
+      observerOn: this.observerOn,
       exitOpen: state.exitOpen,
       echoPresent: state.actors.some((actor) => actor.id === "past"),
       success: state.success,
