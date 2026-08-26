@@ -581,7 +581,7 @@ export class Hud {
       const dir = view.exitBearing === "ahead" ? "앞" : view.exitBearing === "left" ? "왼쪽" : view.exitBearing === "right" ? "오른쪽" : "뒤";
       const out = view.hasPlate
         ? `출구는 ${dir}입니다. 빛으로 나가세요`
-        : `잔상이 잡아 주는 동안입니다. ${dir}의 출구로 나가세요`;
+        : `잔상이 잡아 주고 있습니다. ${dir}의 출구로 나가세요`;
       // Where the exit has its own gate, the doors stop mattering the moment
       // it opens: in 03 leaving the plate shuts the first door behind the
       // echo, and requiring it open again sent the coaching back to "step on

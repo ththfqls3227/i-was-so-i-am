@@ -189,7 +189,7 @@ export const TWO_OF_US_CHAMBER: Chamber = {
     spawnZ: 1.6,
   } satisfies RoomShell,
   number: "04",
-  subtitleOnEntry: "일부 장치는 두 사람 몫의 힘을 요구합니다. 보관소에는 당신이 두 명 있습니다.",
+  subtitleOnEntry: "일부 장치는 두 사람 몫의 힘이 필요합니다. 보관소에는 당신이 두 명 있습니다.",
   // The grab's whole effect is a door behind and above the player. Both passes
   // get one sentence saying it worked, because a playtest owner held the grip
   // for a full tape while reading the room as broken.

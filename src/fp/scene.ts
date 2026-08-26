@@ -2661,6 +2661,22 @@ export class FirstPersonScene {
       leaf.slab.position.x = leaf.home + leaf.offset;
     }
 
+    // Floor chevrons light for whoever's turn it is, and pulse so a glance
+    // finds them: his path while you record, yours while he replays.
+    {
+      const showPast = state.phase === "recording" && this.chamber.sim.recordingDisabled !== true;
+      const showPresent = state.phase === "replay";
+      const pulse = 0.55 + Math.sin(this.clock * 3.4) * 0.35;
+      for (const wing of this.routeArrows.past) {
+        if (wing.isEnabled() !== showPast) wing.setEnabled(showPast);
+        if (showPast) wing.visibility = pulse;
+      }
+      for (const wing of this.routeArrows.present) {
+        if (wing.isEnabled() !== showPresent) wing.setEnabled(showPresent);
+        if (showPresent) wing.visibility = pulse;
+      }
+    }
+
     if (this.echoBeacon) {
       const dest = this.chamber.echoDestination;
       const walker = state.actors.find((actor) => actor.id === "past");
@@ -2855,25 +2871,22 @@ export class FirstPersonScene {
         const dz = to.z - from.z;
         const span = Math.hypot(dx, dz);
         if (span < 0.01) continue;
-        // His line is dashes; yours is one strip. Same width, so the difference
-        // is the rhythm rather than the weight.
-        const dashes = past ? Math.max(1, Math.round(span / 0.62)) : 1;
-        for (let index = 0; index < dashes; index += 1) {
-          const length = past ? (span / dashes) * 0.52 : span;
-          const centre = (index + 0.5) / dashes;
-          const strip = MeshBuilder.CreateBox(`route-${path.id}-${leg}-${index}`, {
-            width: 0.19, height: 0.012, depth: length,
-          }, this.scene);
-          strip.position = new Vector3(
-            from.x + dx * (past ? centre : 0.5),
-            0.011,
-            from.z + dz * (past ? centre : 0.5),
+        // Chevrons at a walking rhythm, pointing the way the feet should go —
+        // and registered by actor, so they only light on that actor's turn.
+        const heading = Math.atan2(dx, dz);
+        const steps = Math.max(1, Math.round(span / 0.62));
+        for (let index = 0; index < steps; index += 1) {
+          const t = (index + 0.5) / steps;
+          this.plantChevron(
+            root,
+            material,
+            `route-${path.id}-${leg}-${index}`,
+            from.x + dx * t,
+            from.z + dz * t,
+            heading,
+            path.glows === true,
+            past ? this.routeArrows.past : this.routeArrows.present,
           );
-          strip.rotation.y = Math.atan2(dx, dz);
-          strip.material = material;
-          strip.isPickable = false;
-          strip.parent = root;
-          if (path.glows) this.glow.addIncludedOnlyMesh(strip);
         }
       }
     }
