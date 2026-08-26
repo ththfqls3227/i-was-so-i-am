@@ -294,6 +294,8 @@ export class FirstPersonScene {
   private missedGrabAt = -Infinity;
   /** Recording ticks spent standing on the first plate — the script's act break. */
   private firstStandTicks = 0;
+  /** When the success card came up. Space/Enter only advance once it has settled. */
+  private successShownAt = Infinity;
   private clock = 0;
   private fps = 60;
   private running = false;
@@ -1052,6 +1054,7 @@ export class FirstPersonScene {
     this.upstairsWait = null;
     this.upstairsSpoken = false;
     this.firstStandTicks = 0;
+    this.successShownAt = Infinity;
     this.approachSpoken = 0;
     this.approachWait = 1.2;
     this.stride.clear();
@@ -2033,6 +2036,17 @@ export class FirstPersonScene {
       if (event.repeat) return;
       if (this.pressed.has(code)) return;
       this.pressed.add(code);
+      // Space or Enter on the success card moves on, like the N it sits next
+      // to — but only a fresh press, and only once the card has been up for a
+      // beat. The held-Space guard above and the delay are the same lesson
+      // twice: a judge once jumped into the light and was advanced out of a
+      // card they never saw.
+      if ((code === "Space" || code === "Enter") && this.started && !this.ended
+        && !this.chamber.finalBeat && this.simulation.state.phase === "success"
+        && performance.now() - this.successShownAt > 600) {
+        this.advanceChamber();
+        return;
+      }
       if (code === "Enter") this.beginFold();
       if (code === "KeyR") this.rerecord();
       if (code === "KeyE") this.answerEmptyGrab();
@@ -2415,6 +2429,7 @@ export class FirstPersonScene {
     this.captureSnapshots();
     if (result.phaseChanged) {
       if (result.state.phase === "rerecord") this.attemptsInRoom += 1;
+      if (result.state.phase === "success") this.successShownAt = performance.now();
       // A replay arriving through here means the tape filled on its own —
       // manual folds go through completeFold and have already changed phase
       // by the time this step runs. Same seal, same announcement: the player
