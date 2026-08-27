@@ -133,10 +133,12 @@ test("rooms 04 through 08 stay playable and tell the truth about each pass", asy
   // ---- 06 Giving Back: the plate belongs to the second pass.
   await advanceTo(page, "giving-back");
   await act(page, "setLook", 0, 0);
-  // 06 is where the teaching stops: the room names what counts as solved and
-  // says nothing about the move. The old prompt spelled the answer out on
-  // arrival, so its absence is the thing worth asserting.
-  await expect(page.locator(".subtitle")).toContainText("슬롯의 빛에 닿으면", { timeout: 10_000 });
+  // 06 is where the teaching stops. It used to name what counted as solved and
+  // now says nothing at all beyond what the place is, so the assertion is that
+  // the room speaks and that none of it is the answer. Asserting the sentence
+  // itself would pin the copy most likely to be rewritten.
+  await expect(page.locator(".subtitle")).not.toBeEmpty({ timeout: 10_000 });
+  await expect(page.locator(".subtitle")).not.toContainText("발판");
   await expect(prompts).not.toContainText("2회차에 밟습니다");
   await walkUntil(page, ["KeyW"], (state) => state.z > 28, 35_000);
   await act(page, "press", "KeyW");
@@ -190,7 +192,10 @@ test("rooms 04 through 08 stay playable and tell the truth about each pass", asy
   expect(silence.canFold).toBe(false);
   expect(silence.plateById["old-plate"]).toBe(true);
   expect(silence.doorById["inner-door"]).toBe(false);
-  await expect(page.locator(".subtitle")).toContainText("두 발판이 동시에", { timeout: 10_000 });
+  // Same bargain in 08: the archive names the place and refuses to name the
+  // move, so what the door wants is no longer written anywhere on screen.
+  await expect(page.locator(".subtitle")).not.toBeEmpty({ timeout: 10_000 });
+  await expect(page.locator(".subtitle")).not.toContainText("발판");
   await expect(prompts).not.toContainText("빈 발판에 올라서세요");
   await expect(prompts).not.toContainText("기록 끝내기");
   await expect(prompts).not.toContainText("다시 기록");

@@ -2367,7 +2367,13 @@ export class FirstPersonScene {
     const now = performance.now();
     if (now - this.missedGrabAt < 2600) return;
     this.missedGrabAt = now;
-    this.events?.onLine("손이 닿는 곳에 잡을 것이 없습니다 — 손잡이 가까이에서 E.");
+    // The fact in both halves of the game, the instruction only in the half
+    // that teaches. A silent E was read as a broken key by a playtest judge, so
+    // an uncoached room still answers — it just answers with what happened
+    // rather than with where to stand.
+    this.events?.onLine(this.chamber.coached === false
+      ? "손이 닿는 곳에 잡을 것이 없습니다."
+      : "손이 닿는 곳에 잡을 것이 없습니다. 손잡이 가까이에서 E.");
   }
 
   /** Absolute aim, in radians. Used by rerecord and by capture choreography. */
@@ -2448,8 +2454,8 @@ export class FirstPersonScene {
       if (this.simulation.state.phase === "recording" && this.simulation.recordingEnabled) {
         this.events?.onLine(
           this.simulation.recordedFrames.length === 0
-            ? "아직 기록이 없습니다 — 움직이면 기록이 시작됩니다"
-            : "아직 기록이 짧습니다 — 조금 더 담은 뒤 ⏎",
+            ? "아직 기록이 없습니다. 움직이면 기록이 시작됩니다"
+            : "아직 기록이 짧습니다. 조금 더 담은 뒤 ⏎",
         );
       }
       return false;
@@ -2505,7 +2511,7 @@ export class FirstPersonScene {
       // judge kept navigating from where they folded and walked into a wall.
       this.events?.onLine("몸이 처음 자리로 돌아갑니다. 이제 잔상이 당신의 길을 걷습니다.");
     } else {
-      this.events?.onLine("기록이 가득 차 저절로 봉인됐습니다. 처음 자리로 — 잔상이 걷기 시작합니다.");
+      this.events?.onLine("기록이 가득 차 저절로 봉인됐습니다. 처음 자리로 돌아갑니다. 잔상이 걷기 시작합니다.");
     }
   }
 

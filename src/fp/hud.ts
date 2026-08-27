@@ -23,6 +23,18 @@ interface Prompt {
  * only place they turn into sentences is this file, so nothing ever branches on
  * a string a translator might change.
  */
+/**
+ * The same two failures, said without the cure attached.
+ *
+ * Only two of the codes ever carried advice — the rest are tape faults, which
+ * have nothing to suggest. An uncoached room uses these: what happened, and
+ * nothing about what to do instead.
+ */
+const PLAIN_FAILURE_COPY: Partial<Record<FailureCode, string>> = {
+  "out-of-time": "시간이 다 되었습니다.",
+  "door-closed": "문이 닫힌 채였습니다.",
+};
+
 const FAILURE_COPY: Record<FailureCode, string> = {
   "out-of-time": "시간이 지났습니다. 이번에는 조금 더 빨리 나가 보세요.",
   "door-closed": "문이 닫힌 채였습니다. 발판을 밟고 나가야 합니다.",
@@ -1007,7 +1019,17 @@ export class Hud {
       // room whose exit waits on the echo, a judge followed that advice through
       // six cycles with no way to learn what had really gone wrong — the copy
       // has to say which half failed: the opening of the way, or the taking of it.
-      this.resultBody.textContent = view.lastError
+      // An uncoached room says what happened and stops. Every branch below adds
+      // the cure to the diagnosis, which is the right thing to do while a room
+      // is still teaching and the wrong thing once it has started asking: the
+      // failure card was the last place the puzzle half was still handing over
+      // its own answer, one loss at a time. The hint ladder still has the
+      // method, and H still gets it on demand.
+      this.resultBody.textContent = !view.coached
+        ? (view.lastError
+          ? (PLAIN_FAILURE_COPY[view.lastError] ?? FAILURE_COPY[view.lastError])
+          : "이번 재생은 끝났습니다.")
+        : view.lastError
         ? (view.lastError === "door-closed" && !view.hasPlate
           ? "문이 닫힌 채였습니다. 잡은 손이 문을 엽니다."
           : view.lastError === "door-closed" && view.plateDutyInReplay

@@ -238,9 +238,9 @@ export const TWO_OF_US_CHAMBER: Chamber = {
       + "잔상의 손은 기록이 끝난 자세 그대로 남습니다. "
       + "어떤 장치는 두 사람 몫의 힘을 받아야 움직입니다. "
       + "푸른 발판은 잔상의 것, 오렌지는 당신의 것, 보라는 둘 다의 것.\n\n"
-      + "여기부터 보관소는 방법을 말하지 않습니다. "
-      + "무엇이 끝난 것으로 치는지는 그대로 알려 드리고, 몇 번 어긋나면 도움말도 따라붙습니다. "
-      + "길은 당신이 찾으십시오.",
+      + "여기부터 보관소는 아무것도 알려 드리지 않습니다. "
+      + "무엇을 해야 하는지도, 무엇이 끝인지도 스스로 읽어 내셔야 합니다. "
+      + "막히면 H가 도움말을 하나씩 내어 줍니다.",
     button: "Space · 다음 구역으로",
   },
   dressing: standardDressing(
@@ -425,7 +425,7 @@ export const LONG_STANDING_CHAMBER: Chamber = {
   sim: LONG_STANDING,
   shell: fiveShell,
   number: "05",
-  subtitleOnEntry: "기록을 서두르지 마십시오. 그가 서 있는 만큼만, 문은 열려 있습니다.",
+  subtitleOnEntry: "여기서는 아무도 서두른 적이 없습니다.",
   // The first room that only asks. Both plates answer the echo alone, so the
   // recording pass has nothing to press and nothing to watch — which is the
   // question, not an oversight: what goes on a tape when nothing in the room
@@ -570,7 +570,7 @@ export const GIVING_BACK_CHAMBER: Chamber = {
   shell: sixShell,
   number: "06",
   // The goal, and nothing about how. 06 is where the teaching stops.
-  subtitleOnEntry: "잔상이 저 끝 슬롯의 빛에 닿으면 이 방은 끝납니다. 그 편이 빠릅니다.",
+  subtitleOnEntry: "이 통로는 끝까지 가 본 사람이 드뭅니다. 그 편이 빠릅니다.",
   coached: false,
   hints: [
     { after: 2, line: "이 방의 발판은 색이 서로 다릅니다. 색은 그것이 누구 것인지를 말합니다." },

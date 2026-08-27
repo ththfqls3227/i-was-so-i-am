@@ -72,7 +72,7 @@ export const SILENCE_CHAMBER: Chamber = {
   number: "08",
   // The rule, not the move: the door wants both plates down at once, and this
   // is the one room that will not let you record anything to help with that.
-  subtitleOnEntry: "이 구역은 기록이 허가되지 않습니다. 저 문은 두 발판이 동시에 눌려 있어야 열립니다.",
+  subtitleOnEntry: "이 구역은 기록이 허가되지 않습니다.",
   coached: false,
   hints: [
     { after: 2, line: "발판 하나는 이미 눌려 있습니다. 누가 눌러 두었는지 보세요." },
