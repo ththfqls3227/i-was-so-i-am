@@ -207,6 +207,18 @@ export interface RoomEchoes {
  */
 const OBSERVER_LIFT = 2.4;
 
+/**
+ * A corridor bay before you have drawn level with it, and after.
+ *
+ * The dark value is not black. Ten unlit windows in a row read as holes in the
+ * wall rather than as rooms waiting to be walked past, and the corridor's whole
+ * claim is that everything is still there.
+ */
+const DIORAMA_DARK = new Color3(0.075, 0.068, 0.058);
+const DIORAMA_LIT = new Color3(0.66, 0.58, 0.46);
+/** Seconds a bay takes to come up. Slow enough to be a light coming on. */
+const DIORAMA_LIGHT_SECONDS = 1.15;
+
 const ECHO_CYAN = new Color3(0.42, 0.86, 1);
 const ECHO_WARM = new Color3(1, 0.72, 0.36);
 const ECHO_RIM_COOL = new Color3(0.26, 0.3, 0.34);
@@ -352,6 +364,8 @@ export class FirstPersonScene {
     place: (at: ActorState) => void;
     skin: StandardMaterial;
   } | null = null;
+  /** The corridor's bays, and how far each has come up. 0 waiting, 1 lit. */
+  private dioramaBays: { z: number; panel: StandardMaterial; lit: number }[] = [];
   /** Progress of the last echo's turn from his colour to mine, or null before it. */
   private warmingEcho: number | null = null;
   /** Tries this room has eaten — natural failures plus replays aborted with R. */
@@ -1114,6 +1128,7 @@ export class FirstPersonScene {
     this.echoes = built.echoes;
 
     this.dioramaLoop = null;
+    this.dioramaBays = [];
     this.warmingEcho = null;
     this.attemptsInRoom = 0;
     this.echoDoorSpoken = false;
@@ -1151,6 +1166,26 @@ export class FirstPersonScene {
       x >= brush.min.x && x <= brush.max.x
       && y >= brush.min.y && y <= brush.max.y
       && z >= brush.min.z && z <= brush.max.z);
+  }
+
+  /**
+   * Bring a corridor bay up as the walk draws level with it, and leave it up.
+   *
+   * The order is the campaign's own: the bays are laid out down the corridor in
+   * play order, so walking out of the building lights the rooms in the sequence
+   * you lived them. Nothing switches off behind you.
+   */
+  private driveDioramaBays(state: Readonly<SimState>, deltaSeconds: number): void {
+    if (this.dioramaBays.length === 0) return;
+    const present = state.actors.find((actor) => actor.id === "present");
+    if (!present) return;
+    for (const bay of this.dioramaBays) {
+      // Level with it, not past it: the light answers a shoulder, not a back.
+      if (bay.lit === 0 && present.z < bay.z) continue;
+      if (bay.lit >= 1) continue;
+      bay.lit = Math.min(1, bay.lit + deltaSeconds / DIORAMA_LIGHT_SECONDS);
+      Color3.LerpToRef(DIORAMA_DARK, DIORAMA_LIT, bay.lit, bay.panel.emissiveColor);
+    }
   }
 
   /**
@@ -2908,6 +2943,7 @@ export class FirstPersonScene {
       }
     }
 
+    this.driveDioramaBays(state, deltaSeconds);
     this.driveWarmBand(state, deltaSeconds);
     this.driveGripFeedback(state);
     this.driveUpstairsCue(state, deltaSeconds);
@@ -3124,9 +3160,18 @@ export class FirstPersonScene {
       // emissive backing costs nothing, and a bright panel with a grey figure
       // in front of it is what a diorama looks like anyway.
       const panel = matteMaterial(this.scene, `diorama-back-${id}-material`, Color3.Black());
-      panel.emissiveColor = new Color3(0.66, 0.58, 0.46);
+      panel.emissiveColor = DIORAMA_DARK.clone();
       panel.disableLighting = true;
       back.material = panel;
+      // A bay lights as you draw level with it, and stays lit. The corridor
+      // used to say this with sound — a note per window, none of them ever
+      // stopping — and that chord was the noise at the end of the game. Same
+      // idea, in the medium the corridor is actually about: you walk past ten
+      // rooms and every one of them is still there, lit, behind you.
+      //
+      // Never fully dark to begin with. An unlit bay in a wall of windows
+      // reads as a hole in the building rather than as a room waiting.
+      this.dioramaBays.push({ z, panel, lit: 0 });
       back.isPickable = false;
       back.parent = root;
 
