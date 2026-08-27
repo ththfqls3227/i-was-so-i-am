@@ -49,5 +49,10 @@ export const FAR_PLATE: PlateSpec = {
 export function door(gatedBy: GateRef, latchOnOpen = false): RoomDefinition["doors"][number] {
   const original = AWAKENING.doors[0];
   if (!original) throw new Error("Awakening has no door to borrow");
-  return { ...original, gatedBy, latchOnOpen, openDelayTicks: 0 };
+  // closeDelayTicks for the same reason as openDelayTicks, and it is the second
+  // time this spread has leaked one of 00's timings into every synthetic room:
+  // 00 buys its plate-to-doorway walk with a three-second closing grace, and a
+  // grip room that inherits it watches a released door stay open for ninety
+  // ticks. Any timing field added to DoorSpec has to be zeroed here too.
+  return { ...original, gatedBy, latchOnOpen, openDelayTicks: 0, closeDelayTicks: 0 };
 }

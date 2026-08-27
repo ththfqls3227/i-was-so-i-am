@@ -75,8 +75,18 @@ export const AWAKENING: RoomDefinition = {
       id: "inner-door",
       brush: doorwayBrush("inner-door", ROOM_SHELL),
       gatedBy: { kind: "plate", id: "entry-plate" },
-      latchOnOpen: true,
+      // It used to latch, and the owner reported that three times as a bug:
+      // step off the plate and the door just stays open. It was deliberate —
+      // the first room must not be failable — but a plate whose door never
+      // shuts teaches the wrong rule, and 01's identical-looking plate then
+      // behaves differently with nothing to explain the change. Two judges
+      // asked what the difference even was.
+      latchOnOpen: false,
       openDelayTicks: DOOR_OPEN_DELAY_TICKS,
+      // Three seconds. The plate is 4.4 m from the doorway, about a second of
+      // walking, so this is generous on purpose: the door visibly closes, and
+      // nobody is ever caught by it. The room still cannot be failed.
+      closeDelayTicks: 90,
     },
   ],
   holds: [],

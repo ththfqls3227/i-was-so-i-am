@@ -52,7 +52,9 @@ function walk(points: readonly { x: number; z: number }[]): { x: number; z: numb
  * came from. A line through a wall is the bug this is looking for.
  */
 function permanentSolids(room: RoomDefinition): Brush[] {
-  return solidsFor(room, room.doors.map((door) => ({ id: door.id, open: true, latched: false, heldTicks: 0 })));
+  return solidsFor(room, room.doors.map((door) => ({
+    id: door.id, open: true, latched: false, heldTicks: 0, releaseTicks: 0,
+  })));
 }
 
 describe("the ending corridor", () => {

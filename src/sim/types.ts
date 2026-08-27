@@ -100,6 +100,16 @@ export interface DoorSpec {
    */
   latchOnOpen: boolean;
   /**
+   * Ticks a door keeps standing open after its gate stops being satisfied.
+   *
+   * Zero everywhere but 00, and 00 needs it because the alternatives are both
+   * wrong: latched, the door never shuts and the first thing the game teaches
+   * about plates is untrue; unlatched with no grace, the room cannot be left
+   * alone, since the plate is 4.4 m from the doorway. With a grace the door
+   * plainly closes and there is still time to walk out.
+   */
+  closeDelayTicks?: number;
+  /**
    * Ticks the gate must be held before the door moves at all.
    *
    * This is in the simulation rather than in the renderer's slide animation on
@@ -114,6 +124,8 @@ export interface DoorState {
   id: string;
   open: boolean;
   latched: boolean;
+  /** Ticks since the gate let go, for a door that closes on a delay. */
+  releaseTicks: number;
   /**
    * Ticks since this door's gate was first satisfied.
    *

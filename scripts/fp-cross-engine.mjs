@@ -26,8 +26,15 @@ const golden = JSON.parse(await readFile(new URL("../src/sim/corpus-checksums.js
 // /src/sim/corpus.ts needed a dev server to transpile it, which meant this gate
 // — the one whose entire job is to prove the shipped simulation agrees across
 // engines — was the only one never pointed at the shipped build.
-const collect = (page) =>
-  page.evaluate(() => globalThis.__I_WAS_SO_I_AM_FP__.runCorpus());
+const collect = async (page) => {
+  // The handle is assigned when the entry module runs, which is after
+  // domcontentloaded. Reading it on the next line raced the bundle and the gate
+  // failed with "cannot read properties of undefined" in every engine — a
+  // failure that says nothing about whether the engines agree, which is the one
+  // thing this script exists to find out.
+  await page.waitForFunction(() => globalThis.__I_WAS_SO_I_AM_FP__?.runCorpus !== undefined);
+  return page.evaluate(() => globalThis.__I_WAS_SO_I_AM_FP__.runCorpus());
+};
 
 const engines = [
   ["chromium", chromium],

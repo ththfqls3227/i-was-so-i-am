@@ -31,7 +31,7 @@ export function initialHolds(room: RoomDefinition): HoldState[] {
 }
 
 export function initialDoors(room: RoomDefinition): DoorState[] {
-  return room.doors.map((door) => ({ id: door.id, open: false, latched: false, heldTicks: 0 }));
+  return room.doors.map((door) => ({ id: door.id, open: false, latched: false, heldTicks: 0, releaseTicks: 0 }));
 }
 
 /**
@@ -181,12 +181,30 @@ export function evaluateDoors(room: RoomDefinition, state: SimState): void {
     //
     // Doors that do not latch keep the old reading: they are open exactly while
     // the gate is satisfied, which is the whole of what 01 teaches.
-    const counting = spec.latchOnOpen === true ? door.heldTicks > 0 || satisfied : satisfied;
+    // Three separate questions, which latchOnOpen used to answer all at once.
+    //
+    // 1. Does a count already under way survive the foot leaving? It must, or
+    //    a door with an opening delay cannot be opened by walking over its
+    //    plate at all: crossing 00's disc takes about thirteen ticks against a
+    //    threshold of eighteen. That was the room two judges failed eight to
+    //    ten times each, and it is a property of the delay, not of latching.
+    // 2. Does the door stay open forever once open? Only if it latches.
+    // 3. How long does it take to shut when it does? closeDelayTicks.
+    const opening = door.heldTicks > 0 && !door.open;
+    const counting = satisfied || opening || (spec.latchOnOpen === true && door.heldTicks > 0);
     if (!counting) {
       door.heldTicks = 0;
+      const grace = spec.closeDelayTicks ?? 0;
+      if (door.open && door.releaseTicks < grace) {
+        door.releaseTicks += 1;
+        continue;
+      }
+      door.releaseTicks = 0;
       door.open = false;
       continue;
     }
+    // Back on the plate before it finished shutting: the count starts over.
+    if (satisfied) door.releaseTicks = 0;
     door.heldTicks += 1;
     // 00's door waits a beat before it moves, which is long enough that a player
     // glances back at the plate they are standing on. That glance goes onto the
