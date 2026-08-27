@@ -85,7 +85,7 @@ export const OPEN_BOX = { x: -ROOM_SHELL.halfWidth + 0.46, y: 1.72, z: 8.4 };
 export const HOLDING_HAND: RoomDefinition = {
   id: "holding-hand",
   version: 1,
-  name: "붙드는 손",
+  name: "붙든 채로",
   subtitle: "The Hand That Holds",
   tapeDurationTicks: TAPE_TICKS,
   replayGraceTicks: GRACE_TICKS,
@@ -174,7 +174,7 @@ const handBrushes: Brush[] = [
 export const HAND_NOT_BODY: RoomDefinition = {
   id: "hand-not-body",
   version: 1,
-  name: "몸이 아니라 손",
+  name: "닫힌 문",
   subtitle: "Hand, Not Body",
   tapeDurationTicks: TAPE_TICKS,
   replayGraceTicks: GRACE_TICKS,

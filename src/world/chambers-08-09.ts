@@ -108,7 +108,7 @@ const FINALE_SHELL: RoomShell = { ...ROOM_SHELL, depth: 20, corridorEnd: 30.6 };
 export const LAST_HOLD: RoomDefinition = {
   id: "last-hold",
   version: 1,
-  name: "마지막 붙듦",
+  name: "두고 가기",
   subtitle: "The Last Hold",
   tapeDurationTicks: TAPE_TICKS,
   replayGraceTicks: GRACE_TICKS,

@@ -378,7 +378,7 @@ const fiveSolids: Solid[] = [
 export const LONG_STANDING: RoomDefinition = {
   id: "long-standing",
   version: 1,
-  name: "오래 선 사람",
+  name: "서 있는 만큼",
   subtitle: "The One Who Stood a Long Time",
   tapeDurationTicks: TAPE_TICKS,
   replayGraceTicks: GRACE_TICKS,
@@ -517,7 +517,7 @@ const sixSolids: Solid[] = [
 export const GIVING_BACK: RoomDefinition = {
   id: "giving-back",
   version: 1,
-  name: "돌려주는 손",
+  name: "먼 쪽 끝",
   subtitle: "The Hand That Gives Back",
   tapeDurationTicks: TAPE_TICKS,
   replayGraceTicks: GRACE_TICKS,
@@ -636,7 +636,7 @@ const sevenSolids: Solid[] = [
 export const UNKEPT: RoomDefinition = {
   id: "unkept",
   version: 1,
-  name: "관리 밖의 서고",
+  name: "버려진 서가",
   subtitle: "The Stacks Nobody Keeps",
   tapeDurationTicks: TAPE_TICKS,
   replayGraceTicks: GRACE_TICKS,
