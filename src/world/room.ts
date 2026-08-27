@@ -7,21 +7,6 @@ const PLATE_CENTRE_Z = 7.6;
 const SPAWN_Z = 1.6;
 
 /**
- * About three quarters of a second between standing on the plate and the door
- * moving.
- *
- * Long enough that a player looks back at what they just did, and that glance
- * lands on the first tape anyone records. The ending replays that tape and the
- * same idle movement reads as someone saying goodbye.
- *
- * Also longer than a straight walk across the plate now spends on it (18 ticks
- * since the press span grew to the body's edge) — the door still opens for
- * that walk-over because the delay counts from the first press, but the pause
- * has to stay something a crossing cannot simply outlast.
- */
-export const DOOR_OPEN_DELAY_TICKS = 22;
-
-/**
  * The hall, in metres: 12 wide, 4 high, with a 6.6 m corridor past the door.
  * These numbers are the single source for both the brushes the player collides
  * with and the surfaces the renderer dresses.
@@ -42,9 +27,15 @@ export const ROOM_SHELL: RoomShell = {
 };
 
 /**
- * 00 — Awakening. Walk to the plate, the door opens and stays open, walk out.
- * No cooperation is required: the living player can press the plate themselves,
- * so the first room can only teach the loop, never fail you for misreading it.
+ * 00 — Awakening. Stand on the plate, record it, and walk out past the man
+ * holding it down.
+ *
+ * It used to be leavable alone: the door latched, so pressing the plate once
+ * opened the way for good. That made the first room the one exception to the
+ * game's premise, and it made a plate mean something here that it means
+ * nowhere else. Now every plate in the building reads the same — down while
+ * something stands on it, up when nothing does — and the first room teaches
+ * the loop by needing it rather than by describing it.
  */
 export const AWAKENING: RoomDefinition = {
   id: "awakening",
@@ -75,18 +66,17 @@ export const AWAKENING: RoomDefinition = {
       id: "inner-door",
       brush: doorwayBrush("inner-door", ROOM_SHELL),
       gatedBy: { kind: "plate", id: "entry-plate" },
-      // It used to latch, and the owner reported that three times as a bug:
-      // step off the plate and the door just stays open. It was deliberate —
-      // the first room must not be failable — but a plate whose door never
-      // shuts teaches the wrong rule, and 01's identical-looking plate then
-      // behaves differently with nothing to explain the change. Two judges
-      // asked what the difference even was.
+      // No latch and no timers. Every other room in the building already works
+      // this way, and the owner's rule is the simpler physics: a plate is down
+      // while something stands on it and up when nothing does, everywhere, with
+      // nothing in the building on a clock.
+      //
+      // What that costs is the walk-through. 00 could be left alone because the
+      // door stayed open behind you; now the plate is 4.4 m from the doorway
+      // and closes the instant you step off, so the way out is the recording —
+      // stand on it, fold, and walk out past the man holding it down. The first
+      // room stops being the exception to the game's own premise.
       latchOnOpen: false,
-      openDelayTicks: DOOR_OPEN_DELAY_TICKS,
-      // Three seconds. The plate is 4.4 m from the doorway, about a second of
-      // walking, so this is generous on purpose: the door visibly closes, and
-      // nobody is ever caught by it. The room still cannot be failed.
-      closeDelayTicks: 90,
     },
   ],
   holds: [],

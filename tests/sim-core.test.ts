@@ -189,13 +189,17 @@ describe("collision", () => {
     expect(actor.z).toBeLessThan(12);
   });
 
-  it("opens once the plate is stood on, and stays open after stepping off", () => {
+  it("opens while the plate is stood on and shuts when it is not", () => {
+    // It used to stay open: 00's door latched, so the first room could be
+    // walked out of alone. Every plate in the building now means the same
+    // thing, which costs 00 its solo exit and buys the game one rule instead
+    // of one rule and an exception.
     const simulation = fresh();
     drive(simulation, framesFor(WALK_TO_PLATE));
     expect(doorOpen(simulation.state, "inner-door")).toBe(true);
     drive(simulation, framesFor([{ back: true, ticks: 40 }]));
     expect(simulation.state.plates[0]?.active).toBe(false);
-    expect(doorOpen(simulation.state, "inner-door")).toBe(true);
+    expect(doorOpen(simulation.state, "inner-door")).toBe(false);
   });
 });
 

@@ -30,6 +30,13 @@ test("the opening four rooms can be played through in order", async ({ page }) =
   expect((await read(page)).subtitle).toContain("기억 보관소");
   await walkInPage(page, ["KeyW"], "s.plates[0].active === true");
   await waitInPage(page, "s.doors[0].open === true");
+  // Stand there before folding. The tape's tail is what the echo goes on doing
+  // after the recording runs out, and a tail of "still walking" carries him
+  // straight over the disc and off the far side. 00's door used to latch, so
+  // it did not matter what he did once he had crossed it once; now the door is
+  // open exactly while he is standing on it, and the recording has to contain
+  // the standing.
+  await page.waitForTimeout(1200);
   expect(await act(page, "fold")).toBe(true);
   await waitInPage(page, 's.phase === "replay" && v.sealing !== true');
   await walkInPage(page, ["KeyW"], 's.phase === "success"', 25000);

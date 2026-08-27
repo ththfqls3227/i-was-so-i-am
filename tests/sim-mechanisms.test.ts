@@ -3,7 +3,7 @@ import { Simulation } from "../src/sim/simulation";
 import { MIN_TAPE_TICKS, PLAYER_RADIUS, STEP_HEIGHT } from "../src/sim/constants";
 import type { RoomDefinition } from "../src/sim/types";
 import { solidsFor } from "../src/sim/mechanisms";
-import { AWAKENING, DOOR_OPEN_DELAY_TICKS } from "../src/world/room";
+import { AWAKENING } from "../src/world/room";
 import { actorOf, doorOpen, drive, framesFor, WALK_TO_PLATE } from "./support/fp-drive";
 import { door, ENTRY_PLATE, FAR_PLATE, PILLAR, roomWith, SECOND_PILLAR } from "./support/fp-rooms";
 
@@ -156,10 +156,18 @@ describe("the finale mechanism", () => {
 });
 
 describe("a door that waits before it moves", () => {
-  const delay = DOOR_OPEN_DELAY_TICKS;
+  // No shipped room uses one any more: every plate in the building is now
+  // instant both ways, which is the rule the owner asked for and the one 00
+  // used to be the single exception to. The field is still supported, so it
+  // stays tested — on a synthetic room, where a timing is chosen on purpose
+  // rather than inherited from a chamber three files away.
+  const delay = 22;
 
   it("counts only while the plate is pressed, and opens exactly on the delay", () => {
-    const simulation = new Simulation(AWAKENING);
+    const waiting = roomWith({
+      doors: [{ ...door({ kind: "plate", id: "entry-plate" }, false), openDelayTicks: delay }],
+    });
+    const simulation = new Simulation(waiting);
     // Walk on and stand there, one tick at a time, watching the count.
     drive(simulation, framesFor([{ forward: true, ticks: 38 }]));
     while ((simulation.state.doors[0]?.heldTicks ?? 0) < delay - 1) {
